@@ -1,0 +1,9 @@
+{
+  "appId": "app.nebulareader.mobile",
+  "appName": "Nebula Reader",
+  "webDir": "dist",
+  "server": { "androidScheme": "https" },
+  "plugins": {
+    "ScreenOrientation": { "orientation": "any" }
+  }
+}

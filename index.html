@@ -1,636 +1,147 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Lector de Cómics CBZ/CBR</title>
-    
-    <!-- Tailwind CSS para el diseño -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    
-    <!-- Phosphor Icons para la iconografía -->
-    <script src="https://unpkg.com/@phosphor-icons/web"></script>
-    
-    <!-- JSZip para procesar y extraer los archivos CBZ/ZIP en el navegador -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
-
-    <style>
-        :root {
-            --bg-dark: #0f172a;
-            --bg-panel: #1e293b;
-            --accent: #38bdf8;
-        }
-
-        body {
-            background-color: var(--bg-dark);
-            color: #f8fafc;
-            overflow: hidden; /* Evitar scroll en el body, lo manejamos en el contenedor */
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            touch-action: manipulation; /* Mejorar comportamiento táctil */
-        }
-
-        /* Estilos personalizados para la zona de carga */
-        .dropzone {
-            border: 2px dashed #475569;
-            transition: all 0.3s ease;
-        }
-        .dropzone.dragover {
-            border-color: var(--accent);
-            background-color: rgba(56, 189, 248, 0.1);
-            transform: scale(1.02);
-        }
-
-        /* Estilos del visor de imágenes */
-        .reader-container {
-            display: none;
-            height: 100vh;
-            width: 100vw;
-            position: relative;
-            flex-direction: column;
-        }
-        
-        .reader-container.active {
-            display: flex;
-        }
-
-        .comic-page {
-            max-width: 100%;
-            max-height: 100%;
-            object-fit: contain;
-            transition: opacity 0.2s ease-in-out;
-            user-select: none;
-            -webkit-user-drag: none;
-        }
-
-        /* Modos de ajuste */
-        .fit-width { width: 100%; height: auto; object-fit: contain; }
-        .fit-height { height: 100vh; width: auto; object-fit: contain; }
-        .fit-best { max-width: 100%; max-height: 100vh; object-fit: contain; }
-
-        /* Controles ocultos que aparecen al pasar el ratón */
-        .hud-overlay {
-            position: absolute;
-            left: 0;
-            right: 0;
-            padding: 1rem;
-            background: linear-gradient(to bottom, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%);
-            transition: opacity 0.3s ease;
-            opacity: 0;
-            z-index: 50;
-        }
-        
-        .hud-overlay.bottom {
-            bottom: 0;
-            background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%);
-        }
-
-        .reader-container:hover .hud-overlay, 
-        .hud-overlay.force-show {
-            opacity: 1;
-        }
-
-        /* Zonas de clic para pasar página (estándar en lectores de cómics) */
-        .click-zone {
-            position: absolute;
-            top: 0;
-            bottom: 0;
-            z-index: 10;
-            cursor: pointer;
-        }
-        .click-zone.left { left: 0; width: 30%; }
-        .click-zone.right { right: 0; width: 70%; }
-
-        /* Scrollbar personalizada para el área de lectura si el ancho ajustado es mayor que la pantalla */
-        .scroll-area {
-            overflow: auto;
-            display: flex;
-            justify-content: center;
-            align-items: flex-start;
-            flex: 1;
-            background-color: #000;
-        }
-        
-        ::-webkit-scrollbar { width: 8px; height: 8px; }
-        ::-webkit-scrollbar-track { background: var(--bg-dark); }
-        ::-webkit-scrollbar-thumb { background: #475569; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: var(--accent); }
-
-        /* Pantalla de carga */
-        #loading-screen {
-            display: none;
-            backdrop-filter: blur(5px);
-        }
-        #loading-screen.active {
-            display: flex;
-        }
-        .spinner {
-            border: 4px solid rgba(255,255,255,0.1);
-            border-left-color: var(--accent);
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-        }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
-        
-        /* Modal de mensaje */
-        .modal {
-            display: none;
-            backdrop-filter: blur(4px);
-        }
-        .modal.active {
-            display: flex;
-        }
-    </style>
-</head>
-<body>
-
-    <!-- Vista Inicial: Carga de Archivos -->
-    <div id="upload-view" class="h-screen w-screen flex flex-col items-center justify-center p-6">
-        <div class="mb-8 text-center">
-            <h1 class="text-4xl font-bold mb-2 flex items-center justify-center gap-3 text-sky-400">
-                <i class="ph-fill ph-books"></i> Lector Web de Cómics
-            </h1>
-            <p class="text-slate-400 max-w-md mx-auto">
-                Lee tus archivos CBZ y CBR directamente en el navegador. Las imágenes se procesan localmente, sin subir nada a internet.
-            </p>
+<!doctype html>
+<html lang="es" data-theme="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0b1020" />
+    <meta name="description" content="Biblioteca y lector de cómics CBZ/CBR privado y sin conexión." />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <title>Nebula Reader</title>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/src/styles.css" />
+    <script src="/vendor/jszip.min.js"></script>
+  </head>
+  <body>
+    <div id="app-shell">
+      <header class="app-header">
+        <button id="brand-home" class="brand" type="button" aria-label="Ir a la biblioteca">
+          <span class="brand-mark" aria-hidden="true">N</span>
+          <span><strong>Nebula</strong><small>Reader</small></span>
+        </button>
+        <div class="header-actions">
+          <span id="offline-badge" class="status-badge">Disponible offline</span>
+          <button id="install-button" class="button ghost hidden" type="button">Instalar</button>
+          <button id="open-settings" class="icon-button" type="button" aria-label="Abrir ajustes" title="Ajustes">⚙</button>
         </div>
+      </header>
 
-        <div id="dropzone" class="dropzone w-full max-w-2xl bg-slate-800/50 rounded-2xl p-12 text-center cursor-pointer flex flex-col items-center justify-center shadow-xl">
-            <i class="ph ph-upload-simple text-6xl text-slate-400 mb-4"></i>
-            <h3 class="text-xl font-semibold mb-2">Arrastra y suelta tu cómic aquí</h3>
-            <p class="text-slate-400 mb-6 text-sm">o haz clic para seleccionar un archivo (.cbz, .cbr, .zip)</p>
-            
-            <input type="file" id="file-input" class="hidden" accept=".cbz,.cbr,.zip">
-            <button onclick="document.getElementById('file-input').click()" class="bg-sky-500 hover:bg-sky-400 text-white font-bold py-2 px-6 rounded-full transition-colors flex items-center gap-2">
-                <i class="ph ph-folder-open"></i> Seleccionar Archivo
-            </button>
-        </div>
-        
-        <div class="mt-8 text-xs text-slate-500 flex items-center gap-2">
-            <i class="ph ph-shield-check text-lg"></i>
-            100% Privado. El archivo nunca sale de tu dispositivo.
-        </div>
+      <main id="library-view" class="view library-view">
+        <section class="hero">
+          <div>
+            <p class="eyebrow">Tu colección, solo en tu dispositivo</p>
+            <h1>Continúa donde lo dejaste.</h1>
+            <p class="hero-copy">Importa CBZ, CBR, ZIP o PDF. La biblioteca y el progreso se guardan localmente y funcionan sin conexión.</p>
+          </div>
+          <div class="hero-actions">
+            <button id="import-button" class="button primary" type="button">＋ Agregar cómics</button>
+            <input id="file-input" type="file" accept=".cbz,.cbr,.zip,.pdf,application/pdf" multiple hidden />
+          </div>
+        </section>
+
+        <section id="dropzone" class="dropzone" tabindex="0" role="button" aria-label="Agregar cómics">
+          <span class="drop-icon" aria-hidden="true">⇩</span>
+          <span><strong>Suelta tus capítulos aquí</strong><small>o toca para elegir varios archivos</small></span>
+        </section>
+
+        <section class="library-section">
+          <div class="section-heading">
+            <div><p class="eyebrow">Biblioteca</p><h2>Mis cómics</h2></div>
+            <div class="storage-summary"><span id="book-count">0 capítulos</span><span id="storage-usage"></span></div>
+          </div>
+          <div id="empty-library" class="empty-state">
+            <span aria-hidden="true">◇</span>
+            <h3>Tu biblioteca está vacía</h3>
+            <p>Agrega uno o varios capítulos para comenzar.</p>
+          </div>
+          <div id="library-grid" class="library-grid" aria-live="polite"></div>
+        </section>
+      </main>
+
+      <main id="reader-view" class="view reader-view hidden" aria-label="Lector">
+        <header id="reader-topbar" class="reader-bar top-bar visible">
+          <button id="close-reader" class="icon-button" type="button" aria-label="Volver a la biblioteca">←</button>
+          <div class="chapter-nav">
+            <button id="previous-chapter" class="icon-button compact" type="button" aria-label="Capítulo anterior">‹</button>
+            <select id="chapter-select" aria-label="Cambiar capítulo"></select>
+            <button id="next-chapter" class="icon-button compact" type="button" aria-label="Capítulo siguiente">›</button>
+          </div>
+          <div class="reader-meta"><strong id="reader-title"></strong><span id="page-counter">Página 1 / 1</span></div>
+          <button id="reader-fullscreen" class="icon-button" type="button" aria-label="Pantalla completa">⛶</button>
+        </header>
+
+        <section id="page-stage" class="page-stage mode-page" aria-live="polite">
+          <button id="previous-page-zone" class="page-zone previous" type="button" aria-label="Página anterior"></button>
+          <div id="paged-pages" class="paged-pages"></div>
+          <div id="vertical-pages" class="vertical-pages hidden"></div>
+          <button id="next-page-zone" class="page-zone next" type="button" aria-label="Página siguiente"></button>
+        </section>
+
+        <footer id="reader-bottombar" class="reader-bar bottom-bar visible">
+          <input id="page-slider" type="range" min="1" max="1" value="1" aria-label="Página actual" />
+          <div class="reader-controls">
+            <div class="control-group">
+              <button id="zoom-out" class="icon-button compact" type="button" aria-label="Alejar">−</button>
+              <output id="zoom-value">100%</output>
+              <button id="zoom-in" class="icon-button compact" type="button" aria-label="Acercar">＋</button>
+              <button id="zoom-reset" class="button ghost compact-button" type="button">Ajustar</button>
+            </div>
+            <div class="control-group page-buttons">
+              <button id="previous-page" class="button ghost" type="button">← Anterior</button>
+              <button id="next-page" class="button primary" type="button">Siguiente →</button>
+            </div>
+            <button id="reader-settings" class="icon-button" type="button" aria-label="Ajustes de lectura">☼</button>
+          </div>
+        </footer>
+        <div id="reader-loader" class="reader-loader hidden"><span class="spinner"></span><p id="loader-text">Abriendo capítulo…</p></div>
+      </main>
     </div>
 
-    <!-- Vista del Lector de Cómics -->
-    <div id="reader-view" class="reader-container">
-        
-        <!-- Controles Superiores -->
-        <div class="hud-overlay top-0 flex justify-between items-center force-show" id="top-hud">
-            <button id="btn-close" class="bg-slate-800/80 hover:bg-slate-700 text-white p-2 rounded-full backdrop-blur-sm transition">
-                <i class="ph ph-arrow-left text-xl"></i>
-            </button>
-            <div class="text-center truncate px-4 flex-1">
-                <h2 id="comic-title" class="text-lg font-semibold truncate text-white drop-shadow-md">Título del Cómic</h2>
-                <span id="page-counter" class="text-sm text-sky-300 font-medium drop-shadow-md">Página 1 / 20</span>
-            </div>
-            <button id="btn-fullscreen" class="bg-slate-800/80 hover:bg-slate-700 text-white p-2 rounded-full backdrop-blur-sm transition">
-                <i class="ph ph-corners-out text-xl"></i>
-            </button>
+    <div id="eye-filter" aria-hidden="true"></div>
+    <div id="toast-region" class="toast-region" aria-live="polite"></div>
+
+    <dialog id="settings-dialog" class="settings-dialog">
+      <form method="dialog" class="dialog-card">
+        <div class="dialog-heading"><div><p class="eyebrow">Preferencias</p><h2>Ajustes de lectura</h2></div><button class="icon-button" value="close" aria-label="Cerrar">×</button></div>
+
+        <fieldset>
+          <legend>Modo de lectura</legend>
+          <div id="reading-mode-control" class="segmented">
+            <button type="button" data-value="page">Una página</button>
+            <button type="button" data-value="spread">Dos páginas</button>
+            <button type="button" data-value="vertical">Vertical</button>
+          </div>
+        </fieldset>
+
+        <label class="setting-row"><span><strong>Ajuste de página</strong><small>Cómo ocupa la imagen el visor</small></span><select id="fit-select"><option value="best">Óptimo</option><option value="width">Ancho</option><option value="height">Alto</option></select></label>
+        <label class="setting-row"><span><strong>Orientación</strong><small>El navegador puede requerir pantalla completa</small></span><select id="orientation-select"><option value="any">Automática</option><option value="portrait">Vertical</option><option value="landscape">Horizontal</option></select></label>
+        <label class="setting-stack"><span><strong>Filtro ocular</strong><output id="eye-filter-value">0%</output></span><input id="eye-filter-range" type="range" min="0" max="60" step="5" value="0" /></label>
+
+        <fieldset>
+          <legend>Tema de la app</legend>
+          <div id="theme-control" class="theme-options">
+            <button type="button" data-value="dark"><span class="theme-dot dark"></span>Oscuro</button>
+            <button type="button" data-value="oled"><span class="theme-dot oled"></span>OLED</button>
+            <button type="button" data-value="sepia"><span class="theme-dot sepia"></span>Sepia</button>
+            <button type="button" data-value="light"><span class="theme-dot light"></span>Claro</button>
+          </div>
+        </fieldset>
+
+        <div id="current-book-actions" class="current-book-actions hidden">
+          <button id="convert-cbr" class="button secondary" type="button">Convertir CBR a CBZ</button>
         </div>
+      </form>
+    </dialog>
 
-        <!-- Área de visualización de la imagen con scroll -->
-        <div class="scroll-area" id="scroll-area">
-            <!-- Zonas de clic invisibles -->
-            <div class="click-zone left" id="zone-left" title="Página Anterior"></div>
-            <div class="click-zone right" id="zone-right" title="Siguiente Página"></div>
-            
-            <img id="comic-image" class="comic-page fit-best" src="" alt="Página del cómic">
-        </div>
+    <dialog id="confirm-dialog" class="confirm-dialog">
+      <form method="dialog" class="dialog-card small-dialog">
+        <h2 id="confirm-title">Confirmar</h2><p id="confirm-message"></p>
+        <div class="dialog-actions"><button value="cancel" class="button ghost">Cancelar</button><button id="confirm-action" value="confirm" class="button danger">Eliminar</button></div>
+      </form>
+    </dialog>
 
-        <!-- Controles Inferiores -->
-        <div class="hud-overlay bottom flex flex-col gap-3 force-show" id="bottom-hud">
-            <!-- Barra de progreso interactiva -->
-            <input type="range" id="page-slider" min="1" max="100" value="1" class="w-full cursor-pointer accent-sky-500 bg-slate-700 h-2 rounded-lg appearance-none">
-            
-            <div class="flex justify-between items-center">
-                <!-- Modo de ajuste -->
-                <div class="flex bg-slate-800/80 rounded-lg backdrop-blur-sm p-1">
-                    <button id="btn-fit-best" class="text-white p-2 rounded-md hover:bg-slate-700 transition" title="Ajuste Óptimo" data-mode="fit-best">
-                        <i class="ph ph-arrows-in text-lg"></i>
-                    </button>
-                    <button id="btn-fit-width" class="text-slate-400 p-2 rounded-md hover:bg-slate-700 transition" title="Ajustar al Ancho" data-mode="fit-width">
-                        <i class="ph ph-arrows-out-line-horizontal text-lg"></i>
-                    </button>
-                    <button id="btn-fit-height" class="text-slate-400 p-2 rounded-md hover:bg-slate-700 transition" title="Ajustar al Alto" data-mode="fit-height">
-                        <i class="ph ph-arrows-out-line-vertical text-lg"></i>
-                    </button>
-                </div>
-
-                <!-- Navegación por botones -->
-                <div class="flex gap-2">
-                    <button id="btn-prev" class="bg-slate-800/80 hover:bg-sky-600 text-white px-4 py-2 rounded-lg backdrop-blur-sm transition flex items-center gap-2">
-                        <i class="ph ph-caret-left font-bold"></i> Anterior
-                    </button>
-                    <button id="btn-next" class="bg-slate-800/80 hover:bg-sky-600 text-white px-4 py-2 rounded-lg backdrop-blur-sm transition flex items-center gap-2">
-                        Siguiente <i class="ph ph-caret-right font-bold"></i>
-                    </button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Pantalla de Carga -->
-    <div id="loading-screen" class="fixed inset-0 bg-slate-900/90 z-50 flex-col items-center justify-center">
-        <div class="spinner mb-4"></div>
-        <h3 class="text-xl font-bold text-white mb-2" id="loading-title">Procesando Cómic...</h3>
-        <p class="text-slate-400 text-sm" id="loading-text">Leyendo estructura del archivo</p>
-    </div>
-
-    <!-- Modal de Alerta (Para manejo de errores CBR/RAR) -->
-    <div id="alert-modal" class="hidden fixed inset-0 bg-black/60 z-[60] items-center justify-center p-4 backdrop-blur-sm">
-        <div class="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full shadow-2xl">
-            <div class="flex items-center gap-3 mb-4 text-amber-400">
-                <i class="ph-fill ph-warning-circle text-3xl"></i>
-                <h3 class="text-xl font-bold text-white">Atención con el formato CBR</h3>
-            </div>
-            <p class="text-slate-300 mb-6 text-sm leading-relaxed" id="alert-message">
-                Este archivo parece ser un archivo RAR (.cbr) puro. Debido a limitaciones tecnológicas de los navegadores, no podemos descomprimir RARs complejos de forma nativa. <br><br>
-                <strong>Solución:</strong> Te sugerimos usar un programa para convertir tu cómic a formato <strong>.cbz</strong> (ZIP) o descargar directamente versiones CBZ.
-            </p>
-            <div class="flex justify-end">
-                <button onclick="closeModal()" class="bg-slate-700 hover:bg-slate-600 text-white font-medium py-2 px-6 rounded-lg transition-colors">
-                    Entendido
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Lógica de la Aplicación -->
-    <script>
-        // Elementos del DOM
-        const views = {
-            upload: document.getElementById('upload-view'),
-            reader: document.getElementById('reader-view'),
-            loading: document.getElementById('loading-screen'),
-            modal: document.getElementById('alert-modal')
-        };
-        
-        const ui = {
-            dropzone: document.getElementById('dropzone'),
-            fileInput: document.getElementById('file-input'),
-            comicImage: document.getElementById('comic-image'),
-            scrollArea: document.getElementById('scroll-area'),
-            title: document.getElementById('comic-title'),
-            counter: document.getElementById('page-counter'),
-            slider: document.getElementById('page-slider'),
-            huds: document.querySelectorAll('.hud-overlay')
-        };
-
-        // Estado de la aplicación
-        let appState = {
-            pages: [], // Contendrá objetos con información del archivo ZipEntry
-            currentIndex: 0,
-            objectUrls: {}, // Caché para evitar generar blobs repetidos y gestionar memoria
-            fitMode: 'fit-best',
-            fileName: ''
-        };
-
-        let hudTimeout;
-
-        // --- MANEJO DE ARCHIVOS ---
-        
-        // Eventos de Arrastrar y Soltar
-        ui.dropzone.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            ui.dropzone.classList.add('dragover');
-        });
-        
-        ui.dropzone.addEventListener('dragleave', () => {
-            ui.dropzone.classList.remove('dragover');
-        });
-        
-        ui.dropzone.addEventListener('drop', (e) => {
-            e.preventDefault();
-            ui.dropzone.classList.remove('dragover');
-            if (e.dataTransfer.files.length) {
-                handleFile(e.dataTransfer.files[0]);
-            }
-        });
-
-        ui.fileInput.addEventListener('change', (e) => {
-            if (e.target.files.length) {
-                handleFile(e.target.files[0]);
-            }
-        });
-
-        /**
-         * Maneja el archivo cargado, ya sea CBZ, CBR o ZIP.
-         */
-        async function handleFile(file) {
-            const ext = file.name.split('.').pop().toLowerCase();
-            if (!['cbz', 'cbr', 'zip'].includes(ext)) {
-                showAlert('Formato no soportado', 'Por favor, sube un archivo .cbz, .cbr o .zip válido.');
-                return;
-            }
-
-            appState.fileName = file.name;
-            showLoading('Leyendo archivo...', file.name);
-            resetState();
-
-            try {
-                // Leemos el archivo en memoria usando FileReader (necesario para JSZip)
-                const arrayBuffer = await readFileAsArrayBuffer(file);
-                
-                try {
-                    // Intentamos abrirlo como ZIP (CBZ)
-                    await processZipFile(arrayBuffer);
-                    startReading();
-                } catch (zipError) {
-                    console.error("Error al descomprimir:", zipError);
-                    hideLoading();
-                    
-                    // Si falla y era CBR, es altamente probable que sea un RAR puro.
-                    if (ext === 'cbr') {
-                        showModal();
-                    } else {
-                        showAlert('Error de archivo', 'No se pudo leer el contenido del archivo. Puede estar dañado.');
-                    }
-                }
-            } catch (err) {
-                hideLoading();
-                showAlert('Error', 'No se pudo cargar el archivo en la memoria del navegador.');
-                console.error(err);
-            }
-        }
-
-        function readFileAsArrayBuffer(file) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onload = (e) => resolve(e.target.result);
-                reader.onerror = (e) => reject(e);
-                reader.readAsArrayBuffer(file);
-            });
-        }
-
-        /**
-         * Usa JSZip para leer el contenido del archivo, filtrar imágenes y ordenarlas.
-         */
-        async function processZipFile(buffer) {
-            const zip = await JSZip.loadAsync(buffer);
-            const imageFiles = [];
-            
-            // Expresión regular para encontrar imágenes (jpg, jpeg, png, webp, gif)
-            const imgRegex = /\.(jpe?g|png|webp|gif)$/i;
-
-            zip.forEach((relativePath, zipEntry) => {
-                if (!zipEntry.dir && imgRegex.test(zipEntry.name)) {
-                    // Evitar archivos ocultos de macOS como __MACOSX o ._
-                    if (!zipEntry.name.includes('__MACOSX') && !zipEntry.name.split('/').pop().startsWith('._')) {
-                        imageFiles.push(zipEntry);
-                    }
-                }
-            });
-
-            if (imageFiles.length === 0) {
-                throw new Error("No se encontraron imágenes legibles en el archivo.");
-            }
-
-            // Ordenamiento Natural (Para que la página 2 vaya antes que la 10)
-            const collator = new Intl.Collator(undefined, {numeric: true, sensitivity: 'base'});
-            imageFiles.sort((a, b) => collator.compare(a.name, b.name));
-
-            appState.pages = imageFiles;
-            
-            // Configurar barra de progreso
-            ui.slider.max = appState.pages.length;
-            ui.title.textContent = appState.fileName;
-        }
-
-        // --- RENDERIZADO Y NAVEGACIÓN (LAZY LOADING) ---
-
-        function startReading() {
-            views.upload.style.display = 'none';
-            views.reader.classList.add('active');
-            hideLoading();
-            renderPage(0);
-            
-            // Ocultar HUD después de 3 segundos para inmersión
-            resetHudTimer();
-        }
-
-        /**
-         * Carga la página de forma diferida. Solo extrae la imagen cuando se necesita.
-         */
-        async function renderPage(index) {
-            if (index < 0 || index >= appState.pages.length) return;
-            
-            ui.comicImage.style.opacity = '0.3'; // Efecto visual de carga
-            appState.currentIndex = index;
-            
-            // Actualizar interfaz
-            ui.counter.textContent = `Página ${index + 1} / ${appState.pages.length}`;
-            ui.slider.value = index + 1;
-
-            // Obtener o crear URL del Blob
-            const objectUrl = await getOrCreateObjectUrl(index);
-            
-            if (objectUrl) {
-                ui.comicImage.src = objectUrl;
-                ui.comicImage.onload = () => {
-                    ui.comicImage.style.opacity = '1';
-                    ui.scrollArea.scrollTop = 0; // Volver arriba al cambiar de página
-                };
-            }
-
-            // Limpieza de memoria (Revocar URLs antiguas para no saturar la RAM)
-            cleanupMemory(index);
-            
-            // Precarga de la siguiente página (mejora la fluidez)
-            if (index + 1 < appState.pages.length) {
-                getOrCreateObjectUrl(index + 1); // Extraer en segundo plano
-            }
-        }
-
-        async function getOrCreateObjectUrl(index) {
-            // Si ya lo tenemos en caché, devolverlo
-            if (appState.objectUrls[index]) {
-                return appState.objectUrls[index];
-            }
-
-            const zipEntry = appState.pages[index];
-            if (!zipEntry) return null;
-
-            try {
-                // Determinar el MIME type básico por extensión
-                const ext = zipEntry.name.split('.').pop().toLowerCase();
-                let mimeType = 'image/jpeg';
-                if (ext === 'png') mimeType = 'image/png';
-                else if (ext === 'webp') mimeType = 'image/webp';
-                else if (ext === 'gif') mimeType = 'image/gif';
-
-                // Extraer el archivo como Uint8Array y crear Blob (Más seguro en navegadores modernos)
-                const content = await zipEntry.async("uint8array");
-                const blob = new Blob([content], { type: mimeType });
-                
-                const url = URL.createObjectURL(blob);
-                appState.objectUrls[index] = url;
-                return url;
-            } catch (e) {
-                console.error("Error extrayendo imagen:", e);
-                return null;
-            }
-        }
-
-        /**
-         * Mantiene en memoria solo la página actual, la anterior y la siguiente.
-         */
-        function cleanupMemory(currentIndex) {
-            const keepIndexes = [currentIndex - 1, currentIndex, currentIndex + 1];
-            
-            for (const idx in appState.objectUrls) {
-                if (!keepIndexes.includes(parseInt(idx))) {
-                    URL.revokeObjectURL(appState.objectUrls[idx]); // Liberar memoria RAM
-                    delete appState.objectUrls[idx];
-                }
-            }
-        }
-
-        function nextPage() {
-            if (appState.currentIndex < appState.pages.length - 1) {
-                renderPage(appState.currentIndex + 1);
-            }
-        }
-
-        function prevPage() {
-            if (appState.currentIndex > 0) {
-                renderPage(appState.currentIndex - 1);
-            }
-        }
-
-        // --- EVENTOS DE INTERFAZ ---
-
-        // Zonas de clic para navegación
-        document.getElementById('zone-left').addEventListener('click', prevPage);
-        document.getElementById('zone-right').addEventListener('click', nextPage);
-        
-        // Botones UI
-        document.getElementById('btn-prev').addEventListener('click', prevPage);
-        document.getElementById('btn-next').addEventListener('click', nextPage);
-        
-        document.getElementById('btn-close').addEventListener('click', () => {
-            // Volver a la pantalla principal
-            resetState();
-            views.reader.classList.remove('active');
-            views.upload.style.display = 'flex';
-            if (document.fullscreenElement) document.exitFullscreen();
-        });
-
-        // Slider
-        ui.slider.addEventListener('input', (e) => {
-            renderPage(parseInt(e.target.value) - 1);
-        });
-
-        // Teclado
-        window.addEventListener('keydown', (e) => {
-            if (views.reader.classList.contains('active')) {
-                if (e.key === 'ArrowRight' || e.key === 'Space') {
-                    nextPage();
-                    e.preventDefault(); // Evitar scroll con espacio
-                } else if (e.key === 'ArrowLeft') {
-                    prevPage();
-                }
-                resetHudTimer(); // Mantener UI visible al usar teclado
-            }
-        });
-
-        // Ocultamiento automático del HUD (controles)
-        views.reader.addEventListener('mousemove', resetHudTimer);
-        views.reader.addEventListener('touchstart', resetHudTimer);
-
-        function resetHudTimer() {
-            ui.huds.forEach(hud => hud.classList.add('force-show'));
-            clearTimeout(hudTimeout);
-            hudTimeout = setTimeout(() => {
-                ui.huds.forEach(hud => hud.classList.remove('force-show'));
-            }, 3000);
-        }
-
-        // --- MODOS DE AJUSTE DE IMAGEN ---
-        const fitButtons = {
-            'fit-best': document.getElementById('btn-fit-best'),
-            'fit-width': document.getElementById('btn-fit-width'),
-            'fit-height': document.getElementById('btn-fit-height')
-        };
-
-        function setFitMode(mode) {
-            // Reset clases de imagen
-            ui.comicImage.classList.remove('fit-best', 'fit-width', 'fit-height');
-            ui.comicImage.classList.add(mode);
-            appState.fitMode = mode;
-
-            // Estilizar botones
-            for (const [key, btn] of Object.entries(fitButtons)) {
-                if (key === mode) {
-                    btn.classList.replace('text-slate-400', 'text-white');
-                    btn.classList.add('bg-slate-700');
-                } else {
-                    btn.classList.replace('text-white', 'text-slate-400');
-                    btn.classList.remove('bg-slate-700');
-                }
-            }
-        }
-
-        document.getElementById('btn-fit-best').addEventListener('click', () => setFitMode('fit-best'));
-        document.getElementById('btn-fit-width').addEventListener('click', () => setFitMode('fit-width'));
-        document.getElementById('btn-fit-height').addEventListener('click', () => setFitMode('fit-height'));
-
-        // Fullscreen
-        document.getElementById('btn-fullscreen').addEventListener('click', () => {
-            if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen().catch(err => {
-                    console.log(`Error al activar pantalla completa: ${err.message}`);
-                });
-            } else {
-                document.exitFullscreen();
-            }
-        });
-
-        // --- UTILIDADES ---
-        
-        function resetState() {
-            // Liberar todas las URLs en memoria
-            for (const idx in appState.objectUrls) {
-                URL.revokeObjectURL(appState.objectUrls[idx]);
-            }
-            
-            appState = {
-                pages: [],
-                currentIndex: 0,
-                objectUrls: {},
-                fitMode: appState.fitMode,
-                fileName: ''
-            };
-            ui.comicImage.src = '';
-            ui.fileInput.value = '';
-        }
-
-        function showLoading(title, text) {
-            document.getElementById('loading-title').textContent = title;
-            document.getElementById('loading-text').textContent = text || '';
-            views.loading.classList.add('active');
-        }
-
-        function hideLoading() {
-            views.loading.classList.remove('active');
-        }
-
-        function showModal() {
-            views.modal.classList.remove('hidden');
-            views.modal.classList.add('flex');
-        }
-
-        function closeModal() {
-            views.modal.classList.add('hidden');
-            views.modal.classList.remove('flex');
-            ui.fileInput.value = ''; // Limpiar el input para volver a intentar
-        }
-
-        // Custom simple alert
-        function showAlert(title, msg) {
-            alert(`${title}\n\n${msg}`);
-        }
-    </script>
-</body>
+    <script type="module" src="/src/app.js"></script>
+  </body>
 </html>
