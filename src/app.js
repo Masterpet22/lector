@@ -17,13 +17,15 @@ const ui = {
   eyeRange: $('#eye-filter-range'), eyeValue: $('#eye-filter-value'), eyeFilter: $('#eye-filter'),
   modeControl: $('#reading-mode-control'), themeControl: $('#theme-control'), convertButton: $('#convert-cbr'),
   currentBookActions: $('#current-book-actions'), installButton: $('#install-button'), offlineBadge: $('#offline-badge'),
+  quickMode: $('#quick-mode'), readerHint: $('#reader-hint'),
 };
 
 const DEFAULT_SETTINGS = { theme: 'dark', readingMode: 'page', fit: 'best', orientation: 'any', eyeFilter: 0, zoom: 1 };
 const state = {
   books: [], currentBook: null, archive: null, currentIndex: 0, settings: { ...DEFAULT_SETTINGS },
   sessionId: 0, renderId: 0, urlPromises: new Map(), objectUrls: new Map(), verticalObserver: null,
-  hudTimer: null, saveTimer: null, installPrompt: null, touchDistance: 0, touchZoom: 1,
+  hudTimer: null, hintTimer: null, saveTimer: null, installPrompt: null, touchDistance: 0, touchZoom: 1,
+  mousePan: null, suppressZoneClick: false,
 };
 
 function formatBytes(bytes = 0) {
@@ -195,6 +197,7 @@ async function openBook(id) {
     applyZoom();
     setLoading(false);
     resetHudTimer();
+    showReaderHint();
     await applyOrientation(state.settings.orientation, false);
   } catch (error) {
     console.error(error);
@@ -240,6 +243,7 @@ function makePageImage(url, index) {
   image.className = 'page-image';
   image.alt = `Página ${index + 1}`;
   image.decoding = 'async';
+  image.addEventListener('load', () => layoutPagedImages(false), { once: true });
   if (url) image.src = url;
   else {
     frame.classList.add('error');
@@ -259,8 +263,10 @@ async function renderPaged() {
   const urls = await Promise.all(indexes.map(getPageUrl));
   if (renderId !== state.renderId || !state.archive) return;
   ui.paged.replaceChildren(...indexes.map((index, position) => makePageImage(urls[position], index)));
+  await Promise.all([...ui.paged.querySelectorAll('img')].map((image) => (image.decode?.() || Promise.resolve()).catch(() => {})));
+  if (renderId !== state.renderId || !state.archive) return;
+  layoutPagedImages(false);
   ui.paged.style.opacity = '1';
-  ui.stage.scrollTo({ top: 0, left: 0 });
   updateReaderMeta();
   cleanupPageUrls(state.currentIndex);
   getPageUrl(state.currentIndex + (spread ? 2 : 1));
@@ -355,6 +361,7 @@ function applyReadingMode() {
   ui.paged.classList.remove('fit-best', 'fit-width', 'fit-height');
   ui.paged.classList.add(`fit-${state.settings.fit}`);
   ui.modeControl.querySelectorAll('button').forEach((button) => button.classList.toggle('active', button.dataset.value === mode));
+  ui.quickMode.textContent = ({ page: '1 página', spread: '2 páginas', vertical: 'Vertical' })[mode];
   if (!state.archive) return;
   if (mode === 'vertical') setupVerticalReader(); else {
     state.verticalObserver?.disconnect();
@@ -363,17 +370,76 @@ function applyReadingMode() {
   }
 }
 
+function viewportAnchor() {
+  return {
+    x: (ui.stage.scrollLeft + ui.stage.clientWidth / 2) / Math.max(ui.stage.scrollWidth, 1),
+    y: (ui.stage.scrollTop + ui.stage.clientHeight / 2) / Math.max(ui.stage.scrollHeight, 1),
+  };
+}
+
+function layoutPagedImages(preserveCenter = true, anchor = preserveCenter ? viewportAnchor() : null) {
+  const images = [...ui.paged.querySelectorAll('.page-image')].filter((image) => image.naturalWidth > 0);
+  if (!images.length || state.settings.readingMode === 'vertical') return;
+  const slots = state.settings.readingMode === 'spread' ? 2 : 1;
+  const availableWidth = Math.max(1, (ui.stage.clientWidth - (slots - 1) * 2) / slots);
+  const availableHeight = Math.max(1, ui.stage.clientHeight);
+
+  for (const image of images) {
+    const widthScale = availableWidth / image.naturalWidth;
+    const heightScale = availableHeight / image.naturalHeight;
+    let baseScale = Math.min(widthScale, heightScale);
+    if (state.settings.fit === 'width') baseScale = widthScale;
+    if (state.settings.fit === 'height') baseScale = heightScale;
+    const scale = Math.max(.05, baseScale * state.settings.zoom);
+    const width = Math.max(1, Math.round(image.naturalWidth * scale));
+    const height = Math.max(1, Math.round(image.naturalHeight * scale));
+    image.style.width = `${width}px`;
+    image.style.height = `${height}px`;
+    image.parentElement.style.width = `${width}px`;
+    image.parentElement.style.height = `${height}px`;
+  }
+
+  requestAnimationFrame(() => {
+    if (anchor) {
+      ui.stage.scrollLeft = Math.max(0, anchor.x * ui.stage.scrollWidth - ui.stage.clientWidth / 2);
+      ui.stage.scrollTop = Math.max(0, anchor.y * ui.stage.scrollHeight - ui.stage.clientHeight / 2);
+    } else {
+      ui.stage.scrollLeft = Math.max(0, (ui.stage.scrollWidth - ui.stage.clientWidth) / 2);
+      ui.stage.scrollTop = Math.max(0, (ui.stage.scrollHeight - ui.stage.clientHeight) / 2);
+    }
+  });
+}
+
 function setZoom(value) {
+  const anchor = viewportAnchor();
   state.settings.zoom = Math.max(.5, Math.min(3, Math.round(value * 4) / 4));
-  applyZoom();
+  applyZoom(anchor);
   saveSettings();
 }
 
-function applyZoom() {
+function applyZoom(anchor = null) {
   const zoom = state.settings.zoom;
   ui.zoomValue.value = `${Math.round(zoom * 100)}%`;
-  ui.paged.style.setProperty('--page-zoom', zoom);
   ui.vertical.querySelectorAll('.vertical-page').forEach((page) => { page.style.width = `min(${zoom * 100}%, ${Math.round(900 * zoom)}px)`; });
+  layoutPagedImages(Boolean(anchor), anchor);
+}
+
+function setReadingMode(mode) {
+  state.settings.readingMode = mode;
+  saveSettings();
+  applyReadingMode();
+}
+
+function hideReaderHint() {
+  clearTimeout(state.hintTimer);
+  ui.readerHint.classList.add('hidden');
+}
+
+function showReaderHint() {
+  if (sessionStorage.getItem('nebula-reader-hint-seen')) return;
+  sessionStorage.setItem('nebula-reader-hint-seen', 'true');
+  ui.readerHint.classList.remove('hidden');
+  state.hintTimer = setTimeout(hideReaderHint, 5200);
 }
 
 function applyTheme() {
@@ -503,12 +569,16 @@ function bindEvents() {
   $('#close-reader').addEventListener('click', closeReader);
   $('#next-page').addEventListener('click', nextPage);
   $('#previous-page').addEventListener('click', previousPage);
-  $('#next-page-zone').addEventListener('click', nextPage);
-  $('#previous-page-zone').addEventListener('click', previousPage);
+  $('#next-page-zone').addEventListener('click', () => { if (!state.suppressZoneClick) nextPage(); });
+  $('#previous-page-zone').addEventListener('click', () => { if (!state.suppressZoneClick) previousPage(); });
   ui.slider.addEventListener('input', () => goToPage(Number(ui.slider.value) - 1));
   $('#zoom-in').addEventListener('click', () => setZoom(state.settings.zoom + .25));
   $('#zoom-out').addEventListener('click', () => setZoom(state.settings.zoom - .25));
   $('#zoom-reset').addEventListener('click', () => setZoom(1));
+  ui.quickMode.addEventListener('click', () => {
+    const modes = ['page', 'spread', 'vertical'];
+    setReadingMode(modes[(modes.indexOf(state.settings.readingMode) + 1) % modes.length]);
+  });
   $('#reader-fullscreen').addEventListener('click', async () => {
     if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen().catch(() => toast('Pantalla completa no disponible.', 'error'));
     await applyOrientation(state.settings.orientation, false);
@@ -516,9 +586,7 @@ function bindEvents() {
   ui.modeControl.addEventListener('click', (event) => {
     const button = event.target.closest('[data-value]');
     if (!button) return;
-    state.settings.readingMode = button.dataset.value;
-    saveSettings();
-    applyReadingMode();
+    setReadingMode(button.dataset.value);
   });
   ui.fitSelect.addEventListener('change', () => {
     state.settings.fit = ui.fitSelect.value;
@@ -548,13 +616,48 @@ function bindEvents() {
   ui.nextChapter.addEventListener('click', () => changeChapter(1));
   ui.stage.addEventListener('mousemove', resetHudTimer);
   ui.stage.addEventListener('click', (event) => { if (!event.target.closest('.page-zone')) resetHudTimer(); });
-  ui.stage.addEventListener('wheel', (event) => {
-    if (!event.ctrlKey) return;
+  ui.stage.addEventListener('pointerdown', (event) => {
+    if (event.pointerType !== 'mouse' || event.button !== 0 || state.settings.readingMode === 'vertical') return;
+    state.mousePan = { x: event.clientX, y: event.clientY, left: ui.stage.scrollLeft, top: ui.stage.scrollTop, moved: false };
+    ui.stage.classList.add('is-panning');
+    ui.stage.setPointerCapture(event.pointerId);
+    hideReaderHint();
+  });
+  ui.stage.addEventListener('pointermove', (event) => {
+    if (!state.mousePan) return;
+    const deltaX = event.clientX - state.mousePan.x;
+    const deltaY = event.clientY - state.mousePan.y;
+    if (Math.abs(deltaX) + Math.abs(deltaY) > 4) state.mousePan.moved = true;
+    ui.stage.scrollLeft = state.mousePan.left - deltaX;
+    ui.stage.scrollTop = state.mousePan.top - deltaY;
     event.preventDefault();
-    setZoom(state.settings.zoom + (event.deltaY < 0 ? .25 : -.25));
+  });
+  const finishMousePan = (event) => {
+    if (!state.mousePan) return;
+    const moved = state.mousePan.moved;
+    state.mousePan = null;
+    ui.stage.classList.remove('is-panning');
+    if (ui.stage.hasPointerCapture(event.pointerId)) ui.stage.releasePointerCapture(event.pointerId);
+    if (moved) {
+      state.suppressZoneClick = true;
+      setTimeout(() => { state.suppressZoneClick = false; }, 0);
+    }
+  };
+  ui.stage.addEventListener('pointerup', finishMousePan);
+  ui.stage.addEventListener('pointercancel', finishMousePan);
+  ui.stage.addEventListener('wheel', (event) => {
+    hideReaderHint();
+    if (event.ctrlKey) {
+      event.preventDefault();
+      setZoom(state.settings.zoom + (event.deltaY < 0 ? .25 : -.25));
+    } else if (event.shiftKey && state.settings.readingMode !== 'vertical') {
+      event.preventDefault();
+      ui.stage.scrollLeft += event.deltaY || event.deltaX;
+    }
   }, { passive: false });
   ui.stage.addEventListener('touchstart', (event) => {
     resetHudTimer();
+    hideReaderHint();
     if (event.touches.length === 2) {
       state.touchDistance = Math.hypot(event.touches[0].clientX - event.touches[1].clientX, event.touches[0].clientY - event.touches[1].clientY);
       state.touchZoom = state.settings.zoom;
@@ -568,6 +671,16 @@ function bindEvents() {
   }, { passive: false });
   window.addEventListener('keydown', (event) => {
     if (ui.readerView.classList.contains('hidden') || ui.settings.open) return;
+    if (event.shiftKey && ['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
+      event.preventDefault();
+      const distance = Math.max(100, Math.round(Math.min(ui.stage.clientWidth, ui.stage.clientHeight) * .22));
+      ui.stage.scrollBy({
+        left: event.key === 'ArrowRight' ? distance : event.key === 'ArrowLeft' ? -distance : 0,
+        top: event.key === 'ArrowDown' ? distance : event.key === 'ArrowUp' ? -distance : 0,
+        behavior: 'smooth',
+      });
+      return;
+    }
     if (event.key === 'ArrowRight' || event.key === ' ') { event.preventDefault(); nextPage(); }
     if (event.key === 'ArrowLeft') { event.preventDefault(); previousPage(); }
     if (event.key === 'Escape') closeReader();
@@ -577,6 +690,7 @@ function bindEvents() {
   });
   window.addEventListener('online', updateConnectionBadge);
   window.addEventListener('offline', updateConnectionBadge);
+  window.addEventListener('resize', () => layoutPagedImages(true));
   window.addEventListener('beforeinstallprompt', (event) => {
     event.preventDefault();
     state.installPrompt = event;

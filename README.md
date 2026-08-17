@@ -29,6 +29,21 @@ npm run mobile:android
 
 El comando compila, sincroniza y abre Android Studio. Desde allí se ejecuta en un dispositivo/emulador y se genera el APK/AAB firmado.
 
+Para generar directamente un APK instalable de pruebas:
+
+```powershell
+npm run android:apk
+```
+
+El resultado visible queda en `releases/NebulaReader-debug.apk`. Android utiliza APK o AAB; el formato PKG pertenece a macOS.
+
+## Controles del lector
+
+- Arrastra con el ratón o desliza con un dedo para recorrer páginas ampliadas.
+- Pellizca o usa `Ctrl + rueda` para cambiar el zoom.
+- Usa `Mayús + flechas` para desplazar la vista sin pasar de página.
+- El botón de modo de la barra inferior alterna una página, dos páginas y lectura vertical.
+
 ## iOS
 
 En macOS, después de instalar Xcode:

@@ -11,6 +11,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "test": "node --test",
+    "assets:android": "capacitor-assets generate --android --assetPath assets --iconBackgroundColor=#070912 --iconBackgroundColorDark=#070912 --splashBackgroundColor=#070912 --splashBackgroundColorDark=#070912",
+    "android:apk": "powershell -ExecutionPolicy Bypass -File scripts/build-android.ps1",
     "mobile:sync": "npm run build && cap sync",
     "mobile:android": "npm run mobile:sync && cap open android",
     "mobile:ios": "npm run mobile:sync && cap open ios"
@@ -24,9 +26,13 @@
   },
   "devDependencies": {
     "@capacitor/android": "^8.0.0",
+    "@capacitor/assets": "^3.0.5",
     "@capacitor/cli": "^8.0.0",
     "@capacitor/ios": "^8.0.0",
     "vite": "^7.1.3",
     "vite-plugin-pwa": "^1.0.2"
+  },
+  "allowScripts": {
+    "sharp@0.32.6": true
   }
 }

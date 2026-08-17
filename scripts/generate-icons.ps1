@@ -1,20 +1,31 @@
 Add-Type -AssemblyName System.Drawing
 
-$outputDirectory = Join-Path (Split-Path $PSScriptRoot -Parent) 'public\icons'
-foreach ($size in 192, 512) {
-    $bitmap = New-Object System.Drawing.Bitmap($size, $size)
+$projectRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
+$sourcePath = Join-Path $projectRoot 'logo.png'
+$outputDirectory = Join-Path $projectRoot 'public\icons'
+$brandingDirectory = Join-Path $projectRoot 'public\branding'
+$source = [System.Drawing.Image]::FromFile($sourcePath)
+
+function Write-NebulaIcon([int]$size, [double]$scale, [string]$fileName) {
+    $bitmap = New-Object System.Drawing.Bitmap($size, $size, [System.Drawing.Imaging.PixelFormat]::Format32bppArgb)
     $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
-    $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
-    $graphics.Clear([System.Drawing.ColorTranslator]::FromHtml('#0b1020'))
-    $margin = [int]($size * 0.18)
-    $brush = New-Object System.Drawing.SolidBrush([System.Drawing.ColorTranslator]::FromHtml('#70e1c1'))
-    $graphics.FillEllipse($brush, $margin, $margin, $size - 2 * $margin, $size - 2 * $margin)
-    $font = New-Object System.Drawing.Font('Segoe UI', ($size * 0.42), [System.Drawing.FontStyle]::Bold, [System.Drawing.GraphicsUnit]::Pixel)
-    $textBrush = New-Object System.Drawing.SolidBrush([System.Drawing.ColorTranslator]::FromHtml('#0b1020'))
-    $format = New-Object System.Drawing.StringFormat
-    $format.Alignment = [System.Drawing.StringAlignment]::Center
-    $format.LineAlignment = [System.Drawing.StringAlignment]::Center
-    $graphics.DrawString('N', $font, $textBrush, (New-Object System.Drawing.RectangleF(0, 0, $size, $size)), $format)
-    $bitmap.Save((Join-Path $outputDirectory "icon-$size.png"), [System.Drawing.Imaging.ImageFormat]::Png)
-    $format.Dispose(); $textBrush.Dispose(); $font.Dispose(); $brush.Dispose(); $graphics.Dispose(); $bitmap.Dispose()
+    $graphics.CompositingQuality = [System.Drawing.Drawing2D.CompositingQuality]::HighQuality
+    $graphics.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+    $graphics.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::HighQuality
+    $graphics.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::HighQuality
+    $graphics.Clear([System.Drawing.ColorTranslator]::FromHtml('#070912'))
+    $targetSize = [int]($size * $scale)
+    $offset = [int](($size - $targetSize) / 2)
+    $graphics.DrawImage($source, $offset, $offset, $targetSize, $targetSize)
+    $bitmap.Save((Join-Path $outputDirectory $fileName), [System.Drawing.Imaging.ImageFormat]::Png)
+    $graphics.Dispose()
+    $bitmap.Dispose()
 }
+
+New-Item -ItemType Directory -Force -Path $outputDirectory,$brandingDirectory | Out-Null
+Write-NebulaIcon 192 0.96 'icon-192.png'
+Write-NebulaIcon 512 0.96 'icon-512.png'
+Write-NebulaIcon 512 0.78 'icon-maskable-512.png'
+Write-NebulaIcon 180 0.96 'apple-touch-icon.png'
+Write-NebulaIcon 256 0.96 '..\branding\logo.png'
+$source.Dispose()

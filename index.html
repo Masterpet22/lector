@@ -10,7 +10,8 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <title>Nebula Reader</title>
     <link rel="manifest" href="/manifest.webmanifest" />
-    <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="stylesheet" href="/src/styles.css" />
     <script src="/vendor/jszip.min.js"></script>
   </head>
@@ -18,7 +19,7 @@
     <div id="app-shell">
       <header class="app-header">
         <button id="brand-home" class="brand" type="button" aria-label="Ir a la biblioteca">
-          <span class="brand-mark" aria-hidden="true">N</span>
+          <img class="brand-logo" src="/branding/logo.png" alt="" aria-hidden="true" />
           <span><strong>Nebula</strong><small>Reader</small></span>
         </button>
         <div class="header-actions">
@@ -77,12 +78,14 @@
           <div id="paged-pages" class="paged-pages"></div>
           <div id="vertical-pages" class="vertical-pages hidden"></div>
           <button id="next-page-zone" class="page-zone next" type="button" aria-label="Página siguiente"></button>
+          <div id="reader-hint" class="reader-hint hidden">↔ Arrastra para explorar · Pellizca o usa Ctrl + rueda para ampliar</div>
         </section>
 
         <footer id="reader-bottombar" class="reader-bar bottom-bar visible">
           <input id="page-slider" type="range" min="1" max="1" value="1" aria-label="Página actual" />
           <div class="reader-controls">
             <div class="control-group">
+              <button id="quick-mode" class="button ghost compact-button mode-button" type="button" title="Cambiar modo de lectura">1 página</button>
               <button id="zoom-out" class="icon-button compact" type="button" aria-label="Alejar">−</button>
               <output id="zoom-value">100%</output>
               <button id="zoom-in" class="icon-button compact" type="button" aria-label="Acercar">＋</button>
@@ -132,6 +135,7 @@
         <div id="current-book-actions" class="current-book-actions hidden">
           <button id="convert-cbr" class="button secondary" type="button">Convertir CBR a CBZ</button>
         </div>
+        <p class="shortcut-help"><strong>Consejo:</strong> arrastra con el ratón o desliza para recorrer una página ampliada. Usa <kbd>Mayús</kbd> + flechas para desplazarte sin cambiar de página.</p>
       </form>
     </dialog>
 

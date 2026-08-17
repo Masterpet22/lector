@@ -45,6 +45,12 @@ Esta combinación mantiene una sola base de código, permite usar el lector desd
    - Compilación web y sincronización Android en cada entrega.
    - Pendiente de producto: pruebas con una colección real grande, CBR cifrados y dispositivos físicos de gama baja.
 
+## Validación con archivos reales
+
+- CBZ aportado: 23 páginas, apertura y extracción correctas.
+- CBR aportado: 29 páginas, estructura RAR y primera imagen verificadas.
+- PDF aportado: 223 páginas, apertura y primera página verificadas.
+
 ## Criterios de aceptación
 
 - La aplicación arranca y muestra la biblioteca sin conexión después de instalarse o visitarse una vez.
