@@ -16,6 +16,26 @@ function mimeFor(name) {
   return ({ avif: 'image/avif', gif: 'image/gif', jpg: 'image/jpeg', jpeg: 'image/jpeg', png: 'image/png', webp: 'image/webp' })[extension(name)] || 'application/octet-stream';
 }
 
+function decodeEntities(value = '') {
+  return value.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'").trim();
+}
+
+function xmlValue(xml, tag) {
+  const match = xml.match(new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, 'i'));
+  return decodeEntities(match?.[1]?.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/<[^>]+>/g, '') || '');
+}
+
+function comicInfoMetadata(xml = '') {
+  if (!xml) return {};
+  const creators = ['Writer', 'Penciller', 'Inker'].map((tag) => xmlValue(xml, tag)).filter(Boolean);
+  const tags = [xmlValue(xml, 'Genre'), xmlValue(xml, 'Tags')].flatMap((value) => value.split(',')).map((value) => value.trim()).filter(Boolean);
+  return {
+    title: xmlValue(xml, 'Title'), series: xmlValue(xml, 'Series'), number: xmlValue(xml, 'Number'),
+    author: [...new Set(creators)].join(', '), publisher: xmlValue(xml, 'Publisher'), year: xmlValue(xml, 'Year'),
+    summary: xmlValue(xml, 'Summary'), tags: [...new Set(tags)],
+  };
+}
+
 async function loadLibarchive() {
   archiveModulePromise ||= import('libarchive.js').then((module) => {
     module.Archive.init({ workerUrl: '/vendor/worker-bundle.js' });
@@ -35,6 +55,8 @@ async function loadPdfJs() {
 async function openZip(blob) {
   if (!window.JSZip) throw new Error('El motor ZIP no está disponible.');
   const zip = await window.JSZip.loadAsync(blob);
+  const infoEntry = Object.values(zip.files).find((entry) => /(^|\/)ComicInfo\.xml$/i.test(entry.name));
+  const metadata = infoEntry ? comicInfoMetadata(await infoEntry.async('text')) : {};
   const entries = [];
   zip.forEach((_, entry) => {
     if (!entry.dir && isUsableImage(entry.name)) entries.push(entry);
@@ -43,6 +65,7 @@ async function openZip(blob) {
   if (!entries.length) throw new Error('El archivo no contiene imágenes compatibles.');
   return {
     type: 'zip',
+    metadata,
     pages: entries.map((entry) => ({
       name: entry.name,
       getBlob: () => entry.async('blob').then((blob) => blob.type ? blob : new Blob([blob], { type: mimeFor(entry.name) })),
@@ -56,6 +79,11 @@ async function openRar(blob, fileName) {
   const file = new File([blob], fileName, { type: blob.type || 'application/vnd.rar' });
   const archive = await Archive.open(file);
   const listed = await archive.getFilesArray();
+  const infoFile = listed.find(({ file: compressed, path }) => compressed && /(^|\/)ComicInfo\.xml$/i.test(`${path}${compressed.name}`.replaceAll('\\', '/')));
+  let metadata = {};
+  if (infoFile) {
+    try { metadata = comicInfoMetadata(await (await infoFile.file.extract()).text()); } catch (error) { console.warn('ComicInfo.xml no legible', error); }
+  }
   const entries = listed
     .filter(({ file: compressed, path }) => compressed && isUsableImage(`${path}${compressed.name}`))
     .map(({ file: compressed, path }) => ({ compressed, name: `${path}${compressed.name}` }))
@@ -66,6 +94,7 @@ async function openRar(blob, fileName) {
   }
   return {
     type: 'rar',
+    metadata,
     pages: entries.map(({ compressed, name }) => ({
       name,
       getBlob: async () => {
@@ -88,10 +117,17 @@ async function openPdf(blob) {
     isEvalSupported: false,
   });
   const documentProxy = await loadingTask.promise;
+  let metadata = {};
+  try {
+    const pdfMetadata = await documentProxy.getMetadata();
+    const info = pdfMetadata?.info || {};
+    metadata = { title: info.Title || '', author: info.Author || '', summary: info.Subject || '', tags: String(info.Keywords || '').split(/[,;]/).map((value) => value.trim()).filter(Boolean) };
+  } catch (error) { console.warn('Metadatos PDF no disponibles', error); }
   let closed = false;
 
   return {
     type: 'pdf',
+    metadata,
     pages: Array.from({ length: documentProxy.numPages }, (_, index) => ({
       name: `${String(index + 1).padStart(4, '0')}.png`,
       getBlob: async () => {
@@ -137,7 +173,7 @@ export async function inspectComic(blob, fileName) {
   const archive = await openComicArchive(blob, fileName);
   try {
     const cover = await archive.pages[0].getBlob();
-    return { pageCount: archive.pages.length, cover };
+    return { pageCount: archive.pages.length, cover, metadata: archive.metadata || {} };
   } finally {
     await archive.close();
   }

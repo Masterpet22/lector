@@ -43,6 +43,15 @@ El resultado visible queda en `releases/NebulaReader-debug.apk`. Android utiliza
 - Pellizca o usa `Ctrl + rueda` para cambiar el zoom.
 - Usa `Mayús + flechas` para desplazar la vista sin pasar de página.
 - El botón de modo de la barra inferior alterna una página, dos páginas y lectura vertical.
+- Un doble clic o doble toque amplía la viñeta detectada; repítelo para volver al ajuste normal.
+- Las flechas laterales y los botones inferiores respetan la dirección occidental o manga.
+
+## Biblioteca y datos de lectura
+
+- Usa la estrella para marcar favoritos y el menú `⋮` para editar metadatos o cambiar la portada.
+- La vista `▦` agrupa los libros en estanterías por serie; búsqueda y filtros funcionan completamente offline.
+- Marcadores, notas, páginas vistas, tiempo leído y progreso se guardan por archivo.
+- Las recomendaciones se calculan solo con series, autores y etiquetas presentes en la biblioteca local.
 
 ## iOS
 

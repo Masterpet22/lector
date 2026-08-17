@@ -52,6 +52,12 @@
             <div><p class="eyebrow">Biblioteca</p><h2>Mis cómics</h2></div>
             <div class="storage-summary"><span id="book-count">0 capítulos</span><span id="storage-usage"></span></div>
           </div>
+          <div id="library-stats" class="stats-grid" aria-label="Estadísticas de lectura"></div>
+          <div class="library-toolbar">
+            <label class="search-box"><span aria-hidden="true">⌕</span><input id="library-search" type="search" placeholder="Buscar título, serie, autor o etiqueta" aria-label="Buscar en la biblioteca" /></label>
+            <select id="library-filter" aria-label="Filtrar biblioteca"><option value="all">Todos</option><option value="favorites">Favoritos</option><option value="reading">En lectura</option><option value="unread">Sin leer</option></select>
+            <button id="library-view-mode" class="icon-button" type="button" aria-label="Cambiar vista de biblioteca" title="Vista de estanterías">▤</button>
+          </div>
           <div id="empty-library" class="empty-state">
             <span aria-hidden="true">◇</span>
             <h3>Tu biblioteca está vacía</h3>
@@ -59,6 +65,7 @@
           </div>
           <div id="library-grid" class="library-grid" aria-live="polite"></div>
         </section>
+        <section id="recommendations" class="recommendations hidden"><div class="section-heading"><div><p class="eyebrow">Tu biblioteca sugiere</p><h2>Para continuar</h2></div></div><div id="recommendation-list" class="recommendation-list"></div></section>
       </main>
 
       <main id="reader-view" class="view reader-view hidden" aria-label="Lector">
@@ -70,6 +77,7 @@
             <button id="next-chapter" class="icon-button compact" type="button" aria-label="Capítulo siguiente">›</button>
           </div>
           <div class="reader-meta"><strong id="reader-title"></strong><span id="page-counter">Página 1 / 1</span></div>
+          <button id="reader-favorite" class="icon-button" type="button" aria-label="Marcar historia como favorita" title="Favorito">☆</button>
           <button id="reader-fullscreen" class="icon-button" type="button" aria-label="Pantalla completa">⛶</button>
         </header>
 
@@ -85,17 +93,21 @@
           <input id="page-slider" type="range" min="1" max="1" value="1" aria-label="Página actual" />
           <div class="reader-controls">
             <div class="control-group">
-              <button id="quick-mode" class="button ghost compact-button mode-button" type="button" title="Cambiar modo de lectura">1 página</button>
-              <button id="zoom-out" class="icon-button compact" type="button" aria-label="Alejar">−</button>
+              <button id="quick-mode" class="icon-button compact" type="button" title="Cambiar modo de lectura" aria-label="Modo de una página">▯</button>
+              <button id="zoom-out" class="icon-button compact" type="button" aria-label="Alejar" title="Alejar">−</button>
               <output id="zoom-value">100%</output>
-              <button id="zoom-in" class="icon-button compact" type="button" aria-label="Acercar">＋</button>
-              <button id="zoom-reset" class="button ghost compact-button" type="button">Ajustar</button>
+              <button id="zoom-in" class="icon-button compact" type="button" aria-label="Acercar" title="Acercar">＋</button>
+              <button id="zoom-reset" class="icon-button compact" type="button" aria-label="Restablecer zoom" title="Ajustar a pantalla">↺</button>
             </div>
             <div class="control-group page-buttons">
-              <button id="previous-page" class="button ghost" type="button">← Anterior</button>
-              <button id="next-page" class="button primary" type="button">Siguiente →</button>
+              <button id="previous-page" class="icon-button" type="button" aria-label="Página anterior" title="Página anterior">←</button>
+              <button id="next-page" class="icon-button primary-icon" type="button" aria-label="Página siguiente" title="Página siguiente">→</button>
             </div>
-            <button id="reader-settings" class="icon-button" type="button" aria-label="Ajustes de lectura">☼</button>
+            <div class="control-group">
+              <button id="page-bookmark" class="icon-button" type="button" aria-label="Marcar esta página" title="Marcador">♧</button>
+              <button id="open-notes" class="icon-button" type="button" aria-label="Abrir marcadores y notas" title="Notas">✎</button>
+              <button id="reader-settings" class="icon-button" type="button" aria-label="Ajustes de lectura" title="Ajustes">⚙</button>
+            </div>
           </div>
         </footer>
         <div id="reader-loader" class="reader-loader hidden"><span class="spinner"></span><p id="loader-text">Abriendo capítulo…</p></div>
@@ -112,15 +124,26 @@
         <fieldset>
           <legend>Modo de lectura</legend>
           <div id="reading-mode-control" class="segmented">
-            <button type="button" data-value="page">Una página</button>
-            <button type="button" data-value="spread">Dos páginas</button>
-            <button type="button" data-value="vertical">Vertical</button>
+            <button type="button" data-value="page">▯ Una</button>
+            <button type="button" data-value="spread">▯▯ Doble</button>
+            <button type="button" data-value="vertical">↧ Fluida</button>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Dirección de lectura</legend>
+          <div id="reading-direction-control" class="segmented two-options">
+            <button type="button" data-value="ltr">→ Occidental</button>
+            <button type="button" data-value="rtl">← Manga</button>
           </div>
         </fieldset>
 
         <label class="setting-row"><span><strong>Ajuste de página</strong><small>Cómo ocupa la imagen el visor</small></span><select id="fit-select"><option value="best">Óptimo</option><option value="width">Ancho</option><option value="height">Alto</option></select></label>
         <label class="setting-row"><span><strong>Orientación</strong><small>El navegador puede requerir pantalla completa</small></span><select id="orientation-select"><option value="any">Automática</option><option value="portrait">Vertical</option><option value="landscape">Horizontal</option></select></label>
         <label class="setting-stack"><span><strong>Filtro ocular</strong><output id="eye-filter-value">0%</output></span><input id="eye-filter-range" type="range" min="0" max="60" step="5" value="0" /></label>
+        <label class="setting-stack"><span><strong>Margen entre páginas</strong><output id="page-margin-value">2 px</output></span><input id="page-margin-range" type="range" min="0" max="48" step="2" value="2" /></label>
+        <label class="setting-stack"><span><strong>Brillo</strong><output id="brightness-value">100%</output></span><input id="brightness-range" type="range" min="50" max="130" step="5" value="100" /></label>
+        <label class="check-setting"><input id="adaptive-brightness" type="checkbox" /><span><strong>Brillo adaptado</strong><small>Reduce el brillo si el sistema usa modo oscuro</small></span></label>
 
         <fieldset>
           <legend>Tema de la app</legend>
@@ -136,6 +159,34 @@
           <button id="convert-cbr" class="button secondary" type="button">Convertir CBR a CBZ</button>
         </div>
         <p class="shortcut-help"><strong>Consejo:</strong> arrastra con el ratón o desliza para recorrer una página ampliada. Usa <kbd>Mayús</kbd> + flechas para desplazarte sin cambiar de página.</p>
+      </form>
+    </dialog>
+
+    <dialog id="book-dialog" class="settings-dialog">
+      <form id="book-form" class="dialog-card">
+        <div class="dialog-heading"><div><p class="eyebrow">Organización</p><h2>Editar libro</h2></div><button id="close-book-dialog" class="icon-button" type="button" aria-label="Cerrar">×</button></div>
+        <input id="book-id" type="hidden" />
+        <div class="form-grid">
+          <label>Título<input id="book-title-input" required /></label>
+          <label>Serie / colección<input id="book-series-input" /></label>
+          <label>Número<input id="book-number-input" /></label>
+          <label>Autor<input id="book-author-input" /></label>
+          <label>Editorial<input id="book-publisher-input" /></label>
+          <label>Año<input id="book-year-input" inputmode="numeric" /></label>
+        </div>
+        <label class="form-field">Etiquetas <input id="book-tags-input" placeholder="manga, ciencia ficción, aventura" /></label>
+        <label class="form-field">Sinopsis <textarea id="book-summary-input" rows="4"></textarea></label>
+        <label class="cover-picker"><span>▧ Cambiar portada</span><input id="book-cover-input" type="file" accept="image/*" /></label>
+        <div class="dialog-actions spread-actions"><button id="delete-book" type="button" class="button danger" title="Eliminar">⌫</button><button id="save-book" type="submit" class="button primary">✓ Guardar</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="notes-dialog" class="settings-dialog">
+      <form id="note-form" class="dialog-card">
+        <div class="dialog-heading"><div><p class="eyebrow">Página actual</p><h2>Marcadores y notas</h2></div><button id="close-notes" class="icon-button" type="button" aria-label="Cerrar">×</button></div>
+        <label class="form-field">Nota para la página <span id="note-page-number"></span><textarea id="page-note-input" rows="4" placeholder="Escribe una observación…"></textarea></label>
+        <div class="dialog-actions"><button id="remove-page-note" type="button" class="button ghost">⌫</button><button type="submit" class="button primary">✓ Guardar</button></div>
+        <div id="bookmark-list" class="bookmark-list"></div>
       </form>
     </dialog>
 

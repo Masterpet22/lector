@@ -33,14 +33,23 @@ Esta combinación mantiene una sola base de código, permite usar el lector desd
    - Tema oscuro, OLED, sepia y claro.
    - Filtro ocular regulable.
    - Bloqueo automático, vertical u horizontal con API web y plugin nativo.
+   - Navegación persistente en los tres modos, dirección occidental o manga y doble página ordenada según la dirección.
+   - Doble toque/clic para zoom inteligente local por regiones de viñeta, con retorno al ajuste normal.
+   - Marcadores y notas por página, margen configurable, brillo manual o adaptado.
 
-5. **Distribución — completada para web y Android**
+5. **Organización avanzada — completada**
+   - Favoritos, búsqueda, filtros y vista visual de estanterías por serie.
+   - Series automáticas desde el nombre y edición manual de título, número, autor, editorial, año, etiquetas y sinopsis.
+   - Extracción local de ComicInfo.xml y metadatos PDF, además de portadas personalizadas.
+   - Historial por archivo, tiempo de lectura, páginas vistas, progreso y recomendaciones internas sin enviar datos.
+
+6. **Distribución — completada para web y Android**
    - Manifest, iconos y service worker sin dependencias remotas.
    - Compilación reproducible con Vite.
    - Proyecto Android de Capacitor generado.
    - Configuración iOS incluida; su proyecto y firma deben generarse en macOS con Xcode.
 
-6. **Validación — en curso continuo**
+7. **Validación — en curso continuo**
    - Pruebas unitarias del archivo, orden y metadatos.
    - Compilación web y sincronización Android en cada entrega.
    - Pendiente de producto: pruebas con una colección real grande, CBR cifrados y dispositivos físicos de gama baja.

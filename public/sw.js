@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nebula-reader-v3';
+const CACHE_NAME = 'nebula-reader-v4';
 const APP_SHELL = [
   '/', '/index.html', '/manifest.webmanifest', '/favicon.ico', '/branding/logo.png', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/icon-maskable-512.png', '/icons/apple-touch-icon.png',
   '/vendor/jszip.min.js', '/vendor/worker-bundle.js', '/vendor/libarchive.wasm',
