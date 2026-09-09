@@ -54,6 +54,15 @@ Esta combinación mantiene una sola base de código, permite usar el lector desd
    - Compilación web y sincronización Android en cada entrega.
    - Pendiente de producto: pruebas con una colección real grande, CBR cifrados y dispositivos físicos de gama baja.
 
+8. **UX premium — completada**
+   - Inicio dinámico con “Continuar leyendo” y “Agregados recientemente”.
+   - Carruseles horizontales adaptados a escritorio y móvil.
+   - Vista de series con acceso directo a capítulos ordenados.
+   - Navegación móvil persistente para Inicio, Continuar, Series y Almacenamiento.
+   - Panel de almacenamiento con uso del sitio, tamaño aproximado de biblioteca y caché.
+   - Limpieza manual de caché temporal sin borrar la biblioteca del usuario.
+   - Ajustes de carga de imágenes del lector para priorizar contenido visible y diferir contenido secundario.
+
 ## Validación con archivos reales
 
 - CBZ aportado: 23 páginas, apertura y extracción correctas.
@@ -63,8 +72,9 @@ Esta combinación mantiene una sola base de código, permite usar el lector desd
 ## Criterios de aceptación
 
 - La aplicación arranca y muestra la biblioteca sin conexión después de instalarse o visitarse una vez.
-- Ningún cómic sale del dispositivo.
+- Ningún cómic sale del dispositivo salvo cuando el usuario conecta explícitamente una fuente externa autorizada.
 - El progreso sobrevive al cierre de la pestaña/app.
 - Un cambio rápido de página o capítulo no puede mostrar contenido de una sesión anterior.
 - Todos los controles críticos son utilizables con teclado y en pantallas táctiles.
 - Android usa el mismo contenido compilado que la web.
+- La pantalla principal permite retomar lectura, descubrir contenido reciente y navegar por series sin depender del buscador.
