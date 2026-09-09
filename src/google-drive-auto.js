@@ -1,4 +1,5 @@
 import { initGoogleDrive } from './google-drive.js';
+import { initPremiumUx } from './premium.js';
 
 async function handFilesToReader(files) {
   const input = document.querySelector('#file-input');
@@ -11,6 +12,7 @@ async function handFilesToReader(files) {
 
 function start() {
   initGoogleDrive(handFilesToReader);
+  initPremiumUx();
 }
 
 if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true });
