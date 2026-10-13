@@ -57,6 +57,17 @@
             <label class="search-box"><span aria-hidden="true">⌕</span><input id="library-search" type="search" placeholder="Buscar título, serie, autor o etiqueta" aria-label="Buscar en la biblioteca" /></label>
             <select id="library-filter" aria-label="Filtrar biblioteca"><option value="all">Todos</option><option value="favorites">Favoritos</option><option value="reading">En lectura</option><option value="unread">Sin leer</option></select>
             <button id="library-view-mode" class="icon-button" type="button" aria-label="Cambiar vista de biblioteca" title="Vista de estanterías">▤</button>
+            <button id="toggle-selection-mode" class="button secondary" type="button">Seleccionar</button>
+          </div>
+          <div id="selection-toolbar" class="selection-toolbar hidden" role="toolbar" aria-label="Acciones para documentos seleccionados">
+            <strong id="selection-count">0 seleccionados</strong>
+            <div class="selection-actions">
+              <button id="select-visible-books" class="button ghost" type="button">Seleccionar todos</button>
+              <button id="group-selected-books" class="button secondary" type="button">Agrupar</button>
+              <button id="backup-selected-books" class="button secondary" type="button">Activar respaldo</button>
+              <button id="delete-selected-books" class="button danger" type="button">Eliminar</button>
+              <button id="cancel-selection" class="button ghost" type="button">Cancelar</button>
+            </div>
           </div>
           <div id="empty-library" class="empty-state">
             <span aria-hidden="true">◇</span>
@@ -144,6 +155,21 @@
         <label class="setting-stack"><span><strong>Margen entre páginas</strong><output id="page-margin-value">2 px</output></span><input id="page-margin-range" type="range" min="0" max="48" step="2" value="2" /></label>
         <label class="setting-stack"><span><strong>Brillo</strong><output id="brightness-value">100%</output></span><input id="brightness-range" type="range" min="50" max="130" step="5" value="100" /></label>
         <label class="check-setting"><input id="adaptive-brightness" type="checkbox" /><span><strong>Brillo adaptado</strong><small>Reduce el brillo si el sistema usa modo oscuro</small></span></label>
+        <label class="switch-setting">
+          <input id="document-backup" type="checkbox" role="switch" />
+          <span class="switch-control" aria-hidden="true"></span>
+          <span class="switch-copy"><strong>Respaldo de documentos</strong><small>Copia en la biblioteca los documentos nuevos; si se desactiva, conserva una referencia al archivo original</small></span>
+        </label>
+
+        <fieldset class="document-locations-setting">
+          <legend>Ubicaciones de documentos</legend>
+          <p>Carpetas autorizadas donde guardas tus documentos. El navegador protege la ruta absoluta.</p>
+          <div id="document-location-list" class="document-location-list"></div>
+          <div class="document-location-actions">
+            <button id="add-document-location" class="button secondary" type="button">＋ Añadir carpeta</button>
+            <button id="refresh-document-locations" class="button secondary" type="button" aria-label="Actualizar biblioteca" title="Actualizar biblioteca"><span aria-hidden="true">🔄</span></button>
+          </div>
+        </fieldset>
 
         <fieldset>
           <legend>Tema de la app</legend>
@@ -197,8 +223,21 @@
       </form>
     </dialog>
 
-    <script src="./google-drive-config.js"></script>
+    <dialog id="bulk-group-dialog" class="settings-dialog">
+      <form id="bulk-group-form" class="dialog-card small-dialog">
+        <div class="dialog-heading"><div><p class="eyebrow">Organización</p><h2>Agrupar documentos</h2></div><button id="close-bulk-group" class="icon-button" type="button" aria-label="Cerrar">×</button></div>
+        <label class="form-field">Nombre del grupo<input id="bulk-group-name" required maxlength="120" autocomplete="off" placeholder="Ej. Saga principal" /></label>
+        <div class="dialog-actions"><button id="cancel-bulk-group" type="button" class="button ghost">Cancelar</button><button type="submit" class="button primary">Guardar grupo</button></div>
+      </form>
+    </dialog>
+
+    <dialog id="library-group-dialog" class="settings-dialog library-group-dialog">
+      <div class="dialog-card">
+        <div class="dialog-heading"><div><p class="eyebrow">Grupo</p><h2 id="library-group-title"></h2><small id="library-group-count"></small></div><button id="close-library-group" class="icon-button" type="button" aria-label="Cerrar">×</button></div>
+        <div id="library-group-books" class="library-grid group-books-grid"></div>
+      </div>
+    </dialog>
+
     <script type="module" src="/src/app.js"></script>
-    <script type="module" src="/src/google-drive-auto.js"></script>
   </body>
 </html>

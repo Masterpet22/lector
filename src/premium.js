@@ -187,7 +187,7 @@ async function openStorage() {
   content.innerHTML = '<p>Calculando almacenamiento...</p>';
   dialog.showModal();
   const [estimate, books, cachesSize] = await Promise.all([getStorageEstimate(), getAllBooks(), cacheBytes()]);
-  const libraryBytes = books.reduce((sum, book) => sum + Number(book.size || book.blob?.size || 0), 0);
+  const libraryBytes = books.reduce((sum, book) => sum + Number(book.blob?.size || 0), 0);
   const usage = estimate?.usage || 0;
   const quota = estimate?.quota || 0;
   const percent = quota ? Math.min(100, usage / quota * 100) : 0;
