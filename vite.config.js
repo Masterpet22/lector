@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite';
 
 export default defineConfig({
-  base: '/lector/',
+  base: './',
   build: {
     target: 'es2022',
     sourcemap: true,
