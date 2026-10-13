@@ -2,7 +2,7 @@
 
 ## Visión del producto
 
-Nebula Reader busca ser un lector de cómics y documentos moderno, privado y multiplataforma, con una experiencia fluida tanto en navegador como en Android/iOS. El núcleo es una PWA offline-first, con soporte para bibliotecas locales y conexión opcional a Google Drive.
+Nebula Reader busca ser un lector de cómics y documentos moderno, privado y multiplataforma, con una experiencia fluida tanto en navegador como en Android/iOS. El núcleo es una PWA offline-first con soporte para bibliotecas locales.
 
 ## Decisión técnica
 
@@ -11,9 +11,8 @@ Nebula Reader busca ser un lector de cómics y documentos moderno, privado y mul
 - **Persistencia local:** IndexedDB para archivos, progreso, notas y preferencias.
 - **Archivos:** JSZip para CBZ/ZIP, libarchive.js + WebAssembly para CBR/RAR y PDF.js para PDF.
 - **Móvil:** Capacitor reutilizando la misma base de código.
-- **Nube:** Google OAuth + Google Picker + Google Drive API, con acceso de solo lectura.
 
-La arquitectura prioriza una sola base de código, privacidad local, funcionamiento offline y compatibilidad progresiva con fuentes externas.
+La arquitectura prioriza una sola base de código, privacidad local y funcionamiento offline.
 
 ---
 
@@ -164,38 +163,7 @@ La arquitectura prioriza una sola base de código, privacidad local, funcionamie
 
 # Próximas fases
 
-## 9. Biblioteca cloud real — pendiente
-
-### Objetivo
-
-Convertir Google Drive de un simple importador a una fuente real de biblioteca sincronizada.
-
-### Tareas
-
-- Añadir un modelo de origen por libro:
-  - `local`
-  - `drive`
-- Guardar metadatos cloud:
-  - `driveFileId`
-  - `folderId`
-  - `driveModifiedTime`
-  - `drivePath`
-- Mostrar archivos de Drive en la biblioteca sin descargarlos completos.
-- Descargar el archivo solamente al abrirlo.
-- Opción **Disponible offline** por capítulo o serie.
-- Sincronización manual.
-- Sincronización automática al iniciar.
-- Detectar:
-  - nuevos archivos,
-  - cambios de nombre,
-  - archivos modificados,
-  - archivos eliminados.
-- Tratar subcarpetas como series cuando sea conveniente.
-- Indicador de estado cloud/offline.
-- Gestión de errores de token OAuth.
-- Reconexión sin perder metadatos locales.
-
-## 10. Escalabilidad y almacenamiento — pendiente
+## 9. Escalabilidad y almacenamiento — pendiente
 
 ### Base de datos v2
 
@@ -232,25 +200,7 @@ Crear índices para:
 - Renderizado progresivo de tarjetas.
 - Portadas optimizadas y thumbnails separados del archivo original.
 
-## 11. Seguridad y producción pública — pendiente
-
-### Google OAuth
-
-- Completar verificación de Google para `drive.readonly`.
-- Video de demostración del flujo OAuth.
-- Página pública de privacidad.
-- Página pública de términos.
-- Revisar scopes y mantener solo lectura.
-- Rotar cualquier `client_secret` que haya sido expuesto durante pruebas.
-- No incluir secretos en frontend ni repositorio.
-
-### API Key
-
-- Mantener restricciones por dominio.
-- Limitar APIs autorizadas a:
-  - Google Drive API,
-  - Google Picker API.
-- Revisar periódicamente cuotas y uso.
+## 10. Seguridad y mantenimiento — pendiente
 
 ### Dependencias
 
@@ -263,7 +213,7 @@ Crear índices para:
   - Vite,
   - Capacitor.
 
-## 12. Pulido móvil y rendimiento — pendiente
+## 11. Pulido móvil y rendimiento — pendiente
 
 - Optimizar experiencia táctil en pantallas pequeñas.
 - Mejorar transiciones entre biblioteca y lector.
@@ -332,21 +282,19 @@ Crear índices para:
 
 - La aplicación debe abrir la biblioteca sin conexión después de una visita inicial.
 - Los archivos locales no deben salir del dispositivo sin acción explícita del usuario.
-- Google Drive debe operar únicamente con autorización del usuario.
 - El progreso debe sobrevivir al cierre de la pestaña o aplicación.
 - Un cambio rápido de página o capítulo no debe mostrar contenido obsoleto.
 - Los controles principales deben funcionar con ratón, teclado y táctil.
 - Una colección grande no debe bloquear la interfaz.
-- El usuario debe saber qué contenido está local, cloud o disponible offline.
+- El usuario debe saber qué contenido está almacenado localmente y qué datos forman parte de un respaldo.
 - La experiencia web y móvil debe conservar el mismo comportamiento funcional.
 
 ---
 
 # Prioridad recomendada actual
 
-1. **Biblioteca cloud real**.
-2. **Base de datos v2 y almacenamiento inteligente**.
+1. **Base de datos v2 y almacenamiento inteligente**.
+2. **Definir e implementar el nuevo método de respaldo**.
 3. **Pruebas de escala y rendimiento**.
-4. **Verificación OAuth para producción**.
-5. **Auditoría de dependencias y seguridad**.
-6. **Pulido móvil y optimización final**.
+4. **Auditoría de dependencias y seguridad**.
+5. **Pulido móvil y optimización final**.

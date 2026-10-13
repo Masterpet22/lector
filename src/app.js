@@ -24,19 +24,29 @@ const ui = {
   readerFavorite: $('#reader-favorite'), pageBookmark: $('#page-bookmark'), notesDialog: $('#notes-dialog'),
   bookDialog: $('#book-dialog'), directionControl: $('#reading-direction-control'), marginRange: $('#page-margin-range'),
   marginValue: $('#page-margin-value'), brightnessRange: $('#brightness-range'), brightnessValue: $('#brightness-value'),
-  adaptiveBrightness: $('#adaptive-brightness'), bookmarkList: $('#bookmark-list'),
+  adaptiveBrightness: $('#adaptive-brightness'), documentBackup: $('#document-backup'), bookmarkList: $('#bookmark-list'),
+  documentLocationList: $('#document-location-list'), addDocumentLocation: $('#add-document-location'),
+  refreshDocumentLocations: $('#refresh-document-locations'),
+  selectionToggle: $('#toggle-selection-mode'), selectionToolbar: $('#selection-toolbar'),
+  selectionCount: $('#selection-count'), selectVisibleBooks: $('#select-visible-books'),
+  groupSelectedBooks: $('#group-selected-books'), backupSelectedBooks: $('#backup-selected-books'),
+  deleteSelectedBooks: $('#delete-selected-books'), groupDialog: $('#bulk-group-dialog'),
+  libraryGroupDialog: $('#library-group-dialog'), libraryGroupTitle: $('#library-group-title'),
+  libraryGroupCount: $('#library-group-count'), libraryGroupBooks: $('#library-group-books'),
 };
 
 const DEFAULT_SETTINGS = {
   theme: 'dark', readingMode: 'page', readingDirection: 'ltr', fit: 'best', orientation: 'any',
-  eyeFilter: 0, zoom: 1, pageMargin: 2, brightness: 100, adaptiveBrightness: false, libraryView: 'grid',
+  eyeFilter: 0, zoom: 1, pageMargin: 2, brightness: 100, adaptiveBrightness: false,
+  documentBackup: false, documentLocations: [], documentLocationsInitialized: false, libraryView: 'grid',
 };
 const state = {
   books: [], currentBook: null, archive: null, currentIndex: 0, settings: { ...DEFAULT_SETTINGS },
   sessionId: 0, renderId: 0, urlPromises: new Map(), objectUrls: new Map(), verticalObserver: null,
   hudTimer: null, pageFeedbackTimer: null, hintTimer: null, saveTimer: null, installPrompt: null, touchDistance: 0, touchZoom: 1,
-  mousePan: null, suppressZoneClick: false,
+  mousePan: null, suppressZoneClick: false, locationsRefreshing: false,
   libraryQuery: '', libraryFilter: 'all', readingStartedAt: 0, sessionPages: new Set(), panelCache: new Map(), lastTap: null,
+  selectionMode: false, selectedBookIds: new Set(), bulkActionBusy: false,
 };
 
 function inferSeries(title = '') {
@@ -46,7 +56,7 @@ function inferSeries(title = '') {
 function normalizeBook(book) {
   return {
     favorite: false, bookmarks: [], tags: [], author: '', publisher: '', year: '', summary: '', number: '',
-    series: inferSeries(book.title), totalReadingMs: 0, pagesRead: [], lastReadAt: 0, ...book,
+    series: inferSeries(book.title), totalReadingMs: 0, pagesRead: [], lastReadAt: 0, backupEnabled: Boolean(book.blob), ...book,
     tags: Array.isArray(book.tags) ? book.tags : String(book.tags || '').split(',').map((tag) => tag.trim()).filter(Boolean),
     bookmarks: Array.isArray(book.bookmarks) ? book.bookmarks : [], pagesRead: Array.isArray(book.pagesRead) ? book.pagesRead : [],
   };
@@ -78,6 +88,93 @@ function setLoading(active, text = 'Procesando…') {
 }
 
 function extOf(name) { return name.split('.').pop()?.toLowerCase() || ''; }
+
+function appPlatform() {
+  const capacitorPlatform = window.Capacitor?.getPlatform?.();
+  if (capacitorPlatform === 'android' || /Android/i.test(navigator.userAgent)) return 'android';
+  if (/Windows/i.test(navigator.userAgent)) return 'windows';
+  return 'web';
+}
+
+function defaultDocumentsLocation() {
+  const platform = appPlatform();
+  const systemPath = platform === 'android'
+    ? '/storage/emulated/0/Documents'
+    : platform === 'windows' ? '%USERPROFILE%\\Documents' : 'Documentos';
+  return {
+    id: 'system-documents', name: 'Documentos', label: 'Documentos',
+    systemPath, platform, wellKnownPath: 'documents', isDefault: true, handle: null,
+  };
+}
+
+const DOCUMENT_PICKER_OPTIONS = {
+  multiple: true,
+  types: [{
+    description: 'Cómics y documentos',
+    accept: {
+      'application/pdf': ['.pdf'],
+      'application/zip': ['.cbz', '.zip'],
+      'application/vnd.rar': ['.cbr'],
+    },
+  }],
+};
+
+async function fileFromBook(book) {
+  if (book.blob) return book.blob;
+  const handle = book.fileHandle;
+  if (!handle?.getFile) throw new Error('La referencia al archivo original ya no está disponible. Vuelve a importarlo.');
+
+  const permissionOptions = { mode: 'read' };
+  let permission = await handle.queryPermission?.(permissionOptions) || 'prompt';
+  if (permission !== 'granted') permission = await handle.requestPermission?.(permissionOptions) || 'denied';
+  if (permission !== 'granted') throw new Error('Debes permitir el acceso al archivo original para abrirlo.');
+
+  try {
+    return await handle.getFile();
+  } catch (error) {
+    if (error?.name === 'NotFoundError') throw new Error('No se encontró el archivo original. Comprueba que no se haya movido o eliminado.');
+    throw error;
+  }
+}
+
+async function selectDocuments() {
+  if (state.settings.documentBackup) {
+    ui.fileInput.click();
+    return;
+  }
+  if (!window.showOpenFilePicker) {
+    toast('Este navegador no permite conservar referencias a archivos. Activa el respaldo para importar una copia.', 'error');
+    return;
+  }
+
+  try {
+    const preferredLocation = state.settings.documentLocations.find((location) => location.handle);
+    const pickerOptions = preferredLocation
+      ? { ...DOCUMENT_PICKER_OPTIONS, startIn: preferredLocation.handle }
+      : DOCUMENT_PICKER_OPTIONS;
+    const handles = await window.showOpenFilePicker(pickerOptions);
+    const entries = await Promise.all(handles.map(async (handle) => ({ handle, file: await handle.getFile() })));
+    await importFiles(entries);
+  } catch (error) {
+    if (error?.name !== 'AbortError') {
+      console.error(error);
+      toast(`No se pudieron seleccionar los documentos: ${error.message}`, 'error');
+    }
+  }
+}
+
+async function importDroppedFiles(dataTransfer) {
+  if (state.settings.documentBackup) return importFiles(dataTransfer.files);
+  const items = [...dataTransfer.items].filter((item) => item.kind === 'file');
+  if (!items.length || items.some((item) => !item.getAsFileSystemHandle)) {
+    toast('Este navegador no puede conservar la referencia de archivos arrastrados. Activa el respaldo para importarlos.', 'error');
+    return;
+  }
+
+  const handles = (await Promise.all(items.map((item) => item.getAsFileSystemHandle()))).filter((handle) => handle?.kind === 'file');
+  const entries = await Promise.all(handles.map(async (handle) => ({ handle, file: await handle.getFile() })));
+  await importFiles(entries);
+}
 
 function legacyCreateBookCard(book) {
   const article = document.createElement('article');
@@ -135,11 +232,13 @@ function legacyCreateBookCard(book) {
   return article;
 }
 
-function createBookCard(book) {
+function createBookCard(book, openAction = () => openBook(book.id)) {
   const article = document.createElement('article');
-  article.className = 'book-card'; article.dataset.id = book.id;
+  const selected = state.selectedBookIds.has(book.id);
+  article.className = `book-card${selected ? ' selected' : ''}`; article.dataset.id = book.id; article.setAttribute('aria-selected', String(selected));
   const open = document.createElement('button');
-  open.type = 'button'; open.className = 'cover-button'; open.setAttribute('aria-label', `Leer ${book.title}`); open.addEventListener('click', () => openBook(book.id));
+  open.type = 'button'; open.className = 'cover-button'; open.setAttribute('aria-label', state.selectionMode ? `Seleccionar ${book.title}` : `Leer ${book.title}`);
+  open.addEventListener('click', () => state.selectionMode ? toggleBookSelection(book.id) : openAction());
   const cover = document.createElement('div'); cover.className = 'cover';
   if (book.cover) {
     const image = new Image(); const url = URL.createObjectURL(book.cover); image.alt = `Portada de ${book.title}`; image.src = url;
@@ -154,11 +253,89 @@ function createBookCard(book) {
   const actions = document.createElement('div'); actions.className = 'book-menu';
   const favorite = document.createElement('button'); favorite.type = 'button'; favorite.className = `icon-button book-favorite${book.favorite ? ' active' : ''}`; favorite.textContent = book.favorite ? '★' : '☆'; favorite.title = 'Favorito'; favorite.setAttribute('aria-label', `Marcar ${book.title} como favorito`); favorite.addEventListener('click', () => toggleFavorite(book));
   const edit = document.createElement('button'); edit.type = 'button'; edit.className = 'icon-button book-edit'; edit.textContent = '⋮'; edit.title = 'Editar'; edit.setAttribute('aria-label', `Editar ${book.title}`); edit.addEventListener('click', () => openBookEditor(book));
-  actions.append(favorite, edit); article.append(open, actions); return article;
+  const select = document.createElement('button'); select.type = 'button'; select.className = 'book-select'; select.textContent = selected ? '✓' : '';
+  select.title = selected ? 'Quitar de la selección' : 'Seleccionar'; select.setAttribute('aria-label', `${selected ? 'Quitar' : 'Añadir'} ${book.title} ${selected ? 'de' : 'a'} la selección`);
+  select.addEventListener('click', () => toggleBookSelection(book.id));
+  actions.append(favorite, edit); article.append(open, actions, select); return article;
+}
+
+function toggleGroupSelection(books) {
+  const allSelected = books.every((book) => state.selectedBookIds.has(book.id));
+  for (const book of books) allSelected ? state.selectedBookIds.delete(book.id) : state.selectedBookIds.add(book.id);
+  renderLibrary();
+}
+
+function openLibraryGroup(series, books) {
+  ui.libraryGroupTitle.textContent = series;
+  ui.libraryGroupCount.textContent = `${books.length} ${books.length === 1 ? 'cómic' : 'cómics'}`;
+  ui.libraryGroupBooks.replaceChildren(...books.map((book) => createBookCard(book, () => {
+    ui.libraryGroupDialog.close();
+    openBook(book.id);
+  })));
+  ui.libraryGroupDialog.showModal();
+}
+
+function createGroupCard(series, books) {
+  const selectedCount = books.filter((book) => state.selectedBookIds.has(book.id)).length;
+  const allSelected = selectedCount === books.length;
+  const article = document.createElement('article');
+  article.className = `book-card group-card${allSelected ? ' selected' : ''}${selectedCount && !allSelected ? ' partially-selected' : ''}`;
+  article.setAttribute('aria-selected', String(allSelected));
+
+  const open = document.createElement('button');
+  open.type = 'button'; open.className = 'cover-button';
+  open.setAttribute('aria-label', state.selectionMode ? `Seleccionar grupo ${series}` : `Abrir grupo ${series}`);
+  open.addEventListener('click', () => state.selectionMode ? toggleGroupSelection(books) : openLibraryGroup(series, books));
+
+  const mosaic = document.createElement('div'); mosaic.className = 'cover group-cover';
+  for (const book of books.slice(0, 4)) {
+    const cell = document.createElement('span'); cell.className = 'group-cover-cell';
+    if (book.cover) {
+      const image = new Image(); const url = URL.createObjectURL(book.cover);
+      image.alt = ''; image.src = url; image.onload = image.onerror = () => URL.revokeObjectURL(url); cell.append(image);
+    } else {
+      const placeholder = document.createElement('span'); placeholder.className = 'group-cover-placeholder'; placeholder.textContent = book.title; cell.append(placeholder);
+    }
+    mosaic.append(cell);
+  }
+  while (mosaic.children.length < 4) { const empty = document.createElement('span'); empty.className = 'group-cover-cell empty'; mosaic.append(empty); }
+
+  const info = document.createElement('div'); info.className = 'book-info';
+  const title = document.createElement('strong'); title.textContent = series;
+  const detail = document.createElement('small'); detail.textContent = `${books.length} ${books.length === 1 ? 'cómic' : 'cómics'}`;
+  info.append(title, detail); open.append(mosaic, info);
+
+  const select = document.createElement('button'); select.type = 'button'; select.className = 'book-select';
+  select.textContent = allSelected ? '✓' : selectedCount ? '−' : '';
+  select.title = allSelected ? 'Quitar grupo de la selección' : 'Seleccionar grupo';
+  select.setAttribute('aria-label', `${allSelected ? 'Quitar' : 'Añadir'} grupo ${series} ${allSelected ? 'de' : 'a'} la selección`);
+  select.addEventListener('click', () => toggleGroupSelection(books));
+  article.append(open, select);
+  return article;
+}
+
+function groupedLibraryCards(books) {
+  const groups = new Map();
+  for (const book of books) {
+    const series = book.series?.trim();
+    if (series) groups.set(series, [...(groups.get(series) || []), book]);
+  }
+  const renderedGroups = new Set();
+  return books.flatMap((book) => {
+    const series = book.series?.trim();
+    const group = series ? groups.get(series) : null;
+    if (!group || group.length < 2) return [createBookCard(book)];
+    if (renderedGroups.has(series)) return [];
+    renderedGroups.add(series);
+    return [createGroupCard(series, group)];
+  });
 }
 
 async function refreshLibrary() {
   state.books = (await getAllBooks()).map(normalizeBook);
+  const availableIds = new Set(state.books.map((book) => book.id));
+  for (const id of state.selectedBookIds) if (!availableIds.has(id)) state.selectedBookIds.delete(id);
+  if (!state.books.length) state.selectionMode = false;
   renderLibrary(); renderStatistics(); renderRecommendations();
   ui.emptyLibrary.classList.toggle('hidden', state.books.length > 0);
   ui.bookCount.textContent = `${state.books.length} ${state.books.length === 1 ? 'capítulo' : 'capítulos'}`;
@@ -181,14 +358,119 @@ function visibleBooks() {
 
 function renderLibrary() {
   const books = visibleBooks(); ui.libraryGrid.classList.toggle('shelf-view', state.settings.libraryView === 'shelf');
-  if (state.settings.libraryView === 'shelf') {
-    const groups = books.reduce((map, book) => map.set(book.series || 'Independientes', [...(map.get(book.series || 'Independientes') || []), book]), new Map());
-    ui.libraryGrid.replaceChildren(...[...groups].map(([series, items]) => {
-      const section = document.createElement('section'); section.className = 'shelf'; const heading = document.createElement('h3'); heading.textContent = series;
-      const row = document.createElement('div'); row.className = 'shelf-row'; row.append(...items.map(createBookCard)); section.append(heading, row); return section;
-    }));
-  } else ui.libraryGrid.replaceChildren(...books.map(createBookCard));
+  ui.libraryGrid.replaceChildren(...groupedLibraryCards(books));
   ui.libraryViewMode.textContent = state.settings.libraryView === 'shelf' ? '▦' : '▤';
+  updateSelectionUi();
+}
+
+function updateSelectionUi() {
+  const count = state.selectedBookIds.size;
+  const visible = visibleBooks();
+  const allVisibleSelected = visible.length > 0 && visible.every((book) => state.selectedBookIds.has(book.id));
+  document.body.classList.toggle('library-selection-mode', state.selectionMode);
+  ui.libraryGrid.classList.toggle('selection-mode', state.selectionMode);
+  ui.selectionToolbar.classList.toggle('hidden', !state.selectionMode);
+  ui.selectionToggle.classList.toggle('active', state.selectionMode);
+  ui.selectionToggle.textContent = state.selectionMode ? 'Cancelar selección' : 'Seleccionar';
+  ui.selectionCount.textContent = `${count} ${count === 1 ? 'seleccionado' : 'seleccionados'}`;
+  ui.selectVisibleBooks.textContent = allVisibleSelected ? 'Quitar todos' : 'Seleccionar todos';
+  ui.selectVisibleBooks.disabled = state.bulkActionBusy || !visible.length;
+  for (const button of [ui.groupSelectedBooks, ui.backupSelectedBooks, ui.deleteSelectedBooks]) button.disabled = state.bulkActionBusy || !count;
+  ui.selectionToggle.disabled = state.bulkActionBusy || !state.books.length;
+}
+
+function setSelectionMode(enabled) {
+  if (state.bulkActionBusy) return;
+  state.selectionMode = Boolean(enabled && state.books.length);
+  if (!state.selectionMode) state.selectedBookIds.clear();
+  renderLibrary();
+}
+
+function toggleBookSelection(id) {
+  if (!state.selectionMode) state.selectionMode = true;
+  if (state.selectedBookIds.has(id)) state.selectedBookIds.delete(id); else state.selectedBookIds.add(id);
+  renderLibrary();
+}
+
+function toggleVisibleSelection() {
+  const books = visibleBooks();
+  const allSelected = books.length && books.every((book) => state.selectedBookIds.has(book.id));
+  for (const book of books) allSelected ? state.selectedBookIds.delete(book.id) : state.selectedBookIds.add(book.id);
+  renderLibrary();
+}
+
+function selectedBooks() {
+  return state.books.filter((book) => state.selectedBookIds.has(book.id));
+}
+
+function openBulkGroupDialog() {
+  const books = selectedBooks();
+  if (!books.length) return;
+  const sharedGroup = books.every((book) => book.series === books[0].series) ? books[0].series : '';
+  $('#bulk-group-name').value = sharedGroup || '';
+  ui.groupDialog.showModal();
+  $('#bulk-group-name').focus();
+}
+
+async function saveBulkGroup(event) {
+  event.preventDefault();
+  const groupName = $('#bulk-group-name').value.trim();
+  if (!groupName) return;
+  const books = selectedBooks();
+  state.bulkActionBusy = true; updateSelectionUi();
+  try {
+    await Promise.all(books.map((book) => updateBook(book.id, { series: groupName })));
+    ui.groupDialog.close();
+    state.bulkActionBusy = false; setSelectionMode(false); await refreshLibrary();
+    toast(`${books.length} ${books.length === 1 ? 'documento agrupado' : 'documentos agrupados'} en “${groupName}”.`);
+  } finally { state.bulkActionBusy = false; updateSelectionUi(); }
+}
+
+async function backupSelectedDocuments() {
+  const books = selectedBooks();
+  if (!books.length) return;
+  state.bulkActionBusy = true; updateSelectionUi();
+  let completed = 0; const failures = [];
+  try {
+    await requestPersistentStorage();
+    for (let index = 0; index < books.length; index += 1) {
+      const book = books[index];
+      if (book.blob) {
+        if (!book.backupEnabled) await updateBook(book.id, { backupEnabled: true, storageMode: 'backup' });
+        completed += 1; continue;
+      }
+      setLoading(true, `Respaldando ${index + 1} de ${books.length}: ${book.title}`);
+      try {
+        const file = await fileFromBook(book);
+        await updateBook(book.id, { blob: file, backupEnabled: true, storageMode: 'backup', size: file.size || book.size });
+        completed += 1;
+      } catch (error) { console.error(error); failures.push(book.title); }
+    }
+  } finally {
+    setLoading(false); state.bulkActionBusy = false; setSelectionMode(false); await refreshLibrary();
+  }
+  if (failures.length) toast(`${completed} respaldados; no se pudieron respaldar ${failures.length}.`, 'error');
+  else toast(`${completed} ${completed === 1 ? 'documento respaldado' : 'documentos respaldados'}.`);
+}
+
+function confirmDeleteSelected() {
+  const books = selectedBooks();
+  if (!books.length) return;
+  $('#confirm-title').textContent = 'Eliminar documentos';
+  $('#confirm-message').textContent = `Se quitarán ${books.length} ${books.length === 1 ? 'documento seleccionado' : 'documentos seleccionados'} y su progreso de este dispositivo.`;
+  $('#confirm-action').textContent = 'Eliminar';
+  ui.confirm.returnValue = '';
+  ui.confirm.showModal();
+  ui.confirm.addEventListener('close', async function onClose() {
+    ui.confirm.removeEventListener('close', onClose);
+    if (ui.confirm.returnValue !== 'confirm') return;
+    state.bulkActionBusy = true; updateSelectionUi();
+    try {
+      await Promise.all(books.map((book) => deleteBook(book.id)));
+      state.bulkActionBusy = false; setSelectionMode(false); await refreshLibrary();
+      toast(`${books.length} ${books.length === 1 ? 'documento eliminado' : 'documentos eliminados'}.`);
+    } finally { state.bulkActionBusy = false; updateSelectionUi(); }
+  });
 }
 
 function renderStatistics() {
@@ -203,23 +485,33 @@ function renderRecommendations() {
   ui.recommendationList.replaceChildren(...items.map(({ book }) => { const button = document.createElement('button'); button.type = 'button'; button.className = 'recommendation-card'; button.textContent = `› ${book.title}`; button.addEventListener('click', () => openBook(book.id)); return button; }));
 }
 
-async function importFiles(files) {
-  const accepted = [...files].filter((file) => ['cbz', 'cbr', 'zip', 'pdf'].includes(extOf(file.name)));
+async function importFiles(items) {
+  const entries = [...items]
+    .map((item) => item?.file instanceof File ? item : { file: item, handle: null })
+    .filter(({ file }) => file instanceof File && ['cbz', 'cbr', 'zip', 'pdf'].includes(extOf(file.name)));
+  const accepted = state.settings.documentBackup ? entries : entries.filter(({ handle }) => handle?.kind === 'file');
   if (!accepted.length) return toast('Selecciona archivos CBZ, CBR, ZIP o PDF.', 'error');
   await requestPersistentStorage();
 
   for (let index = 0; index < accepted.length; index += 1) {
-    const file = accepted[index];
+    const { file, handle, sourcePath: providedSourcePath, sourceKey } = accepted[index];
     setLoading(true, `Importando ${index + 1} de ${accepted.length}: ${file.name}`);
     try {
-      const id = stableBookId(file);
-      const existing = await getBook(id);
+      const sourcePath = providedSourcePath || file.webkitRelativePath || handle?.name || file.name;
+      const existingByPath = state.books.find((book) => sourceKey ? book.sourceKey === sourceKey : book.sourcePath === sourcePath);
+      const id = existingByPath?.id || stableBookId(file);
+      const existing = existingByPath || await getBook(id);
       const details = await inspectComic(file, file.name);
       const metadata = details.metadata || {};
       const title = existing?.title || metadata.title || baseTitle(file.name);
       await saveBook(normalizeBook({
         ...existing, id, title, normalizedTitle: title.toLocaleLowerCase(), fileName: file.name,
-        format: extOf(file.name), blob: file, cover: existing?.cover || details.cover, pageCount: details.pageCount,
+        format: extOf(file.name), blob: (state.settings.documentBackup || existing?.backupEnabled) ? file : undefined,
+        fileHandle: handle || existing?.fileHandle,
+        backupEnabled: Boolean(state.settings.documentBackup || existing?.backupEnabled),
+        storageMode: (state.settings.documentBackup || existing?.backupEnabled) ? 'backup' : 'reference',
+        sourcePath, sourceKey: sourceKey || existing?.sourceKey || '',
+        cover: existing?.cover || details.cover, pageCount: details.pageCount,
         series: existing?.series || metadata.series || inferSeries(title), number: existing?.number || metadata.number || '',
         author: existing?.author || metadata.author || '', publisher: existing?.publisher || metadata.publisher || '',
         year: existing?.year || metadata.year || '', summary: existing?.summary || metadata.summary || '', tags: existing?.tags || metadata.tags || [],
@@ -238,6 +530,8 @@ async function importFiles(files) {
 function confirmDelete(book) {
   $('#confirm-title').textContent = 'Eliminar capítulo';
   $('#confirm-message').textContent = `Se quitará “${book.title}” y su progreso de este dispositivo.`;
+  $('#confirm-action').textContent = 'Eliminar';
+  ui.confirm.returnValue = '';
   ui.confirm.showModal();
   ui.confirm.addEventListener('close', async function onClose() {
     ui.confirm.removeEventListener('close', onClose);
@@ -343,7 +637,8 @@ async function openBook(id) {
   state.readingStartedAt = Date.now(); state.sessionPages = new Set(state.currentBook.pagesRead); state.sessionPages.add(state.currentIndex);
 
   try {
-    const archive = await openComicArchive(book.blob, book.fileName);
+    const sourceFile = await fileFromBook(book);
+    const archive = await openComicArchive(sourceFile, book.fileName);
     if (sessionId !== state.sessionId) return archive.close();
     state.archive = archive;
     if (archive.pages.length !== book.pageCount) {
@@ -705,9 +1000,215 @@ async function applyOrientation(value, notify = true) {
 
 async function saveSettings() { await setSetting('reader-preferences', state.settings); }
 
+function renderDocumentLocations() {
+  const locations = state.settings.documentLocations;
+  if (!locations.length) {
+    const empty = document.createElement('p');
+    empty.className = 'document-location-empty';
+    empty.textContent = 'No hay carpetas configuradas.';
+    ui.documentLocationList.replaceChildren(empty);
+    return;
+  }
+
+  ui.documentLocationList.replaceChildren(...locations.map((location) => {
+    const row = document.createElement('div'); row.className = 'document-location-row';
+    const icon = document.createElement('span'); icon.className = 'document-location-icon'; icon.textContent = '▱'; icon.setAttribute('aria-hidden', 'true');
+    const copy = document.createElement('span'); copy.className = 'document-location-copy';
+    const input = document.createElement('input'); input.value = location.label || location.name; input.setAttribute('aria-label', `Nombre de la carpeta ${location.name}`);
+    input.disabled = state.locationsRefreshing;
+    input.addEventListener('change', async () => {
+      location.label = input.value.trim() || location.name;
+      input.value = location.label;
+      await saveSettings();
+      await syncLibraryWithLocations();
+    });
+    const path = document.createElement('small');
+    path.textContent = location.handle ? location.systemPath || location.name : `${location.systemPath || location.name} · requiere autorización`;
+    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'button ghost'; remove.textContent = 'Quitar'; remove.setAttribute('aria-label', `Quitar la carpeta ${location.label || location.name}`);
+    remove.disabled = state.locationsRefreshing;
+    remove.addEventListener('click', async () => {
+      state.settings.documentLocations = state.settings.documentLocations.filter((item) => item.id !== location.id);
+      await saveSettings();
+      renderDocumentLocations();
+      await removeBooksFromLocation(location.id);
+      await syncLibraryWithLocations();
+    });
+    copy.append(input, path); row.append(icon, copy, remove);
+    return row;
+  }));
+}
+
+async function sameDirectory(first, second) {
+  try { return Boolean(first?.isSameEntry && await first.isSameEntry(second)); } catch { return false; }
+}
+
+async function storeDocumentLocation(handle) {
+  for (const location of state.settings.documentLocations) {
+    if (await sameDirectory(location.handle, handle)) return false;
+  }
+
+  const defaultLocation = state.settings.documentLocations.find((location) => location.isDefault && !location.handle);
+  if (defaultLocation && handle.name.toLocaleLowerCase() === 'documents') {
+    defaultLocation.name = handle.name;
+    defaultLocation.handle = handle;
+  } else {
+    state.settings.documentLocations.push({
+      id: crypto.randomUUID?.() || `location-${Date.now()}`,
+      name: handle.name,
+      label: handle.name,
+      systemPath: handle.name,
+      platform: appPlatform(),
+      handle,
+    });
+  }
+  await saveSettings();
+  renderDocumentLocations();
+  return true;
+}
+
+async function addDocumentLocation() {
+  if (state.locationsRefreshing) return;
+  if (!window.showDirectoryPicker) {
+    toast('Este navegador no permite guardar ubicaciones de carpetas.', 'error');
+    return;
+  }
+
+  try {
+    const handle = await window.showDirectoryPicker({ mode: 'read', startIn: 'documents' });
+    if (await storeDocumentLocation(handle)) await syncLibraryWithLocations();
+    else toast('Esta carpeta ya está en la lista.');
+  } catch (error) {
+    if (error?.name !== 'AbortError') {
+      console.error(error);
+      toast(`No se pudo añadir la carpeta: ${error.message}`, 'error');
+    }
+  }
+}
+
+async function authorizeDirectory(location) {
+  if (location.handle) return location.handle;
+  if (!window.showDirectoryPicker) throw new Error('Este sistema no permite autorizar carpetas desde la aplicación.');
+  const handle = await window.showDirectoryPicker({ mode: 'read', startIn: location.wellKnownPath || 'documents' });
+  location.handle = handle;
+  location.name = handle.name;
+  if (!location.label) location.label = handle.name;
+  await saveSettings();
+  renderDocumentLocations();
+  return handle;
+}
+
+async function ensureDirectoryPermission(handle) {
+  const options = { mode: 'read' };
+  let permission = await handle.queryPermission?.(options) || 'prompt';
+  if (permission !== 'granted') permission = await handle.requestPermission?.(options) || 'denied';
+  return permission === 'granted';
+}
+
+async function scanDocumentDirectory(handle, location, relativePath = '', results = []) {
+  for await (const [name, entry] of handle.entries()) {
+    const entryPath = relativePath ? `${relativePath}/${name}` : name;
+    if (entry.kind === 'directory') {
+      await scanDocumentDirectory(entry, location, entryPath, results);
+    } else if (['cbz', 'cbr', 'zip', 'pdf'].includes(extOf(name))) {
+      results.push({
+        handle: entry,
+        file: await entry.getFile(),
+        sourcePath: `${location.label || location.name}/${entryPath}`,
+        sourceKey: `${location.id}/${entryPath}`,
+      });
+    }
+  }
+  return results;
+}
+
+async function removeMissingLocationBooks(scannedLocationIds, foundSourceKeys, reconcileEntireLibrary = false) {
+  const missing = state.books.filter((book) => {
+    if (reconcileEntireLibrary) return !book.sourceKey || !foundSourceKeys.has(book.sourceKey);
+    if (!book.sourceKey) return false;
+    const separator = book.sourceKey.indexOf('/');
+    const locationId = separator >= 0 ? book.sourceKey.slice(0, separator) : '';
+    return scannedLocationIds.has(locationId) && !foundSourceKeys.has(book.sourceKey);
+  });
+  if (!missing.length) return 0;
+
+  if (state.currentBook && missing.some((book) => book.id === state.currentBook.id)) await closeReader();
+  for (const book of missing) await deleteBook(book.id);
+  await refreshLibrary();
+  return missing.length;
+}
+
+async function removeBooks(books) {
+  if (!books.length) return 0;
+  if (state.currentBook && books.some((book) => book.id === state.currentBook.id)) await closeReader();
+  for (const book of books) await deleteBook(book.id);
+  await refreshLibrary();
+  return books.length;
+}
+
+async function removeBooksFromLocation(locationId) {
+  return removeBooks(state.books.filter((book) => book.sourceKey?.startsWith(`${locationId}/`)));
+}
+
+async function clearLibraryWithoutLocations() {
+  const removed = await removeBooks([...state.books]);
+  toast(removed
+    ? `${removed} documento${removed === 1 ? '' : 's'} eliminado${removed === 1 ? '' : 's'} porque no hay carpetas configuradas.`
+    : 'No hay carpetas configuradas ni documentos disponibles.');
+}
+
+async function syncLibraryWithLocations() {
+  if (!state.settings.documentLocations.length) return clearLibraryWithoutLocations();
+  return refreshSavedLocations();
+}
+
+async function refreshSavedLocations() {
+  if (state.locationsRefreshing) return;
+  if (!state.settings.documentLocations.length) return toast('Añade una ubicación para poder actualizarla.', 'error');
+  state.locationsRefreshing = true;
+  ui.addDocumentLocation.disabled = true;
+  ui.refreshDocumentLocations.disabled = true;
+  ui.documentLocationList.querySelectorAll('button, input').forEach((control) => { control.disabled = true; });
+  ui.refreshDocumentLocations.classList.add('refreshing');
+  const entries = [];
+  const scannedLocationIds = new Set();
+  let unavailable = 0;
+  try {
+    for (const location of state.settings.documentLocations) {
+      try {
+        const handle = await authorizeDirectory(location);
+        if (!await ensureDirectoryPermission(handle)) { unavailable += 1; continue; }
+        await scanDocumentDirectory(handle, location, '', entries);
+        scannedLocationIds.add(location.id);
+      } catch (error) {
+        if (error?.name === 'AbortError') { unavailable += 1; continue; }
+        console.error(`No se pudo revisar ${location.label || location.name}`, error);
+        unavailable += 1;
+      }
+    }
+    if (entries.length) await importFiles(entries);
+    const foundSourceKeys = new Set(entries.map((entry) => entry.sourceKey));
+    const allLocationsScanned = unavailable === 0 && scannedLocationIds.size === state.settings.documentLocations.length;
+    const removed = await removeMissingLocationBooks(scannedLocationIds, foundSourceKeys, allLocationsScanned);
+    const message = entries.length
+      ? `${entries.length} documento${entries.length === 1 ? '' : 's'} revisado${entries.length === 1 ? '' : 's'}.`
+      : 'No se encontraron documentos compatibles en las ubicaciones disponibles.';
+    const removalMessage = removed ? ` ${removed} documento${removed === 1 ? '' : 's'} ausente${removed === 1 ? '' : 's'} eliminado${removed === 1 ? '' : 's'}.` : '';
+    const unavailableMessage = unavailable ? ` ${unavailable} ubicación${unavailable === 1 ? '' : 'es'} no disponible${unavailable === 1 ? '' : 's'}.` : '';
+    toast(`${message}${removalMessage}${unavailableMessage}`, unavailable ? 'error' : '');
+  } finally {
+    state.locationsRefreshing = false;
+    ui.addDocumentLocation.disabled = false;
+    ui.refreshDocumentLocations.disabled = false;
+    ui.refreshDocumentLocations.classList.remove('refreshing');
+    ui.documentLocationList.querySelectorAll('button, input').forEach((control) => { control.disabled = false; });
+  }
+}
+
 function syncSettingsUi() {
   ui.fitSelect.value = state.settings.fit;
   ui.orientationSelect.value = state.settings.orientation;
+  ui.documentBackup.checked = state.settings.documentBackup;
+  renderDocumentLocations();
   applyTheme();
   applyEyeFilter();
   applyDisplaySettings();
@@ -756,7 +1257,10 @@ async function closeReader() {
 
 function showSettings() {
   refreshChapterPicker();
-  if (!ui.settings.open) ui.settings.showModal();
+  if (!ui.settings.open) {
+    document.documentElement.classList.add('settings-open');
+    ui.settings.showModal();
+  }
 }
 
 function hideHud() {
@@ -788,7 +1292,8 @@ async function convertCurrentBook() {
   ui.settings.close();
   setLoading(true, 'Preparando conversión…');
   try {
-    const cbz = await convertRarToCbz(book.blob, book.fileName, (done, total) => setLoading(true, `Convirtiendo página ${done} de ${total}…`));
+    const sourceFile = await fileFromBook(book);
+    const cbz = await convertRarToCbz(sourceFile, book.fileName, (done, total) => setLoading(true, `Convirtiendo página ${done} de ${total}…`));
     const url = URL.createObjectURL(cbz);
     const anchor = document.createElement('a');
     anchor.href = url;
@@ -803,18 +1308,34 @@ async function convertCurrentBook() {
 }
 
 function bindEvents() {
-  $('#import-button').addEventListener('click', () => ui.fileInput.click());
+  $('#import-button').addEventListener('click', selectDocuments);
+  ui.selectionToggle.addEventListener('click', () => setSelectionMode(!state.selectionMode));
+  $('#cancel-selection').addEventListener('click', () => setSelectionMode(false));
+  ui.selectVisibleBooks.addEventListener('click', toggleVisibleSelection);
+  ui.groupSelectedBooks.addEventListener('click', openBulkGroupDialog);
+  ui.backupSelectedBooks.addEventListener('click', backupSelectedDocuments);
+  ui.deleteSelectedBooks.addEventListener('click', confirmDeleteSelected);
+  $('#bulk-group-form').addEventListener('submit', saveBulkGroup);
+  $('#close-bulk-group').addEventListener('click', () => ui.groupDialog.close());
+  $('#cancel-bulk-group').addEventListener('click', () => ui.groupDialog.close());
+  ui.groupDialog.addEventListener('click', (event) => { if (event.target === ui.groupDialog) ui.groupDialog.close(); });
+  $('#close-library-group').addEventListener('click', () => ui.libraryGroupDialog.close());
+  ui.libraryGroupDialog.addEventListener('click', (event) => { if (event.target === ui.libraryGroupDialog) ui.libraryGroupDialog.close(); });
   ui.librarySearch.addEventListener('input', () => { state.libraryQuery = ui.librarySearch.value; renderLibrary(); });
   ui.libraryFilter.addEventListener('change', () => { state.libraryFilter = ui.libraryFilter.value; renderLibrary(); });
   ui.libraryViewMode.addEventListener('click', () => { state.settings.libraryView = state.settings.libraryView === 'grid' ? 'shelf' : 'grid'; saveSettings(); renderLibrary(); });
   ui.fileInput.addEventListener('change', () => importFiles(ui.fileInput.files));
-  ui.dropzone.addEventListener('click', () => ui.fileInput.click());
-  ui.dropzone.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); ui.fileInput.click(); } });
+  ui.dropzone.addEventListener('click', selectDocuments);
+  ui.dropzone.addEventListener('keydown', (event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); selectDocuments(); } });
   for (const eventName of ['dragenter', 'dragover']) ui.dropzone.addEventListener(eventName, (event) => { event.preventDefault(); ui.dropzone.classList.add('dragging'); });
   for (const eventName of ['dragleave', 'drop']) ui.dropzone.addEventListener(eventName, (event) => { event.preventDefault(); ui.dropzone.classList.remove('dragging'); });
-  ui.dropzone.addEventListener('drop', (event) => importFiles(event.dataTransfer.files));
+  ui.dropzone.addEventListener('drop', (event) => importDroppedFiles(event.dataTransfer));
   $('#open-settings').addEventListener('click', showSettings);
   $('#reader-settings').addEventListener('click', showSettings);
+  ui.settings.addEventListener('click', (event) => {
+    if (event.target === ui.settings) ui.settings.close();
+  });
+  ui.settings.addEventListener('close', () => document.documentElement.classList.remove('settings-open'));
   $('#brand-home').addEventListener('click', () => { if (!ui.readerView.classList.contains('hidden')) closeReader(); });
   $('#close-reader').addEventListener('click', closeReader);
   $('#next-page').addEventListener('click', nextPage);
@@ -869,6 +1390,15 @@ function bindEvents() {
   ui.marginRange.addEventListener('input', () => { state.settings.pageMargin = Number(ui.marginRange.value); applyDisplaySettings(); saveSettings(); });
   ui.brightnessRange.addEventListener('input', () => { state.settings.brightness = Number(ui.brightnessRange.value); applyDisplaySettings(); saveSettings(); });
   ui.adaptiveBrightness.addEventListener('change', () => { state.settings.adaptiveBrightness = ui.adaptiveBrightness.checked; applyDisplaySettings(); saveSettings(); });
+  ui.documentBackup.addEventListener('change', async () => {
+    state.settings.documentBackup = ui.documentBackup.checked;
+    await saveSettings();
+    toast(state.settings.documentBackup
+      ? 'Los documentos nuevos se copiarán en la biblioteca.'
+      : 'Los documentos nuevos se guardarán como referencias.');
+  });
+  ui.addDocumentLocation.addEventListener('click', addDocumentLocation);
+  ui.refreshDocumentLocations.addEventListener('click', refreshSavedLocations);
   ui.themeControl.addEventListener('click', (event) => {
     const button = event.target.closest('[data-value]');
     if (!button) return;
@@ -956,6 +1486,9 @@ function bindEvents() {
     setZoom(state.touchZoom * distance / state.touchDistance);
   }, { passive: false });
   window.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && state.selectionMode && ui.readerView.classList.contains('hidden') && !ui.groupDialog.open && !ui.confirm.open) {
+      event.preventDefault(); setSelectionMode(false); return;
+    }
     if (ui.readerView.classList.contains('hidden') || ui.settings.open) return;
     if (event.shiftKey && ['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
       event.preventDefault();
@@ -999,10 +1532,19 @@ async function init() {
   try {
     await openDatabase();
     state.settings = { ...DEFAULT_SETTINGS, ...await getSetting('reader-preferences', DEFAULT_SETTINGS) };
+    if (!Array.isArray(state.settings.documentLocations)) state.settings.documentLocations = [];
+    if (!state.settings.documentLocationsInitialized) {
+      const existingDefault = state.settings.documentLocations.find((location) => /^(documents|documentos)$/i.test(location.name || location.label || ''));
+      if (existingDefault) Object.assign(existingDefault, { isDefault: true, wellKnownPath: 'documents', platform: existingDefault.platform || appPlatform() });
+      else state.settings.documentLocations.unshift(defaultDocumentsLocation());
+      state.settings.documentLocationsInitialized = true;
+      await saveSettings();
+    }
     bindEvents();
     syncSettingsUi();
     updateConnectionBadge();
     await refreshLibrary();
+    if (!state.settings.documentLocations.length && state.books.length) await clearLibraryWithoutLocations();
     if ('serviceWorker' in navigator) {
       if (import.meta.env?.PROD && (location.protocol === 'https:' || location.hostname === 'localhost')) {
         navigator.serviceWorker.register('/sw.js').catch((error) => console.warn('Service worker no registrado', error));
