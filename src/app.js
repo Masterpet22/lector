@@ -3,6 +3,9 @@ import {
   openDatabase, requestPersistentStorage, saveBook, setSetting, updateBook,
 } from './db.js';
 import { baseTitle, convertRarToCbz, inspectComic, openComicArchive, stableBookId } from './archive.js';
+import { registerPlugin } from '@capacitor/core';
+
+const NativeDirectoryAccess = registerPlugin('DirectoryAccess');
 
 const $ = (selector) => document.querySelector(selector);
 const ui = {
@@ -485,32 +488,73 @@ function renderRecommendations() {
   ui.recommendationList.replaceChildren(...items.map(({ book }) => { const button = document.createElement('button'); button.type = 'button'; button.className = 'recommendation-card'; button.textContent = `› ${book.title}`; button.addEventListener('click', () => openBook(book.id)); return button; }));
 }
 
+function sameNativeSource(entry, existing) {
+  if (!existing) return false;
+  const incomingSize = Number(entry.size || 0);
+  const storedSize = Number(existing.sourceSize || existing.size || 0);
+  const incomingModified = Number(entry.lastModified || 0);
+  const storedModified = Number(existing.sourceLastModified || existing.blob?.lastModified || 0);
+  const comparableSize = incomingSize > 0 && storedSize > 0;
+  const comparableModified = incomingModified > 0 && storedModified > 0;
+  if (comparableSize && incomingSize !== storedSize) return false;
+  if (comparableModified && incomingModified !== storedModified) return false;
+  return comparableSize || comparableModified;
+}
+
+async function readNativeFile(entry) {
+  const parts = [];
+  let sessionId;
+  try {
+    ({ sessionId } = await NativeDirectoryAccess.openFile({ uri: entry.nativeUri }));
+    let done = false;
+    while (!done) {
+      const chunk = await NativeDirectoryAccess.readFileChunk({ sessionId, maxBytes: 512 * 1024 });
+      done = chunk.done;
+      if (!chunk.data) continue;
+      const binary = atob(chunk.data);
+      const bytes = new Uint8Array(binary.length);
+      for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+      parts.push(bytes);
+    }
+  } finally {
+    if (sessionId) await NativeDirectoryAccess.closeFile({ sessionId }).catch(() => {});
+  }
+  return new File(parts, entry.name, { lastModified: entry.lastModified || Date.now() });
+}
+
 async function importFiles(items) {
   const entries = [...items]
-    .map((item) => item?.file instanceof File ? item : { file: item, handle: null })
-    .filter(({ file }) => file instanceof File && ['cbz', 'cbr', 'zip', 'pdf'].includes(extOf(file.name)));
-  const accepted = state.settings.documentBackup ? entries : entries.filter(({ handle }) => handle?.kind === 'file');
+    .map((item) => item?.nativeFile || item?.file instanceof File ? item : { file: item, handle: null })
+    .filter(({ file, name, nativeFile }) => (file instanceof File || nativeFile) && ['cbz', 'cbr', 'zip', 'pdf'].includes(extOf(file?.name || name)));
+  const accepted = state.settings.documentBackup ? entries : entries.filter(({ handle, nativeFile }) => handle?.kind === 'file' || nativeFile);
   if (!accepted.length) return toast('Selecciona archivos CBZ, CBR, ZIP o PDF.', 'error');
   await requestPersistentStorage();
 
   for (let index = 0; index < accepted.length; index += 1) {
-    const { file, handle, sourcePath: providedSourcePath, sourceKey } = accepted[index];
-    setLoading(true, `Importando ${index + 1} de ${accepted.length}: ${file.name}`);
+    const { handle, sourcePath: providedSourcePath, sourceKey, nativeFile } = accepted[index];
+    let { file } = accepted[index];
     try {
+      const existingByPath = state.books.find((book) => sourceKey ? book.sourceKey === sourceKey : book.sourcePath === providedSourcePath);
+      if (nativeFile && sameNativeSource(accepted[index], existingByPath)) continue;
+      setLoading(true, `Importando ${index + 1} de ${accepted.length}: ${accepted[index].name || file?.name}`);
+      if (nativeFile && !file) file = await readNativeFile(accepted[index]);
       const sourcePath = providedSourcePath || file.webkitRelativePath || handle?.name || file.name;
-      const existingByPath = state.books.find((book) => sourceKey ? book.sourceKey === sourceKey : book.sourcePath === sourcePath);
-      const id = existingByPath?.id || stableBookId(file);
+      const id = existingByPath?.id || stableBookId(sourceKey
+        ? { name: sourceKey, size: file.size, lastModified: file.lastModified }
+        : file);
       const existing = existingByPath || await getBook(id);
       const details = await inspectComic(file, file.name);
       const metadata = details.metadata || {};
       const title = existing?.title || metadata.title || baseTitle(file.name);
       await saveBook(normalizeBook({
         ...existing, id, title, normalizedTitle: title.toLocaleLowerCase(), fileName: file.name,
-        format: extOf(file.name), blob: (state.settings.documentBackup || existing?.backupEnabled) ? file : undefined,
+        format: extOf(file.name), blob: (state.settings.documentBackup || existing?.backupEnabled || nativeFile) ? file : undefined,
         fileHandle: handle || existing?.fileHandle,
-        backupEnabled: Boolean(state.settings.documentBackup || existing?.backupEnabled),
-        storageMode: (state.settings.documentBackup || existing?.backupEnabled) ? 'backup' : 'reference',
+        backupEnabled: Boolean(state.settings.documentBackup || existing?.backupEnabled || nativeFile),
+        storageMode: (state.settings.documentBackup || existing?.backupEnabled || nativeFile) ? 'backup' : 'reference',
         sourcePath, sourceKey: sourceKey || existing?.sourceKey || '',
+        sourceSize: nativeFile ? Number(accepted[index].size || file.size) : existing?.sourceSize,
+        sourceLastModified: nativeFile ? Number(accepted[index].lastModified || file.lastModified || 0) : existing?.sourceLastModified,
         cover: existing?.cover || details.cover, pageCount: details.pageCount,
         series: existing?.series || metadata.series || inferSeries(title), number: existing?.number || metadata.number || '',
         author: existing?.author || metadata.author || '', publisher: existing?.publisher || metadata.publisher || '',
@@ -519,7 +563,7 @@ async function importFiles(items) {
       }));
     } catch (error) {
       console.error(error);
-      toast(`No se pudo importar ${file.name}: ${error.message}`, 'error');
+      toast(`No se pudo importar ${file?.name || accepted[index].name}: ${error.message}`, 'error');
     }
   }
   setLoading(false);
@@ -1023,7 +1067,7 @@ function renderDocumentLocations() {
       await syncLibraryWithLocations();
     });
     const path = document.createElement('small');
-    path.textContent = location.handle ? location.systemPath || location.name : `${location.systemPath || location.name} · requiere autorización`;
+    path.textContent = location.handle || location.nativeUri ? location.systemPath || location.name : `${location.systemPath || location.name} · requiere autorización`;
     const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'button ghost'; remove.textContent = 'Quitar'; remove.setAttribute('aria-label', `Quitar la carpeta ${location.label || location.name}`);
     remove.disabled = state.locationsRefreshing;
     remove.addEventListener('click', async () => {
@@ -1066,8 +1110,37 @@ async function storeDocumentLocation(handle) {
   return true;
 }
 
+async function storeNativeDocumentLocation(directory) {
+  if (state.settings.documentLocations.some((location) => location.nativeUri === directory.uri)) return false;
+
+  state.settings.documentLocations = state.settings.documentLocations.filter((location) => !location.isDefault || location.handle || location.nativeUri);
+  state.settings.documentLocations.push({
+    id: crypto.randomUUID?.() || `location-${Date.now()}`,
+    name: directory.name,
+    label: directory.name,
+    systemPath: directory.name,
+    platform: 'android',
+    nativeUri: directory.uri,
+  });
+  await saveSettings();
+  renderDocumentLocations();
+  return true;
+}
+
 async function addDocumentLocation() {
   if (state.locationsRefreshing) return;
+  if (appPlatform() === 'android') {
+    try {
+      const directory = await NativeDirectoryAccess.pickDirectory();
+      if (directory.cancelled) return;
+      if (await storeNativeDocumentLocation(directory)) await syncLibraryWithLocations();
+      else toast('Esta carpeta ya está en la lista.');
+    } catch (error) {
+      console.error(error);
+      toast(`No se pudo añadir la carpeta: ${error.message}`, 'error');
+    }
+    return;
+  }
   if (!window.showDirectoryPicker) {
     toast('Este navegador no permite guardar ubicaciones de carpetas.', 'error');
     return;
@@ -1097,6 +1170,24 @@ async function authorizeDirectory(location) {
   return handle;
 }
 
+async function authorizeNativeDirectory(location) {
+  const directory = await NativeDirectoryAccess.pickDirectory();
+  if (directory.cancelled) return false;
+  location.nativeUri = directory.uri;
+  location.name = directory.name;
+  location.systemPath = directory.name;
+  location.platform = 'android';
+  if (location.isDefault) {
+    location.label = directory.name;
+    location.isDefault = false;
+  } else if (!location.label) {
+    location.label = directory.name;
+  }
+  await saveSettings();
+  renderDocumentLocations();
+  return true;
+}
+
 async function ensureDirectoryPermission(handle) {
   const options = { mode: 'read' };
   let permission = await handle.queryPermission?.(options) || 'prompt';
@@ -1119,6 +1210,22 @@ async function scanDocumentDirectory(handle, location, relativePath = '', result
     }
   }
   return results;
+}
+
+async function scanNativeDocumentDirectory(location, results) {
+  const { files } = await NativeDirectoryAccess.listFiles({ uri: location.nativeUri });
+  for (const file of files) {
+    const sourcePath = `${location.label || location.name}/${file.relativePath}`;
+    results.push({
+      name: file.name,
+      size: file.size,
+      lastModified: file.lastModified,
+      nativeUri: file.uri,
+      nativeFile: true,
+      sourcePath,
+      sourceKey: `${location.id}/${file.relativePath}`,
+    });
+  }
 }
 
 async function removeMissingLocationBooks(scannedLocationIds, foundSourceKeys, reconcileEntireLibrary = false) {
@@ -1175,6 +1282,12 @@ async function refreshSavedLocations() {
   try {
     for (const location of state.settings.documentLocations) {
       try {
+        if (appPlatform() === 'android') {
+          if (!location.nativeUri && !await authorizeNativeDirectory(location)) { unavailable += 1; continue; }
+          await scanNativeDocumentDirectory(location, entries);
+          scannedLocationIds.add(location.id);
+          continue;
+        }
         const handle = await authorizeDirectory(location);
         if (!await ensureDirectoryPermission(handle)) { unavailable += 1; continue; }
         await scanDocumentDirectory(handle, location, '', entries);

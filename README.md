@@ -37,6 +37,8 @@ npm run android:apk
 
 El resultado visible queda en `releases/NebulaReader-debug.apk`. Android utiliza APK o AAB; el formato PKG pertenece a macOS.
 
+En Android, añade carpetas desde **Ajustes → Ubicaciones de documentos → Añadir carpeta**. El selector del sistema conserva el acceso y los cómics encontrados se copian a la biblioteca local.
+
 ## Controles del lector
 
 - Arrastra con el ratón o desliza con un dedo para recorrer páginas ampliadas.
