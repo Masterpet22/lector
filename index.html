@@ -125,6 +125,11 @@
       </main>
     </div>
 
+    <div id="background-activity" class="background-activity hidden" role="status" aria-live="polite" aria-atomic="true">
+      <span class="background-spinner" aria-hidden="true"></span>
+      <span id="background-activity-text">Procesando documentos en segundo plano…</span>
+    </div>
+
     <div id="eye-filter" aria-hidden="true"></div>
     <div id="toast-region" class="toast-region" aria-live="polite"></div>
 
@@ -163,7 +168,7 @@
 
         <fieldset class="document-locations-setting">
           <legend>Ubicaciones de documentos</legend>
-          <p>Carpetas autorizadas donde guardas tus documentos. En Android, selecciona una carpeta del dispositivo; sus cómics se copian a la biblioteca.</p>
+          <p>Carpetas autorizadas donde guardas tus documentos. En Android, la app conserva acceso al archivo original; solo crea una copia si activas el respaldo.</p>
           <div id="document-location-list" class="document-location-list"></div>
           <div class="document-location-actions">
             <button id="add-document-location" class="button secondary" type="button">＋ Añadir carpeta</button>

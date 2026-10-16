@@ -33,6 +33,7 @@ import java.util.concurrent.Executors;
 public class DirectoryAccessPlugin extends Plugin {
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final Map<String, InputStream> openFiles = new ConcurrentHashMap<>();
+    private final Map<String, NativeDocumentSession> documentSessions = new ConcurrentHashMap<>();
 
     @PluginMethod
     public void pickDirectory(PluginCall call) {
@@ -164,6 +165,103 @@ public class DirectoryAccessPlugin extends Plugin {
         call.resolve();
     }
 
+    @PluginMethod
+    public void inspectDocument(PluginCall call) {
+        String uriValue = call.getString("uri");
+        String fileName = call.getString("name");
+        if (uriValue == null || fileName == null) {
+            call.reject("Faltan los datos del documento.");
+            return;
+        }
+
+        executor.execute(() -> {
+            try (NativeDocumentSession session = openDocumentSession(uriValue, fileName)) {
+                NativePage cover = session.readPage(0);
+                call.resolve(new JSObject()
+                    .put("pageCount", session.getPageCount())
+                    .put("coverData", Base64.encodeToString(cover.data, Base64.NO_WRAP))
+                    .put("coverMimeType", cover.mimeType)
+                    .put("metadata", session.getMetadata()));
+            } catch (Exception error) {
+                call.reject("No se pudo inspeccionar el documento con el lector nativo.", error);
+            }
+        });
+    }
+
+    @PluginMethod
+    public void openDocument(PluginCall call) {
+        String uriValue = call.getString("uri");
+        String fileName = call.getString("name");
+        if (uriValue == null || fileName == null) {
+            call.reject("Faltan los datos del documento.");
+            return;
+        }
+
+        executor.execute(() -> {
+            NativeDocumentSession session = null;
+            try {
+                session = openDocumentSession(uriValue, fileName);
+                String sessionId = UUID.randomUUID().toString();
+                documentSessions.put(sessionId, session);
+                call.resolve(new JSObject()
+                    .put("sessionId", sessionId)
+                    .put("pageCount", session.getPageCount())
+                    .put("metadata", session.getMetadata()));
+            } catch (Exception error) {
+                if (session != null) try { session.close(); } catch (IOException ignored) {}
+                call.reject("No se pudo abrir el documento con el lector nativo.", error);
+            }
+        });
+    }
+
+    @PluginMethod
+    public void readDocumentPage(PluginCall call) {
+        String sessionId = call.getString("sessionId");
+        Integer pageIndex = call.getInt("index");
+        if (sessionId == null || pageIndex == null) {
+            call.reject("Faltan los datos de la página.");
+            return;
+        }
+
+        executor.execute(() -> {
+            NativeDocumentSession session = documentSessions.get(sessionId);
+            if (session == null) {
+                call.reject("La sesión del documento ya no está disponible.");
+                return;
+            }
+            try {
+                NativePage page = session.readPage(pageIndex);
+                call.resolve(new JSObject()
+                    .put("data", Base64.encodeToString(page.data, Base64.NO_WRAP))
+                    .put("mimeType", page.mimeType));
+            } catch (Exception error) {
+                call.reject("No se pudo extraer la página solicitada.", error);
+            }
+        });
+    }
+
+    @PluginMethod
+    public void closeDocument(PluginCall call) {
+        String sessionId = call.getString("sessionId");
+        if (sessionId == null) {
+            call.resolve();
+            return;
+        }
+        executor.execute(() -> {
+            closeDocumentSession(sessionId);
+            call.resolve();
+        });
+    }
+
+    private NativeDocumentSession openDocumentSession(String uriValue, String fileName) throws Exception {
+        return NativeDocumentSession.open(
+            getContext().getContentResolver(),
+            Uri.parse(uriValue),
+            fileName,
+            getContext().getResources().getDisplayMetrics()
+        );
+    }
+
     private Uri requireTreeUri(String value) {
         Uri uri = Uri.parse(value);
         if (!DocumentsContract.isTreeUri(uri)) {
@@ -268,9 +366,18 @@ public class DirectoryAccessPlugin extends Plugin {
         } catch (IOException ignored) {}
     }
 
+    private void closeDocumentSession(String sessionId) {
+        NativeDocumentSession session = documentSessions.remove(sessionId);
+        if (session == null) return;
+        try {
+            session.close();
+        } catch (IOException ignored) {}
+    }
+
     @Override
     protected void handleOnDestroy() {
         for (String sessionId : openFiles.keySet()) closeSession(sessionId);
+        for (String sessionId : documentSessions.keySet()) closeDocumentSession(sessionId);
         executor.shutdownNow();
         super.handleOnDestroy();
     }

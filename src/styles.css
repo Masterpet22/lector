@@ -39,6 +39,8 @@ button:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focu
 .brand small { color: var(--muted); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; margin-top: 4px; }
 .header-actions { display: flex; align-items: center; gap: 10px; }
 .status-badge { color: var(--accent); font-size: 12px; padding: 6px 10px; border: 1px solid color-mix(in srgb, var(--accent) 30%, transparent); border-radius: 99px; background: color-mix(in srgb, var(--accent) 9%, transparent); }
+.background-activity { position: fixed; z-index: 45; right: max(16px,env(safe-area-inset-right)); bottom: max(16px,env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 10px; max-width: min(420px,calc(100vw - 32px)); padding: 11px 14px; border: 1px solid color-mix(in srgb,var(--accent) 35%,var(--line)); border-radius: 14px; background: color-mix(in srgb,var(--panel) 94%,transparent); color: var(--text); box-shadow: var(--shadow); backdrop-filter: blur(16px); font-size: 13px; }
+.background-spinner { width: 16px; height: 16px; flex: 0 0 auto; border: 2px solid color-mix(in srgb,var(--accent) 28%,transparent); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
 
 .view { min-height: calc(100dvh - 68px); }
 .library-view { max-width: 1240px; margin: 0 auto; padding: clamp(32px,6vw,84px) clamp(16px,4vw,48px) 80px; }

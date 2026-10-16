@@ -36,6 +36,7 @@ const ui = {
   deleteSelectedBooks: $('#delete-selected-books'), groupDialog: $('#bulk-group-dialog'),
   libraryGroupDialog: $('#library-group-dialog'), libraryGroupTitle: $('#library-group-title'),
   libraryGroupCount: $('#library-group-count'), libraryGroupBooks: $('#library-group-books'),
+  backgroundActivity: $('#background-activity'), backgroundActivityText: $('#background-activity-text'),
 };
 
 const DEFAULT_SETTINGS = {
@@ -50,6 +51,9 @@ const state = {
   mousePan: null, suppressZoneClick: false, locationsRefreshing: false,
   libraryQuery: '', libraryFilter: 'all', readingStartedAt: 0, sessionPages: new Set(), panelCache: new Map(), lastTap: null,
   selectionMode: false, selectedBookIds: new Set(), bulkActionBusy: false,
+  importQueue: [], queuedImportKeys: new Set(), importWorkerRunning: false,
+  importSessionTotal: 0, importSessionCompleted: 0, importSessionImported: 0,
+  importSessionUpdated: 0, importSessionSkipped: 0, importSessionFailed: 0,
 };
 
 function inferSeries(title = '') {
@@ -124,6 +128,17 @@ const DOCUMENT_PICKER_OPTIONS = {
 
 async function fileFromBook(book) {
   if (book.blob) return book.blob;
+  if (book.nativeUri) {
+    try {
+      return await readNativeFile({
+        nativeUri: book.nativeUri,
+        name: book.fileName,
+        lastModified: book.sourceLastModified,
+      });
+    } catch (error) {
+      throw new Error(`No se pudo leer el archivo original en Android. Comprueba que no se haya movido o eliminado. ${error.message}`);
+    }
+  }
   const handle = book.fileHandle;
   if (!handle?.getFile) throw new Error('La referencia al archivo original ya no está disponible. Vuelve a importarlo.');
 
@@ -488,17 +503,26 @@ function renderRecommendations() {
   ui.recommendationList.replaceChildren(...items.map(({ book }) => { const button = document.createElement('button'); button.type = 'button'; button.className = 'recommendation-card'; button.textContent = `› ${book.title}`; button.addEventListener('click', () => openBook(book.id)); return button; }));
 }
 
-function sameNativeSource(entry, existing) {
+function sameSource(entry, existing) {
   if (!existing) return false;
-  const incomingSize = Number(entry.size || 0);
+  const incomingSize = Number(entry.size || entry.file?.size || 0);
   const storedSize = Number(existing.sourceSize || existing.size || 0);
-  const incomingModified = Number(entry.lastModified || 0);
+  const incomingModified = Number(entry.lastModified || entry.file?.lastModified || 0);
   const storedModified = Number(existing.sourceLastModified || existing.blob?.lastModified || 0);
   const comparableSize = incomingSize > 0 && storedSize > 0;
   const comparableModified = incomingModified > 0 && storedModified > 0;
+  // Older web records did not persist the source modification time. Process
+  // them once so future refreshes can reliably detect same-size replacements.
+  if (incomingModified > 0 && storedModified <= 0) return false;
   if (comparableSize && incomingSize !== storedSize) return false;
   if (comparableModified && incomingModified !== storedModified) return false;
   return comparableSize || comparableModified;
+}
+
+function sourceStorageIsCurrent(entry, existing) {
+  if (!entry.nativeFile || !existing) return true;
+  if (state.settings.documentBackup) return Boolean(existing.blob);
+  return !existing.blob && existing.nativeUri === entry.nativeUri;
 }
 
 async function readNativeFile(entry) {
@@ -522,53 +546,200 @@ async function readNativeFile(entry) {
   return new File(parts, entry.name, { lastModified: entry.lastModified || Date.now() });
 }
 
-async function importFiles(items) {
+function blobFromBase64(data, mimeType = 'application/octet-stream') {
+  const binary = atob(data);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return new Blob([bytes], { type: mimeType });
+}
+
+async function inspectNativeDocument(entry) {
+  const result = await NativeDirectoryAccess.inspectDocument({ uri: entry.nativeUri, name: entry.name });
+  return {
+    pageCount: result.pageCount,
+    cover: blobFromBase64(result.coverData, result.coverMimeType),
+    metadata: result.metadata || {},
+  };
+}
+
+async function openNativeComicArchive(book) {
+  const opened = await NativeDirectoryAccess.openDocument({ uri: book.nativeUri, name: book.fileName });
+  let closed = false;
+  return {
+    type: `native-${book.format}`,
+    metadata: opened.metadata || {},
+    pages: Array.from({ length: opened.pageCount }, (_, index) => ({
+      name: `${String(index + 1).padStart(4, '0')}`,
+      getBlob: async () => {
+        if (closed) throw new Error('El documento nativo ya está cerrado.');
+        const page = await NativeDirectoryAccess.readDocumentPage({ sessionId: opened.sessionId, index });
+        return blobFromBase64(page.data, page.mimeType);
+      },
+    })),
+    close: async () => {
+      if (closed) return;
+      closed = true;
+      await NativeDirectoryAccess.closeDocument({ sessionId: opened.sessionId });
+    },
+  };
+}
+
+function importEntryKey(entry) {
+  if (entry.sourceKey) return `source:${entry.sourceKey}`;
+  if (entry.nativeUri) return `native:${entry.nativeUri}`;
+  const file = entry.file;
+  return file instanceof File ? `file:${file.name}:${file.size}:${file.lastModified}` : '';
+}
+
+function updateBackgroundImportStatus(currentName = '') {
+  const active = state.importWorkerRunning || state.importQueue.length > 0;
+  ui.backgroundActivity.classList.toggle('hidden', !active);
+  if (!active) return;
+  const position = Math.min(state.importSessionCompleted + 1, state.importSessionTotal);
+  ui.backgroundActivityText.textContent = currentName
+    ? `Procesando ${position} de ${state.importSessionTotal}: ${currentName}`
+    : `${state.importQueue.length} documento${state.importQueue.length === 1 ? '' : 's'} en espera`;
+}
+
+function yieldToInterface() {
+  if (globalThis.scheduler?.yield) return globalThis.scheduler.yield();
+  return new Promise((resolve) => window.setTimeout(resolve, 0));
+}
+
+async function commitImportedDocument(entry) {
+  const { handle, sourcePath: providedSourcePath, sourceKey, nativeFile } = entry;
+  let { file } = entry;
+  const knownSourcePath = providedSourcePath || file?.webkitRelativePath || handle?.name || file?.name;
+  const existingByPath = state.books.find((book) => sourceKey
+    ? book.sourceKey === sourceKey
+    : providedSourcePath && book.sourcePath === providedSourcePath);
+  if (sameSource(entry, existingByPath) && sourceStorageIsCurrent(entry, existingByPath)) return 'skipped';
+
+  const nativeReference = Boolean(nativeFile && !state.settings.documentBackup);
+  if (nativeFile && !file && !nativeReference) file = await readNativeFile(entry);
+  const documentName = file?.name || entry.name;
+  const documentSize = Number(entry.size || file?.size || 0);
+  const documentLastModified = Number(entry.lastModified || file?.lastModified || 0);
+  const sourcePath = knownSourcePath || file?.webkitRelativePath || handle?.name || documentName;
+  const candidateId = stableBookId(sourceKey
+    ? { name: sourceKey, size: documentSize, lastModified: documentLastModified }
+    : file);
+  const existing = existingByPath || await getBook(candidateId);
+  if (!providedSourcePath && !sourceKey
+    && sameSource({ ...entry, file }, existing)
+    && sourceStorageIsCurrent(entry, existing)) return 'skipped';
+
+  let details;
+  if (nativeReference) {
+    try {
+      details = await inspectNativeDocument(entry);
+    } catch (nativeError) {
+      console.warn('El lector nativo no pudo inspeccionar el documento; se usará el modo compatible.', nativeError);
+      file = await readNativeFile(entry);
+      details = await inspectComic(file, file.name);
+    }
+  } else {
+    details = await inspectComic(file, file.name);
+  }
+  const metadata = details.metadata || {};
+  const id = existing?.id || candidateId;
+  // Read again immediately before publishing so edits and reading progress made
+  // while the replacement was being prepared are not overwritten.
+  const latest = await getBook(id) || existing;
+  const title = latest?.title || metadata.title || baseTitle(documentName);
+  const keepLocalCopy = Boolean(state.settings.documentBackup || (!nativeFile && latest?.backupEnabled));
+  const completedBook = normalizeBook({
+    ...latest, id, title, normalizedTitle: title.toLocaleLowerCase(), fileName: documentName,
+    format: extOf(documentName), blob: keepLocalCopy ? file : undefined,
+    fileHandle: handle || latest?.fileHandle,
+    backupEnabled: keepLocalCopy,
+    storageMode: keepLocalCopy ? 'backup' : 'reference',
+    sourcePath, sourceKey: sourceKey || latest?.sourceKey || '',
+    nativeUri: entry.nativeUri || latest?.nativeUri || '',
+    sourceSize: documentSize,
+    sourceLastModified: documentLastModified,
+    cover: latest?.cover || details.cover, pageCount: details.pageCount,
+    series: latest?.series || metadata.series || inferSeries(title), number: latest?.number || metadata.number || '',
+    author: latest?.author || metadata.author || '', publisher: latest?.publisher || metadata.publisher || '',
+    year: latest?.year || metadata.year || '', summary: latest?.summary || metadata.summary || '', tags: latest?.tags || metadata.tags || [],
+    currentPage: latest?.currentPage || 0, addedAt: latest?.addedAt || Date.now(), updatedAt: Date.now(), size: documentSize,
+  });
+
+  // This is the publication point. No partial record is stored or rendered.
+  await saveBook(completedBook);
+  await refreshLibrary();
+  return latest ? 'updated' : 'imported';
+}
+
+function finishBackgroundImportSession() {
+  const completed = state.importSessionImported + state.importSessionUpdated;
+  const parts = [];
+  if (state.importSessionImported) parts.push(`${state.importSessionImported} importado${state.importSessionImported === 1 ? '' : 's'}`);
+  if (state.importSessionUpdated) parts.push(`${state.importSessionUpdated} actualizado${state.importSessionUpdated === 1 ? '' : 's'}`);
+  if (state.importSessionSkipped) parts.push(`${state.importSessionSkipped} sin cambios`);
+  if (state.importSessionFailed) parts.push(`${state.importSessionFailed} con error`);
+  toast(parts.length ? `Proceso en segundo plano terminado: ${parts.join(', ')}.` : 'No hubo documentos para procesar.', state.importSessionFailed ? 'error' : '');
+  if (completed) ui.fileInput.value = '';
+  state.importSessionTotal = 0;
+  state.importSessionCompleted = 0;
+  state.importSessionImported = 0;
+  state.importSessionUpdated = 0;
+  state.importSessionSkipped = 0;
+  state.importSessionFailed = 0;
+}
+
+async function processImportQueue() {
+  if (state.importWorkerRunning) return;
+  state.importWorkerRunning = true;
+  try {
+    while (state.importQueue.length) {
+      const task = state.importQueue.shift();
+      const name = task.entry.name || task.entry.file?.name || 'documento';
+      updateBackgroundImportStatus(name);
+      await yieldToInterface();
+      try {
+        const result = await commitImportedDocument(task.entry);
+        if (result === 'imported') state.importSessionImported += 1;
+        else if (result === 'updated') state.importSessionUpdated += 1;
+        else state.importSessionSkipped += 1;
+      } catch (error) {
+        console.error(error);
+        state.importSessionFailed += 1;
+        toast(`No se pudo importar ${name}: ${error.message}`, 'error');
+      } finally {
+        state.queuedImportKeys.delete(task.key);
+        state.importSessionCompleted += 1;
+      }
+    }
+  } finally {
+    state.importWorkerRunning = false;
+    updateBackgroundImportStatus();
+    finishBackgroundImportSession();
+  }
+}
+
+function importFiles(items) {
   const entries = [...items]
     .map((item) => item?.nativeFile || item?.file instanceof File ? item : { file: item, handle: null })
     .filter(({ file, name, nativeFile }) => (file instanceof File || nativeFile) && ['cbz', 'cbr', 'zip', 'pdf'].includes(extOf(file?.name || name)));
   const accepted = state.settings.documentBackup ? entries : entries.filter(({ handle, nativeFile }) => handle?.kind === 'file' || nativeFile);
   if (!accepted.length) return toast('Selecciona archivos CBZ, CBR, ZIP o PDF.', 'error');
-  await requestPersistentStorage();
-
-  for (let index = 0; index < accepted.length; index += 1) {
-    const { handle, sourcePath: providedSourcePath, sourceKey, nativeFile } = accepted[index];
-    let { file } = accepted[index];
-    try {
-      const existingByPath = state.books.find((book) => sourceKey ? book.sourceKey === sourceKey : book.sourcePath === providedSourcePath);
-      if (nativeFile && sameNativeSource(accepted[index], existingByPath)) continue;
-      setLoading(true, `Importando ${index + 1} de ${accepted.length}: ${accepted[index].name || file?.name}`);
-      if (nativeFile && !file) file = await readNativeFile(accepted[index]);
-      const sourcePath = providedSourcePath || file.webkitRelativePath || handle?.name || file.name;
-      const id = existingByPath?.id || stableBookId(sourceKey
-        ? { name: sourceKey, size: file.size, lastModified: file.lastModified }
-        : file);
-      const existing = existingByPath || await getBook(id);
-      const details = await inspectComic(file, file.name);
-      const metadata = details.metadata || {};
-      const title = existing?.title || metadata.title || baseTitle(file.name);
-      await saveBook(normalizeBook({
-        ...existing, id, title, normalizedTitle: title.toLocaleLowerCase(), fileName: file.name,
-        format: extOf(file.name), blob: (state.settings.documentBackup || existing?.backupEnabled || nativeFile) ? file : undefined,
-        fileHandle: handle || existing?.fileHandle,
-        backupEnabled: Boolean(state.settings.documentBackup || existing?.backupEnabled || nativeFile),
-        storageMode: (state.settings.documentBackup || existing?.backupEnabled || nativeFile) ? 'backup' : 'reference',
-        sourcePath, sourceKey: sourceKey || existing?.sourceKey || '',
-        sourceSize: nativeFile ? Number(accepted[index].size || file.size) : existing?.sourceSize,
-        sourceLastModified: nativeFile ? Number(accepted[index].lastModified || file.lastModified || 0) : existing?.sourceLastModified,
-        cover: existing?.cover || details.cover, pageCount: details.pageCount,
-        series: existing?.series || metadata.series || inferSeries(title), number: existing?.number || metadata.number || '',
-        author: existing?.author || metadata.author || '', publisher: existing?.publisher || metadata.publisher || '',
-        year: existing?.year || metadata.year || '', summary: existing?.summary || metadata.summary || '', tags: existing?.tags || metadata.tags || [],
-        currentPage: existing?.currentPage || 0, addedAt: existing?.addedAt || Date.now(), updatedAt: Date.now(), size: file.size,
-      }));
-    } catch (error) {
-      console.error(error);
-      toast(`No se pudo importar ${file?.name || accepted[index].name}: ${error.message}`, 'error');
-    }
+  void requestPersistentStorage();
+  let queued = 0;
+  for (const entry of accepted) {
+    const key = importEntryKey(entry);
+    if (key && state.queuedImportKeys.has(key)) continue;
+    if (key) state.queuedImportKeys.add(key);
+    state.importQueue.push({ entry, key });
+    queued += 1;
   }
-  setLoading(false);
   ui.fileInput.value = '';
-  await refreshLibrary();
+  if (!queued) return toast('Los documentos seleccionados ya están en la cola.');
+  state.importSessionTotal += queued;
+  updateBackgroundImportStatus();
+  void processImportQueue();
+  toast(`${queued} documento${queued === 1 ? '' : 's'} añadido${queued === 1 ? '' : 's'} a la cola en segundo plano.`);
+  return queued;
 }
 
 function confirmDelete(book) {
@@ -681,8 +852,19 @@ async function openBook(id) {
   state.readingStartedAt = Date.now(); state.sessionPages = new Set(state.currentBook.pagesRead); state.sessionPages.add(state.currentIndex);
 
   try {
-    const sourceFile = await fileFromBook(book);
-    const archive = await openComicArchive(sourceFile, book.fileName);
+    let archive;
+    if (appPlatform() === 'android' && book.nativeUri && !book.blob) {
+      try {
+        archive = await openNativeComicArchive(book);
+      } catch (nativeError) {
+        console.warn('El lector nativo no pudo abrir el documento; se usará el modo compatible.', nativeError);
+        const sourceFile = await fileFromBook(book);
+        archive = await openComicArchive(sourceFile, book.fileName);
+      }
+    } else {
+      const sourceFile = await fileFromBook(book);
+      archive = await openComicArchive(sourceFile, book.fileName);
+    }
     if (sessionId !== state.sessionId) return archive.close();
     state.archive = archive;
     if (archive.pages.length !== book.pageCount) {
@@ -1298,12 +1480,12 @@ async function refreshSavedLocations() {
         unavailable += 1;
       }
     }
-    if (entries.length) await importFiles(entries);
+    const queued = entries.length ? importFiles(entries) || 0 : 0;
     const foundSourceKeys = new Set(entries.map((entry) => entry.sourceKey));
     const allLocationsScanned = unavailable === 0 && scannedLocationIds.size === state.settings.documentLocations.length;
     const removed = await removeMissingLocationBooks(scannedLocationIds, foundSourceKeys, allLocationsScanned);
     const message = entries.length
-      ? `${entries.length} documento${entries.length === 1 ? '' : 's'} revisado${entries.length === 1 ? '' : 's'}.`
+      ? `${entries.length} documento${entries.length === 1 ? '' : 's'} revisado${entries.length === 1 ? '' : 's'}; ${queued} en cola de segundo plano.`
       : 'No se encontraron documentos compatibles en las ubicaciones disponibles.';
     const removalMessage = removed ? ` ${removed} documento${removed === 1 ? '' : 's'} ausente${removed === 1 ? '' : 's'} eliminado${removed === 1 ? '' : 's'}.` : '';
     const unavailableMessage = unavailable ? ` ${unavailable} ubicación${unavailable === 1 ? '' : 'es'} no disponible${unavailable === 1 ? '' : 's'}.` : '';
@@ -1507,8 +1689,11 @@ function bindEvents() {
     state.settings.documentBackup = ui.documentBackup.checked;
     await saveSettings();
     toast(state.settings.documentBackup
-      ? 'Los documentos nuevos se copiarán en la biblioteca.'
-      : 'Los documentos nuevos se guardarán como referencias.');
+      ? 'Los documentos se copiarán en la biblioteca durante la sincronización.'
+      : 'En Android se usarán los archivos originales sin conservar duplicados.');
+    if (appPlatform() === 'android' && state.settings.documentLocations.some((location) => location.nativeUri)) {
+      void syncLibraryWithLocations();
+    }
   });
   ui.addDocumentLocation.addEventListener('click', addDocumentLocation);
   ui.refreshDocumentLocations.addEventListener('click', refreshSavedLocations);
@@ -1658,6 +1843,9 @@ async function init() {
     updateConnectionBadge();
     await refreshLibrary();
     if (!state.settings.documentLocations.length && state.books.length) await clearLibraryWithoutLocations();
+    if (appPlatform() === 'android' && state.settings.documentLocations.some((location) => location.nativeUri)) {
+      void syncLibraryWithLocations();
+    }
     if ('serviceWorker' in navigator) {
       if (import.meta.env?.PROD && (location.protocol === 'https:' || location.hostname === 'localhost')) {
         navigator.serviceWorker.register('/sw.js').catch((error) => console.warn('Service worker no registrado', error));
