@@ -1,11 +1,13 @@
 package app.nebulareader.mobile;
 
 import android.app.Activity;
+import android.content.ClipData;
 import android.content.ContentResolver;
 import android.content.Intent;
 import android.database.Cursor;
 import android.net.Uri;
 import android.provider.DocumentsContract;
+import android.provider.OpenableColumns;
 import android.util.Base64;
 
 import androidx.activity.result.ActivityResult;
@@ -23,6 +25,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.Locale;
 import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
@@ -43,6 +47,66 @@ public class DirectoryAccessPlugin extends Plugin {
                 | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
         );
         startActivityForResult(call, intent, "directoryPicked");
+    }
+
+    @PluginMethod
+    public void pickFiles(PluginCall call) {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("*/*");
+        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        intent.putExtra(Intent.EXTRA_MIME_TYPES, new String[] {
+            "application/pdf",
+            "application/zip",
+            "application/x-zip-compressed",
+            "application/vnd.comicbook+zip",
+            "application/x-cbz",
+            "application/x-rar-compressed",
+            "application/vnd.rar",
+            "application/vnd.comicbook-rar",
+            "application/x-cbr",
+            "application/octet-stream"
+        });
+        intent.addFlags(
+            Intent.FLAG_GRANT_READ_URI_PERMISSION
+                | Intent.FLAG_GRANT_PERSISTABLE_URI_PERMISSION
+        );
+        startActivityForResult(call, intent, "filesPicked");
+    }
+
+    @ActivityCallback
+    private void filesPicked(PluginCall call, ActivityResult result) {
+        if (call == null) return;
+        Intent data = result.getData();
+        if (result.getResultCode() != Activity.RESULT_OK || data == null) {
+            call.resolve(new JSObject().put("cancelled", true));
+            return;
+        }
+
+        List<Uri> selectedUris = new ArrayList<>();
+        ClipData clipData = data.getClipData();
+        if (clipData != null) {
+            for (int index = 0; index < clipData.getItemCount(); index += 1) {
+                Uri uri = clipData.getItemAt(index).getUri();
+                if (uri != null && !selectedUris.contains(uri)) selectedUris.add(uri);
+            }
+        } else if (data.getData() != null) {
+            selectedUris.add(data.getData());
+        }
+
+        try {
+            ContentResolver resolver = getContext().getContentResolver();
+            int permissionFlags = data.getFlags() & Intent.FLAG_GRANT_READ_URI_PERMISSION;
+            JSArray files = new JSArray();
+            for (Uri uri : selectedUris) {
+                if (permissionFlags != 0) resolver.takePersistableUriPermission(uri, permissionFlags);
+                JSObject file = describeSelectedFile(uri);
+                if (isComicFile(file.getString("name"))) files.put(file);
+            }
+            call.resolve(new JSObject().put("cancelled", false).put("files", files));
+        } catch (Exception error) {
+            call.reject("No se pudo conservar el acceso a los documentos seleccionados.", error);
+        }
     }
 
     @ActivityCallback
@@ -284,6 +348,32 @@ public class DirectoryAccessPlugin extends Plugin {
             String name = cursor.getString(0);
             if (name == null || name.isEmpty()) throw new IOException("El proveedor no devolvió el nombre de la carpeta.");
             return name;
+        }
+    }
+
+    private JSObject describeSelectedFile(Uri uri) throws IOException {
+        try (Cursor cursor = getContext().getContentResolver().query(
+            uri,
+            new String[] {
+                OpenableColumns.DISPLAY_NAME,
+                OpenableColumns.SIZE,
+                DocumentsContract.Document.COLUMN_LAST_MODIFIED
+            },
+            null,
+            null,
+            null
+        )) {
+            if (cursor == null || !cursor.moveToFirst()) throw new IOException("No se pudieron leer los datos del documento.");
+            int nameColumn = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+            int sizeColumn = cursor.getColumnIndex(OpenableColumns.SIZE);
+            int modifiedColumn = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED);
+            String name = nameColumn < 0 || cursor.isNull(nameColumn) ? null : cursor.getString(nameColumn);
+            if (name == null || name.isEmpty()) throw new IOException("El proveedor no devolvió el nombre del documento.");
+            return new JSObject()
+                .put("name", name)
+                .put("uri", uri.toString())
+                .put("size", sizeColumn < 0 || cursor.isNull(sizeColumn) ? 0 : cursor.getLong(sizeColumn))
+                .put("lastModified", modifiedColumn < 0 || cursor.isNull(modifiedColumn) ? 0 : cursor.getLong(modifiedColumn));
         }
     }
 

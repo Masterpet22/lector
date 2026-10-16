@@ -25,6 +25,7 @@ html[data-theme="light"] { color-scheme: light; --bg: #f3f6fa; --panel: #fff; --
 html, body { min-height: 100%; margin: 0; background: var(--bg); color: var(--text); }
 body { min-width: 300px; }
 html.settings-open, html.settings-open body { overflow: hidden; }
+html.onboarding-open, html.onboarding-open body { overflow: hidden; }
 button, input, select { font: inherit; }
 button, select { color: inherit; }
 button { cursor: pointer; }
@@ -42,6 +43,17 @@ button:focus-visible, input:focus-visible, select:focus-visible, [tabindex]:focu
 .background-activity { position: fixed; z-index: 45; right: max(16px,env(safe-area-inset-right)); bottom: max(16px,env(safe-area-inset-bottom)); display: flex; align-items: center; gap: 10px; max-width: min(420px,calc(100vw - 32px)); padding: 11px 14px; border: 1px solid color-mix(in srgb,var(--accent) 35%,var(--line)); border-radius: 14px; background: color-mix(in srgb,var(--panel) 94%,transparent); color: var(--text); box-shadow: var(--shadow); backdrop-filter: blur(16px); font-size: 13px; }
 .background-spinner { width: 16px; height: 16px; flex: 0 0 auto; border: 2px solid color-mix(in srgb,var(--accent) 28%,transparent); border-top-color: var(--accent); border-radius: 50%; animation: spin .8s linear infinite; }
 
+.welcome-screen { position: fixed; z-index: 100; inset: 0; min-height: 100dvh; padding: max(24px,var(--safe-top)) max(18px,env(safe-area-inset-right)) max(24px,var(--safe-bottom)) max(18px,env(safe-area-inset-left)); display: grid; place-items: center; overflow: auto; background: radial-gradient(circle at 50% 12%,color-mix(in srgb,var(--accent) 20%,transparent),transparent 38%),var(--bg); }
+.welcome-card { width: min(680px,100%); padding: clamp(28px,6vw,58px); text-align: center; border: 1px solid var(--line); border-radius: 28px; background: color-mix(in srgb,var(--panel) 94%,transparent); box-shadow: var(--shadow); }
+.welcome-logo { width: clamp(76px,16vw,108px); aspect-ratio: 1; margin-bottom: 24px; border-radius: 24px; object-fit: cover; box-shadow: 0 0 48px color-mix(in srgb,var(--accent) 32%,transparent); }
+.welcome-card h1 { max-width: 600px; margin: 0 auto 18px; font-size: clamp(36px,7vw,64px); }
+.welcome-copy { max-width: 560px; margin: 0 auto; color: var(--muted); font-size: clamp(15px,2.4vw,18px); line-height: 1.65; }
+.welcome-details { margin: 30px auto; display: flex; justify-content: center; flex-wrap: wrap; gap: 9px; }
+.welcome-details span { padding: 8px 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel-2); color: var(--muted); font-size: 12px; }
+.welcome-action { width: min(100%,340px); min-height: 52px; }
+.welcome-status { min-height: 22px; margin: 14px 0 0; color: var(--danger); font-size: 13px; }
+.welcome-card > small { display: block; max-width: 480px; margin: 8px auto 0; color: var(--muted); line-height: 1.5; }
+
 .view { min-height: calc(100dvh - 68px); }
 .library-view { max-width: 1240px; margin: 0 auto; padding: clamp(32px,6vw,84px) clamp(16px,4vw,48px) 80px; }
 .hero { display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: end; gap: 30px; }
@@ -51,6 +63,7 @@ h1 { max-width: 760px; margin-bottom: 18px; font-size: clamp(40px,7vw,80px); lin
 h2 { margin-bottom: 0; font-size: clamp(26px,4vw,38px); letter-spacing: -.035em; }
 .hero-copy { max-width: 620px; margin-bottom: 0; color: var(--muted); font-size: clamp(15px,2vw,18px); line-height: 1.65; }
 .hero-actions { padding-bottom: 4px; }
+.hero-actions .import-trigger { width: 52px; min-width: 52px; height: 52px; padding: 0; display: grid; place-items: center; font-size: 28px; line-height: 1; }
 
 .button, .icon-button { border: 1px solid var(--line); border-radius: 12px; background: var(--panel-2); transition: transform .15s, background .15s, opacity .15s; }
 .button:hover, .icon-button:hover { transform: translateY(-1px); }
@@ -256,6 +269,8 @@ kbd { padding: 2px 5px; border: 1px solid var(--line); border-bottom-width: 2px;
 .small-dialog { width: min(92vw,430px); }
 .small-dialog p { color: var(--muted); line-height: 1.55; }
 .dialog-actions { display: flex; justify-content: flex-end; gap: 9px; margin-top: 24px; }
+.import-source-actions { display: grid; gap: 10px; margin-top: 24px; }
+.import-source-actions .button { width: 100%; }
 .library-group-dialog { width: min(94vw,980px); }
 .library-group-dialog .dialog-heading small { display: block; margin-top: 5px; color: var(--muted); }
 .group-books-grid { grid-template-columns: repeat(auto-fill,minmax(145px,1fr)); }
@@ -264,6 +279,7 @@ kbd { padding: 2px 5px; border: 1px solid var(--line); border-bottom-width: 2px;
   .status-badge { display: none; }
   .hero { grid-template-columns: 1fr; }
   .hero-actions .button { width: 100%; }
+  .hero-actions .import-trigger { width: 52px; }
   .dropzone { justify-content: flex-start; }
   .reader-meta { display: none; }
   .chapter-nav { flex: 1; }

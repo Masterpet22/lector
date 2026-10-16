@@ -37,7 +37,7 @@
             <p class="hero-copy">Importa CBZ, CBR, ZIP o PDF. La biblioteca y el progreso se guardan localmente y funcionan sin conexión.</p>
           </div>
           <div class="hero-actions">
-            <button id="import-button" class="button primary" type="button">＋ Agregar cómics</button>
+            <button id="import-button" class="button primary import-trigger" type="button" aria-label="Agregar cómics" title="Agregar cómics">＋</button>
             <input id="file-input" type="file" accept=".cbz,.cbr,.zip,.pdf,application/pdf" multiple hidden />
           </div>
         </section>
@@ -125,6 +125,23 @@
       </main>
     </div>
 
+    <section id="welcome-screen" class="welcome-screen hidden" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
+      <div class="welcome-card">
+        <img class="welcome-logo" src="/branding/logo.png" alt="" aria-hidden="true" />
+        <p class="eyebrow">Bienvenido a Nebula Reader</p>
+        <h1 id="welcome-title">Elige dónde vive tu biblioteca.</h1>
+        <p id="welcome-copy" class="welcome-copy">Selecciona la carpeta que contiene tus documentos. La aplicación la revisará al iniciar para mantener tu biblioteca actualizada.</p>
+        <div class="welcome-details" aria-label="Cómo funciona">
+          <span>CBZ, CBR, ZIP y PDF</span>
+          <span>Lectura privada y local</span>
+          <span>Sincronización automática</span>
+        </div>
+        <button id="choose-initial-location" class="button primary welcome-action" type="button">Seleccionar carpeta</button>
+        <p id="welcome-status" class="welcome-status" role="alert" aria-live="polite"></p>
+        <small id="welcome-privacy">Nebula Reader solo solicitará permiso de lectura para la carpeta que elijas.</small>
+      </div>
+    </section>
+
     <div id="background-activity" class="background-activity hidden" role="status" aria-live="polite" aria-atomic="true">
       <span class="background-spinner" aria-hidden="true"></span>
       <span id="background-activity-text">Procesando documentos en segundo plano…</span>
@@ -191,6 +208,17 @@
         </div>
         <p class="shortcut-help"><strong>Consejo:</strong> arrastra con el ratón o desliza para recorrer una página ampliada. Usa <kbd>Mayús</kbd> + flechas para desplazarte sin cambiar de página.</p>
       </form>
+    </dialog>
+
+    <dialog id="import-source-dialog" class="settings-dialog small-dialog">
+      <div class="dialog-card">
+        <div class="dialog-heading"><div><p class="eyebrow">Agregar contenido</p><h2>Elige el origen</h2></div><button id="close-import-source" class="icon-button" type="button" aria-label="Cerrar">×</button></div>
+        <p>Selecciona varios documentos compatibles o añade una carpeta para mantenerla sincronizada.</p>
+        <div class="import-source-actions">
+          <button id="import-source-files" class="button primary" type="button">Seleccionar archivos</button>
+          <button id="import-source-folder" class="button secondary" type="button">Seleccionar carpeta</button>
+        </div>
+      </div>
     </dialog>
 
     <dialog id="book-dialog" class="settings-dialog">

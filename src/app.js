@@ -9,6 +9,8 @@ const NativeDirectoryAccess = registerPlugin('DirectoryAccess');
 
 const $ = (selector) => document.querySelector(selector);
 const ui = {
+  appShell: $('#app-shell'), welcomeScreen: $('#welcome-screen'), welcomeCopy: $('#welcome-copy'),
+  welcomeChoose: $('#choose-initial-location'), welcomeStatus: $('#welcome-status'), welcomePrivacy: $('#welcome-privacy'),
   libraryView: $('#library-view'), readerView: $('#reader-view'), libraryGrid: $('#library-grid'),
   emptyLibrary: $('#empty-library'), fileInput: $('#file-input'), dropzone: $('#dropzone'),
   bookCount: $('#book-count'), storageUsage: $('#storage-usage'), settings: $('#settings-dialog'),
@@ -36,13 +38,16 @@ const ui = {
   deleteSelectedBooks: $('#delete-selected-books'), groupDialog: $('#bulk-group-dialog'),
   libraryGroupDialog: $('#library-group-dialog'), libraryGroupTitle: $('#library-group-title'),
   libraryGroupCount: $('#library-group-count'), libraryGroupBooks: $('#library-group-books'),
+  importSourceDialog: $('#import-source-dialog'), importSourceFiles: $('#import-source-files'),
+  importSourceFolder: $('#import-source-folder'),
   backgroundActivity: $('#background-activity'), backgroundActivityText: $('#background-activity-text'),
 };
 
 const DEFAULT_SETTINGS = {
   theme: 'dark', readingMode: 'page', readingDirection: 'ltr', fit: 'best', orientation: 'any',
   eyeFilter: 0, zoom: 1, pageMargin: 2, brightness: 100, adaptiveBrightness: false,
-  documentBackup: false, documentLocations: [], documentLocationsInitialized: false, libraryView: 'grid',
+  documentBackup: false, documentLocations: [], documentLocationsInitialized: false,
+  onboardingCompleted: false, libraryView: 'grid',
 };
 const state = {
   books: [], currentBook: null, archive: null, currentIndex: 0, settings: { ...DEFAULT_SETTINGS },
@@ -54,6 +59,7 @@ const state = {
   importQueue: [], queuedImportKeys: new Set(), importWorkerRunning: false,
   importSessionTotal: 0, importSessionCompleted: 0, importSessionImported: 0,
   importSessionUpdated: 0, importSessionSkipped: 0, importSessionFailed: 0,
+  importSessionNotifyUnchanged: false,
 };
 
 function inferSeries(title = '') {
@@ -126,6 +132,14 @@ const DOCUMENT_PICKER_OPTIONS = {
   }],
 };
 
+function showImportSourceChooser() {
+  ui.importSourceDialog.showModal();
+}
+
+function closeImportSourceChooser() {
+  ui.importSourceDialog.close();
+}
+
 async function fileFromBook(book) {
   if (book.blob) return book.blob;
   if (book.nativeUri) {
@@ -156,6 +170,24 @@ async function fileFromBook(book) {
 }
 
 async function selectDocuments() {
+  if (appPlatform() === 'android') {
+    try {
+      const result = await NativeDirectoryAccess.pickFiles();
+      if (result.cancelled) return;
+      const entries = (result.files || []).map((file) => ({
+        name: file.name,
+        size: file.size,
+        lastModified: file.lastModified,
+        nativeUri: file.uri,
+        nativeFile: true,
+      }));
+      importFiles(entries);
+    } catch (error) {
+      console.error(error);
+      toast(`No se pudieron seleccionar los documentos: ${error.message}`, 'error');
+    }
+    return;
+  }
   if (state.settings.documentBackup) {
     ui.fileInput.click();
     return;
@@ -623,7 +655,7 @@ async function commitImportedDocument(entry) {
   const sourcePath = knownSourcePath || file?.webkitRelativePath || handle?.name || documentName;
   const candidateId = stableBookId(sourceKey
     ? { name: sourceKey, size: documentSize, lastModified: documentLastModified }
-    : file);
+    : file || { name: documentName, size: documentSize, lastModified: documentLastModified });
   const existing = existingByPath || await getBook(candidateId);
   if (!providedSourcePath && !sourceKey
     && sameSource({ ...entry, file }, existing)
@@ -678,7 +710,9 @@ function finishBackgroundImportSession() {
   if (state.importSessionUpdated) parts.push(`${state.importSessionUpdated} actualizado${state.importSessionUpdated === 1 ? '' : 's'}`);
   if (state.importSessionSkipped) parts.push(`${state.importSessionSkipped} sin cambios`);
   if (state.importSessionFailed) parts.push(`${state.importSessionFailed} con error`);
-  toast(parts.length ? `Proceso en segundo plano terminado: ${parts.join(', ')}.` : 'No hubo documentos para procesar.', state.importSessionFailed ? 'error' : '');
+  if (completed || state.importSessionFailed || state.importSessionNotifyUnchanged) {
+    toast(parts.length ? `Proceso en segundo plano terminado: ${parts.join(', ')}.` : 'No hubo documentos para procesar.', state.importSessionFailed ? 'error' : '');
+  }
   if (completed) ui.fileInput.value = '';
   state.importSessionTotal = 0;
   state.importSessionCompleted = 0;
@@ -686,6 +720,7 @@ function finishBackgroundImportSession() {
   state.importSessionUpdated = 0;
   state.importSessionSkipped = 0;
   state.importSessionFailed = 0;
+  state.importSessionNotifyUnchanged = false;
 }
 
 async function processImportQueue() {
@@ -718,7 +753,7 @@ async function processImportQueue() {
   }
 }
 
-function importFiles(items) {
+function importFiles(items, { announceQueued = true, notifyUnchanged = true } = {}) {
   const entries = [...items]
     .map((item) => item?.nativeFile || item?.file instanceof File ? item : { file: item, handle: null })
     .filter(({ file, name, nativeFile }) => (file instanceof File || nativeFile) && ['cbz', 'cbr', 'zip', 'pdf'].includes(extOf(file?.name || name)));
@@ -727,6 +762,12 @@ function importFiles(items) {
   void requestPersistentStorage();
   let queued = 0;
   for (const entry of accepted) {
+    const existing = entry.sourceKey
+      ? state.books.find((book) => book.sourceKey === entry.sourceKey)
+      : entry.sourcePath
+        ? state.books.find((book) => book.sourcePath === entry.sourcePath)
+        : null;
+    if (sameSource(entry, existing) && sourceStorageIsCurrent(entry, existing)) continue;
     const key = importEntryKey(entry);
     if (key && state.queuedImportKeys.has(key)) continue;
     if (key) state.queuedImportKeys.add(key);
@@ -734,11 +775,15 @@ function importFiles(items) {
     queued += 1;
   }
   ui.fileInput.value = '';
-  if (!queued) return toast('Los documentos seleccionados ya están en la cola.');
+  if (!queued) {
+    if (notifyUnchanged) toast('No se detectaron cambios en los documentos.');
+    return 0;
+  }
   state.importSessionTotal += queued;
+  state.importSessionNotifyUnchanged ||= notifyUnchanged;
   updateBackgroundImportStatus();
   void processImportQueue();
-  toast(`${queued} documento${queued === 1 ? '' : 's'} añadido${queued === 1 ? '' : 's'} a la cola en segundo plano.`);
+  if (announceQueued) toast(`${queued} documento${queued === 1 ? '' : 's'} añadido${queued === 1 ? '' : 's'} a la cola en segundo plano.`);
   return queued;
 }
 
@@ -1309,6 +1354,61 @@ async function storeNativeDocumentLocation(directory) {
   return true;
 }
 
+function setOnboardingVisible(visible) {
+  ui.welcomeScreen.classList.toggle('hidden', !visible);
+  ui.welcomeScreen.setAttribute('aria-hidden', String(!visible));
+  ui.appShell.inert = visible;
+  document.documentElement.classList.toggle('onboarding-open', visible);
+  if (visible) window.setTimeout(() => ui.welcomeChoose.focus(), 0);
+}
+
+function showInitialLocationOnboarding() {
+  const android = appPlatform() === 'android';
+  ui.welcomeCopy.textContent = android
+    ? 'Selecciona la carpeta que contiene tus documentos. Nebula Reader conservará el acceso y la revisará cada vez que abras la aplicación.'
+    : 'Selecciona la carpeta que contiene tus documentos. El navegador conservará la autorización y Nebula Reader la revisará cada vez que abras la aplicación.';
+  ui.welcomePrivacy.textContent = android
+    ? 'La aplicación usará el selector seguro de Android y solo solicitará acceso de lectura.'
+    : 'La carpeta permanece en tu dispositivo; los documentos no se envían a ningún servidor.';
+  ui.welcomeStatus.textContent = '';
+  setOnboardingVisible(true);
+}
+
+async function chooseInitialDocumentLocation() {
+  if (ui.welcomeChoose.disabled) return;
+  ui.welcomeChoose.disabled = true;
+  ui.welcomeChoose.textContent = 'Abriendo selector…';
+  ui.welcomeStatus.textContent = '';
+  try {
+    if (appPlatform() === 'android') {
+      const directory = await NativeDirectoryAccess.pickDirectory();
+      if (directory.cancelled) return;
+      await storeNativeDocumentLocation(directory);
+    } else {
+      if (!window.showDirectoryPicker) {
+        throw new Error('Este navegador no permite seleccionar y recordar carpetas. Usa una versión reciente de Chrome o Edge.');
+      }
+      const handle = await window.showDirectoryPicker({ mode: 'read', startIn: 'documents' });
+      state.settings.documentLocations = state.settings.documentLocations.filter((location) => (
+        !location.isDefault || location.handle || location.nativeUri
+      ));
+      await storeDocumentLocation(handle);
+    }
+    state.settings.onboardingCompleted = true;
+    await saveSettings();
+    setOnboardingVisible(false);
+    void syncLibraryWithLocations({ automatic: true });
+  } catch (error) {
+    if (error?.name !== 'AbortError') {
+      console.error(error);
+      ui.welcomeStatus.textContent = error.message || 'No se pudo guardar la carpeta seleccionada.';
+    }
+  } finally {
+    ui.welcomeChoose.disabled = false;
+    ui.welcomeChoose.textContent = 'Seleccionar carpeta';
+  }
+}
+
 async function addDocumentLocation() {
   if (state.locationsRefreshing) return;
   if (appPlatform() === 'android') {
@@ -1370,10 +1470,10 @@ async function authorizeNativeDirectory(location) {
   return true;
 }
 
-async function ensureDirectoryPermission(handle) {
+async function ensureDirectoryPermission(handle, requestPermission = true) {
   const options = { mode: 'read' };
   let permission = await handle.queryPermission?.(options) || 'prompt';
-  if (permission !== 'granted') permission = await handle.requestPermission?.(options) || 'denied';
+  if (permission !== 'granted' && requestPermission) permission = await handle.requestPermission?.(options) || 'denied';
   return permission === 'granted';
 }
 
@@ -1410,9 +1510,8 @@ async function scanNativeDocumentDirectory(location, results) {
   }
 }
 
-async function removeMissingLocationBooks(scannedLocationIds, foundSourceKeys, reconcileEntireLibrary = false) {
+async function removeMissingLocationBooks(scannedLocationIds, foundSourceKeys) {
   const missing = state.books.filter((book) => {
-    if (reconcileEntireLibrary) return !book.sourceKey || !foundSourceKeys.has(book.sourceKey);
     if (!book.sourceKey) return false;
     const separator = book.sourceKey.indexOf('/');
     const locationId = separator >= 0 ? book.sourceKey.slice(0, separator) : '';
@@ -1445,12 +1544,12 @@ async function clearLibraryWithoutLocations() {
     : 'No hay carpetas configuradas ni documentos disponibles.');
 }
 
-async function syncLibraryWithLocations() {
+async function syncLibraryWithLocations(options = {}) {
   if (!state.settings.documentLocations.length) return clearLibraryWithoutLocations();
-  return refreshSavedLocations();
+  return refreshSavedLocations(options);
 }
 
-async function refreshSavedLocations() {
+async function refreshSavedLocations({ automatic = false } = {}) {
   if (state.locationsRefreshing) return;
   if (!state.settings.documentLocations.length) return toast('Añade una ubicación para poder actualizarla.', 'error');
   state.locationsRefreshing = true;
@@ -1465,13 +1564,16 @@ async function refreshSavedLocations() {
     for (const location of state.settings.documentLocations) {
       try {
         if (appPlatform() === 'android') {
-          if (!location.nativeUri && !await authorizeNativeDirectory(location)) { unavailable += 1; continue; }
+          if (!location.nativeUri) {
+            if (automatic || !await authorizeNativeDirectory(location)) continue;
+          }
           await scanNativeDocumentDirectory(location, entries);
           scannedLocationIds.add(location.id);
           continue;
         }
+        if (automatic && !location.handle) continue;
         const handle = await authorizeDirectory(location);
-        if (!await ensureDirectoryPermission(handle)) { unavailable += 1; continue; }
+        if (!await ensureDirectoryPermission(handle, !automatic)) { unavailable += 1; continue; }
         await scanDocumentDirectory(handle, location, '', entries);
         scannedLocationIds.add(location.id);
       } catch (error) {
@@ -1480,16 +1582,23 @@ async function refreshSavedLocations() {
         unavailable += 1;
       }
     }
-    const queued = entries.length ? importFiles(entries) || 0 : 0;
+    const queued = entries.length ? importFiles(entries, {
+      announceQueued: !automatic,
+      notifyUnchanged: !automatic,
+    }) || 0 : 0;
     const foundSourceKeys = new Set(entries.map((entry) => entry.sourceKey));
-    const allLocationsScanned = unavailable === 0 && scannedLocationIds.size === state.settings.documentLocations.length;
-    const removed = await removeMissingLocationBooks(scannedLocationIds, foundSourceKeys, allLocationsScanned);
-    const message = entries.length
-      ? `${entries.length} documento${entries.length === 1 ? '' : 's'} revisado${entries.length === 1 ? '' : 's'}; ${queued} en cola de segundo plano.`
-      : 'No se encontraron documentos compatibles en las ubicaciones disponibles.';
+    const removed = await removeMissingLocationBooks(scannedLocationIds, foundSourceKeys);
     const removalMessage = removed ? ` ${removed} documento${removed === 1 ? '' : 's'} ausente${removed === 1 ? '' : 's'} eliminado${removed === 1 ? '' : 's'}.` : '';
     const unavailableMessage = unavailable ? ` ${unavailable} ubicación${unavailable === 1 ? '' : 'es'} no disponible${unavailable === 1 ? '' : 's'}.` : '';
-    toast(`${message}${removalMessage}${unavailableMessage}`, unavailable ? 'error' : '');
+    if (automatic) {
+      const automaticMessage = `${removalMessage}${unavailableMessage}`.trim();
+      if (automaticMessage) toast(automaticMessage, unavailable ? 'error' : '');
+    } else {
+      const message = entries.length
+        ? `${entries.length} documento${entries.length === 1 ? '' : 's'} revisado${entries.length === 1 ? '' : 's'}; ${queued} en cola de segundo plano.`
+        : 'No se encontraron documentos compatibles en las ubicaciones disponibles.';
+      toast(`${message}${removalMessage}${unavailableMessage}`, unavailable ? 'error' : '');
+    }
   } finally {
     state.locationsRefreshing = false;
     ui.addDocumentLocation.disabled = false;
@@ -1603,7 +1712,20 @@ async function convertCurrentBook() {
 }
 
 function bindEvents() {
-  $('#import-button').addEventListener('click', selectDocuments);
+  ui.welcomeChoose.addEventListener('click', chooseInitialDocumentLocation);
+  $('#import-button').addEventListener('click', showImportSourceChooser);
+  $('#close-import-source').addEventListener('click', closeImportSourceChooser);
+  ui.importSourceFiles.addEventListener('click', () => {
+    closeImportSourceChooser();
+    void selectDocuments();
+  });
+  ui.importSourceFolder.addEventListener('click', () => {
+    closeImportSourceChooser();
+    void addDocumentLocation();
+  });
+  ui.importSourceDialog.addEventListener('click', (event) => {
+    if (event.target === ui.importSourceDialog) closeImportSourceChooser();
+  });
   ui.selectionToggle.addEventListener('click', () => setSelectionMode(!state.selectionMode));
   $('#cancel-selection').addEventListener('click', () => setSelectionMode(false));
   ui.selectVisibleBooks.addEventListener('click', toggleVisibleSelection);
@@ -1691,9 +1813,11 @@ function bindEvents() {
     toast(state.settings.documentBackup
       ? 'Los documentos se copiarán en la biblioteca durante la sincronización.'
       : 'En Android se usarán los archivos originales sin conservar duplicados.');
-    if (appPlatform() === 'android' && state.settings.documentLocations.some((location) => location.nativeUri)) {
-      void syncLibraryWithLocations();
-    }
+    const platform = appPlatform();
+    const hasAuthorizedLocations = state.settings.documentLocations.some((location) => (
+      platform === 'android' ? location.nativeUri : location.handle
+    ));
+    if (hasAuthorizedLocations) void syncLibraryWithLocations({ automatic: true });
   });
   ui.addDocumentLocation.addEventListener('click', addDocumentLocation);
   ui.refreshDocumentLocations.addEventListener('click', refreshSavedLocations);
@@ -1829,23 +1953,37 @@ function updateConnectionBadge() {
 async function init() {
   try {
     await openDatabase();
-    state.settings = { ...DEFAULT_SETTINGS, ...await getSetting('reader-preferences', DEFAULT_SETTINGS) };
-    if (!Array.isArray(state.settings.documentLocations)) state.settings.documentLocations = [];
+    const savedSettings = await getSetting('reader-preferences', null);
+    state.settings = { ...DEFAULT_SETTINGS, ...(savedSettings || {}) };
+    let settingsChanged = false;
+    if (!Array.isArray(state.settings.documentLocations)) {
+      state.settings.documentLocations = [];
+      settingsChanged = true;
+    }
+    if (!Object.prototype.hasOwnProperty.call(savedSettings || {}, 'onboardingCompleted')) {
+      state.settings.onboardingCompleted = state.settings.documentLocations.some((location) => location.handle || location.nativeUri);
+      settingsChanged = true;
+    }
     if (!state.settings.documentLocationsInitialized) {
       const existingDefault = state.settings.documentLocations.find((location) => /^(documents|documentos)$/i.test(location.name || location.label || ''));
       if (existingDefault) Object.assign(existingDefault, { isDefault: true, wellKnownPath: 'documents', platform: existingDefault.platform || appPlatform() });
       else state.settings.documentLocations.unshift(defaultDocumentsLocation());
       state.settings.documentLocationsInitialized = true;
-      await saveSettings();
+      settingsChanged = true;
     }
+    if (settingsChanged) await saveSettings();
     bindEvents();
     syncSettingsUi();
+    ui.dropzone.classList.toggle('hidden', appPlatform() === 'android');
     updateConnectionBadge();
     await refreshLibrary();
     if (!state.settings.documentLocations.length && state.books.length) await clearLibraryWithoutLocations();
-    if (appPlatform() === 'android' && state.settings.documentLocations.some((location) => location.nativeUri)) {
-      void syncLibraryWithLocations();
-    }
+    const platform = appPlatform();
+    const hasAuthorizedLocations = state.settings.documentLocations.some((location) => (
+      platform === 'android' ? location.nativeUri : location.handle
+    ));
+    if (!state.settings.onboardingCompleted) showInitialLocationOnboarding();
+    else if (hasAuthorizedLocations) void syncLibraryWithLocations({ automatic: true });
     if ('serviceWorker' in navigator) {
       if (import.meta.env?.PROD && (location.protocol === 'https:' || location.hostname === 'localhost')) {
         navigator.serviceWorker.register('/sw.js').catch((error) => console.warn('Service worker no registrado', error));
