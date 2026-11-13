@@ -10,9 +10,10 @@
              BackgroundColor="{StaticResource BgCanvas}"
              Title="{Binding Title}">
 
-    <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="14,12" RowSpacing="12">
+    <Grid x:Name="LibraryRootGrid" RowDefinitions="Auto,Auto,*,Auto" Padding="14,12" RowSpacing="12">
         <!-- Barra superior moderna -->
-        <Border Grid.Row="0"
+        <Border x:Name="LibraryToolbarBorder"
+                Grid.Row="0"
                 BackgroundColor="{StaticResource Surface1}"
                 Stroke="{StaticResource SubtleBorder}"
                 StrokeThickness="1"
@@ -43,7 +44,8 @@
         </Border>
 
         <!-- Barra de navegación dentro de una serie/saga -->
-        <Border Grid.Row="1"
+        <Border x:Name="LibraryBreadcrumbBorder"
+                Grid.Row="1"
                 IsVisible="{Binding IsInsideGroup}"
                 BackgroundColor="{StaticResource Surface2}"
                 Stroke="{StaticResource NeonPurple}"
@@ -79,32 +81,34 @@
             </CollectionView.ItemsLayout>
 
             <CollectionView.EmptyView>
-                <Border VerticalOptions="Center"
-                        HorizontalOptions="Center"
-                        MaximumWidthRequest="440"
-                        BackgroundColor="{StaticResource Surface1}"
-                        Stroke="{StaticResource NeonPurpleDeep}"
-                        StrokeThickness="1.2"
-                        StrokeShape="RoundRectangle 16"
-                        Padding="28,24"
-                        Margin="16">
-                    <VerticalStackLayout Spacing="10">
-                        <Label Text="NEBULA READER"
-                               TextColor="{StaticResource NeonPurpleBright}"
-                               FontFamily="OpenSansSemibold"
-                               FontSize="12"
-                               CharacterSpacing="2"
-                               HorizontalTextAlignment="Center" />
-                        <Label Text="Tu biblioteca está vacía"
-                               TextColor="{StaticResource TextPrimary}"
-                               FontSize="20"
-                               FontAttributes="Bold"
-                               HorizontalTextAlignment="Center" />
-                        <Label Text="Pulsa 'Abrir Archivo' o 'Escanear Carpeta' para importar cómics (.cbz, .cbr) o PDF."
-                               TextColor="{StaticResource TextSecondary}"
-                               HorizontalTextAlignment="Center" />
-                    </VerticalStackLayout>
-                </Border>
+                <ScrollView>
+                    <Border VerticalOptions="Center"
+                            HorizontalOptions="Center"
+                            MaximumWidthRequest="440"
+                            BackgroundColor="{StaticResource Surface1}"
+                            Stroke="{StaticResource NeonPurpleDeep}"
+                            StrokeThickness="1.2"
+                            StrokeShape="RoundRectangle 16"
+                            Padding="24,20"
+                            Margin="12">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="NEBULA READER"
+                                   TextColor="{StaticResource NeonPurpleBright}"
+                                   FontFamily="OpenSansSemibold"
+                                   FontSize="12"
+                                   CharacterSpacing="2"
+                                   HorizontalTextAlignment="Center" />
+                            <Label Text="Tu biblioteca está vacía"
+                                   TextColor="{StaticResource TextPrimary}"
+                                   FontSize="19"
+                                   FontAttributes="Bold"
+                                   HorizontalTextAlignment="Center" />
+                            <Label Text="Pulsa 'Abrir Archivo' o 'Escanear Carpeta' para importar cómics (.cbz, .cbr) o PDF."
+                                   TextColor="{StaticResource TextSecondary}"
+                                   HorizontalTextAlignment="Center" />
+                        </VerticalStackLayout>
+                    </Border>
+                </ScrollView>
             </CollectionView.EmptyView>
 
             <CollectionView.ItemTemplate>
@@ -127,8 +131,9 @@
                                 CommandParameter="{Binding .}" />
                         </Border.GestureRecognizers>
 
-                        <Grid RowDefinitions="205,Auto,Auto,Auto" RowSpacing="5">
+                        <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="5">
                             <Border Grid.Row="0"
+                                    HeightRequest="{Binding CoverHeight}"
                                     BackgroundColor="{StaticResource BgCanvas}"
                                     StrokeThickness="0"
                                     StrokeShape="RoundRectangle 10">
@@ -228,7 +233,8 @@
         </CollectionView>
 
         <!-- Pie de estado -->
-        <Border Grid.Row="3"
+        <Border x:Name="LibraryFooterBorder"
+                Grid.Row="3"
                 BackgroundColor="{StaticResource Surface1}"
                 Stroke="{StaticResource SubtleBorder}"
                 StrokeThickness="1"

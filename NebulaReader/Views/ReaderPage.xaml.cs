@@ -171,6 +171,7 @@ public partial class ReaderPage : ContentPage
     {
         base.OnAppearing();
         ViewModel?.UpdateViewportSize(Width, Height);
+        UpdateAdaptiveHudLayout(Width, Height);
         SyncSliderFromViewModel();
         InvalidateCanvasSurface();
     }
@@ -179,8 +180,47 @@ public partial class ReaderPage : ContentPage
     {
         base.OnSizeAllocated(width, height);
         ViewModel?.UpdateViewportSize(width, height);
+        UpdateAdaptiveHudLayout(width, height);
         ClampPan();
         InvalidateCanvasSurface();
+    }
+
+    private void UpdateAdaptiveHudLayout(double width, double height)
+    {
+        if (width <= 0 || height <= 0 || TopHudBar == null || BottomHudBar == null)
+        {
+            return;
+        }
+
+        var isCompactHeight = height < 520;
+
+        TopHudBar.Margin = isCompactHeight ? new Thickness(8, 6, 8, 0) : new Thickness(10, 10, 10, 0);
+        TopHudBar.Padding = isCompactHeight ? new Thickness(10, 6) : new Thickness(12, 10);
+        TopHudGrid.RowSpacing = isCompactHeight ? 4 : 6;
+        TopButtonsScroll.MaximumHeightRequest = isCompactHeight
+            ? Math.Max(42, height * 0.26)
+            : 220;
+
+        BottomHudBar.Margin = isCompactHeight ? new Thickness(8, 0, 8, 6) : new Thickness(10, 0, 10, 10);
+        BottomHudBar.Padding = isCompactHeight ? new Thickness(12, 6, 12, 6) : new Thickness(14, 8, 14, 10);
+        BottomHudStack.Spacing = isCompactHeight ? 2 : 4;
+
+        if (width > 980)
+        {
+            TopHudBar.HorizontalOptions = LayoutOptions.Center;
+            TopHudBar.WidthRequest = Math.Min(940, width - 32);
+
+            BottomHudBar.HorizontalOptions = LayoutOptions.Center;
+            BottomHudBar.WidthRequest = Math.Min(860, width - 32);
+        }
+        else
+        {
+            TopHudBar.HorizontalOptions = LayoutOptions.Fill;
+            TopHudBar.WidthRequest = -1;
+
+            BottomHudBar.HorizontalOptions = LayoutOptions.Fill;
+            BottomHudBar.WidthRequest = -1;
+        }
     }
 
     private void OnCanvasHandlerChanged(object? sender, EventArgs e)

@@ -95,7 +95,7 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     public partial ReaderVisualFilter VisualFilter { get; set; }
 
     public bool CanScrubPages => TotalPages > 1;
-    public string RotationLockLabel => IsRotationLocked ? "Rotación: Fija" : "Rotación: Libre";
+    public string RotationLockLabel => IsRotationLocked ? "Rot. Fija" : "Rot. Libre";
     public string DirectionModeLabel => IsRightToLeftManga ? "Manga (D→I)" : "Cómic (I→D)";
     public string LayoutModeLabel => LayoutMode switch
     {

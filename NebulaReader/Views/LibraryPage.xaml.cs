@@ -3,7 +3,7 @@ using NebulaReader.ViewModels;
 namespace NebulaReader.Views;
 
 /// <summary>
-/// Pantalla principal de la biblioteca con cuadrícula adaptable por tamaño de pantalla.
+/// Pantalla principal de la biblioteca con cuadrícula adaptable por tamaño y orientación de pantalla.
 /// </summary>
 public partial class LibraryPage : ContentPage
 {
@@ -16,7 +16,7 @@ public partial class LibraryPage : ContentPage
     protected override async void OnAppearing()
     {
         base.OnAppearing();
-        UpdateAdaptiveGridSpan(Width);
+        UpdateAdaptiveLayout(Width, Height);
 
         if (BindingContext is LibraryViewModel vm)
         {
@@ -27,7 +27,7 @@ public partial class LibraryPage : ContentPage
     protected override void OnSizeAllocated(double width, double height)
     {
         base.OnSizeAllocated(width, height);
-        UpdateAdaptiveGridSpan(width);
+        UpdateAdaptiveLayout(width, height);
     }
 
     protected override bool OnBackButtonPressed()
@@ -41,34 +41,61 @@ public partial class LibraryPage : ContentPage
         return base.OnBackButtonPressed();
     }
 
-    private void UpdateAdaptiveGridSpan(double width)
+    private void UpdateAdaptiveLayout(double width, double height)
     {
-        if (width <= 0 || LibraryGridLayout == null)
+        if (width <= 0 || height <= 0 || LibraryGridLayout == null)
         {
             return;
         }
 
+        var isCompactHeight = height < 520;
+
+        // 1. Espaciado adaptable para evitar recortes en móviles horizontales de altura reducida
+        LibraryRootGrid.Padding = isCompactHeight ? new Thickness(10, 6) : new Thickness(14, 12);
+        LibraryRootGrid.RowSpacing = isCompactHeight ? 6 : 12;
+        LibraryToolbarBorder.Padding = isCompactHeight ? new Thickness(8, 6, 8, 2) : new Thickness(12, 10, 12, 4);
+        LibraryBreadcrumbBorder.Padding = isCompactHeight ? new Thickness(8, 5) : new Thickness(10, 7);
+        LibraryFooterBorder.Padding = isCompactHeight ? new Thickness(10, 4) : new Thickness(12, 7);
+
+        // 2. Columnas adaptables para pantallas móviles (320dp..920dp), tabletas y monitores (HD/FHD/2K/4K)
         int targetSpan;
         if (DeviceInfo.Current.Idiom == DeviceIdiom.Phone)
         {
-            // 2 columnas en vertical y hasta 3 columnas en horizontal/pantallas amplias de teléfono
-            targetSpan = width >= 540 ? 3 : 2;
+            targetSpan = width >= 720 ? 4 : (width >= 500 ? 3 : 2);
         }
         else if (DeviceInfo.Current.Idiom == DeviceIdiom.Tablet)
         {
-            targetSpan = Math.Clamp((int)Math.Floor(width / 200.0), 3, 5);
+            targetSpan = Math.Clamp((int)Math.Floor(width / 195.0), 3, 6);
         }
         else
         {
-            // Escritorio (Windows): 5-7 columnas dinámicas al redimensionar la ventana
             targetSpan = width >= 900
-                ? Math.Clamp((int)Math.Floor(width / 190.0), 5, 7)
-                : Math.Clamp((int)Math.Floor(width / 190.0), 2, 4);
+                ? Math.Clamp((int)Math.Floor(width / 195.0), 4, 8)
+                : Math.Clamp((int)Math.Floor(width / 180.0), 2, 4);
         }
 
         if (LibraryGridLayout.Span != targetSpan)
         {
             LibraryGridLayout.Span = targetSpan;
+        }
+
+        var hSpacing = isCompactHeight ? 8.0 : 12.0;
+        LibraryGridLayout.HorizontalItemSpacing = hSpacing;
+        LibraryGridLayout.VerticalItemSpacing = hSpacing;
+
+        // 3. Alto proporcional de portada para que las tarjetas mantengan proporción sin desbordar ni cortarse
+        var horizontalChrome = LibraryRootGrid.Padding.HorizontalThickness + ((targetSpan - 1) * hSpacing);
+        var approxColWidth = Math.Max(110.0, (width - horizontalChrome) / targetSpan);
+        var desiredCoverHeight = Math.Clamp(approxColWidth * 1.28, 130.0, 245.0);
+
+        if (isCompactHeight)
+        {
+            desiredCoverHeight = Math.Min(desiredCoverHeight, Math.Clamp(height * 0.36, 110.0, 155.0));
+        }
+
+        if (BindingContext is LibraryViewModel vm)
+        {
+            vm.UpdateCardCoverHeight(Math.Round(desiredCoverHeight));
         }
     }
 }

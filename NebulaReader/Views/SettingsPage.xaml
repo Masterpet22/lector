@@ -8,9 +8,9 @@
              Title="{Binding Title}">
 
     <ScrollView>
-        <VerticalStackLayout Padding="20"
+        <VerticalStackLayout x:Name="SettingsContainer"
+                             Padding="16"
                              Spacing="16"
-                             MaximumWidthRequest="720"
                              HorizontalOptions="Center">
 
             <!-- Sección: Apariencia y lectura -->
@@ -29,6 +29,7 @@
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                         <Label Text="Modo lectura nocturna (inversión suave)"
                                TextColor="{StaticResource TextPrimary}"
+                               LineBreakMode="WordWrap"
                                VerticalOptions="Center" />
                         <Switch Grid.Column="1" IsToggled="{Binding NightReadingModeEnabled}" />
                     </Grid>
@@ -38,6 +39,7 @@
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                         <Label Text="Filtro visual sepia"
                                TextColor="{StaticResource TextPrimary}"
+                               LineBreakMode="WordWrap"
                                VerticalOptions="Center" />
                         <Switch Grid.Column="1" IsToggled="{Binding SepiaFilterEnabled}" />
                     </Grid>
@@ -47,6 +49,7 @@
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                         <Label Text="Lectura derecha a izquierda (Manga)"
                                TextColor="{StaticResource TextPrimary}"
+                               LineBreakMode="WordWrap"
                                VerticalOptions="Center" />
                         <Switch Grid.Column="1" IsToggled="{Binding RightToLeftMangaMode}" />
                     </Grid>
@@ -112,6 +115,7 @@
                     <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
                         <Label Text="Pantalla completa"
                                TextColor="{StaticResource TextPrimary}"
+                               LineBreakMode="WordWrap"
                                VerticalOptions="Center" />
                         <Switch Grid.Column="1" IsToggled="{Binding IsFullScreen}" />
                     </Grid>

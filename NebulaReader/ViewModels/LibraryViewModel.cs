@@ -32,8 +32,24 @@ public partial class LibraryViewModel : BaseViewModel
     [NotifyPropertyChangedFor(nameof(FullScreenButtonLabel))]
     public partial bool IsFullScreen { get; set; }
 
+    private double _cardCoverHeight = 200;
+
     public bool IsNotFullScreen => !IsFullScreen;
-    public string FullScreenButtonLabel => IsFullScreen ? "Salir pantalla completa" : "Pantalla completa";
+    public string FullScreenButtonLabel => IsFullScreen ? "Modo ventana" : "Pantalla completa";
+
+    public void UpdateCardCoverHeight(double height)
+    {
+        if (Math.Abs(_cardCoverHeight - height) < 1.0)
+        {
+            return;
+        }
+
+        _cardCoverHeight = height;
+        foreach (var item in DisplayItems)
+        {
+            item.CoverHeight = height;
+        }
+    }
 
     [ObservableProperty]
     public partial string StatusMessage { get; set; } = "Biblioteca lista. Abre un archivo o escanea una carpeta.";
@@ -249,7 +265,7 @@ public partial class LibraryViewModel : BaseViewModel
                     var bookTags = string.IsNullOrWhiteSpace(book.Tags)
                         ? Array.Empty<string>()
                         : book.Tags.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-                    nextItems.Add(LibraryDisplayItem.FromSingleBook(book, bookTags));
+                    nextItems.Add(LibraryDisplayItem.FromSingleBook(book, bookTags, _cardCoverHeight));
                 }
 
                 DisplayItems = new ObservableCollection<LibraryDisplayItem>(nextItems);
@@ -262,8 +278,8 @@ public partial class LibraryViewModel : BaseViewModel
         foreach (var bucket in buckets)
         {
             nextItems.Add(bucket.IsGroup
-                ? LibraryDisplayItem.FromSeriesGroup(bucket.DisplayName, bucket.Items, bucket.CommonTags)
-                : LibraryDisplayItem.FromSingleBook(bucket.Items[0], bucket.CommonTags));
+                ? LibraryDisplayItem.FromSeriesGroup(bucket.DisplayName, bucket.Items, bucket.CommonTags, _cardCoverHeight)
+                : LibraryDisplayItem.FromSingleBook(bucket.Items[0], bucket.CommonTags, _cardCoverHeight));
         }
 
         DisplayItems = new ObservableCollection<LibraryDisplayItem>(nextItems);

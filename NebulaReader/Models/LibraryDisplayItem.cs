@@ -1,11 +1,16 @@
+using CommunityToolkit.Mvvm.ComponentModel;
+
 namespace NebulaReader.Models;
 
 /// <summary>
 /// Elemento visual de la cuadrícula de biblioteca: puede representar un grupo/saga de varios documentos
 /// (con mosaico de hasta 4 portadas) o un documento individual.
 /// </summary>
-public sealed class LibraryDisplayItem
+public sealed partial class LibraryDisplayItem : ObservableObject
 {
+    [ObservableProperty]
+    public partial double CoverHeight { get; set; } = 200;
+
     public bool IsGroup { get; init; }
     public bool IsSingleBook => !IsGroup;
 
@@ -29,7 +34,7 @@ public sealed class LibraryDisplayItem
     public bool HasCover3 => !string.IsNullOrWhiteSpace(Cover3);
     public bool HasCover4 => !string.IsNullOrWhiteSpace(Cover4);
 
-    public static LibraryDisplayItem FromSingleBook(BookItem book, IReadOnlyList<string>? displayTags = null)
+    public static LibraryDisplayItem FromSingleBook(BookItem book, IReadOnlyList<string>? displayTags = null, double coverHeight = 200)
     {
         var tagsText = displayTags is { Count: > 0 }
             ? string.Join(" · ", displayTags.Take(2))
@@ -37,6 +42,7 @@ public sealed class LibraryDisplayItem
 
         return new LibraryDisplayItem
         {
+            CoverHeight = coverHeight,
             IsGroup = false,
             Title = book.Title,
             Book = book,
@@ -52,7 +58,8 @@ public sealed class LibraryDisplayItem
     public static LibraryDisplayItem FromSeriesGroup(
         string seriesName,
         IReadOnlyList<BookItem> books,
-        IReadOnlyList<string>? commonTags = null)
+        IReadOnlyList<string>? commonTags = null,
+        double coverHeight = 200)
     {
         var covers = books
             .Select(b => b.CoverThumbnailPath)
@@ -65,6 +72,7 @@ public sealed class LibraryDisplayItem
 
         return new LibraryDisplayItem
         {
+            CoverHeight = coverHeight,
             IsGroup = true,
             Title = seriesName,
             Book = null,
