@@ -5,120 +5,129 @@
              x:Class="NebulaReader.Views.ReaderPage"
              x:DataType="vm:ReaderViewModel"
              Shell.NavBarIsVisible="False"
+             BackgroundColor="{StaticResource BgCanvas}"
              Title="{Binding Title}">
 
-    <Grid BackgroundColor="#101218">
+    <Grid BackgroundColor="{StaticResource BgCanvas}">
         <!-- Contenedor del lienzo SkiaSharp (SKGLView en Android / SKCanvasView en Windows) -->
         <ContentView x:Name="CanvasHost" />
 
         <ActivityIndicator IsRunning="{Binding IsBusy}"
                            IsVisible="{Binding IsBusy}"
-                           Color="White"
+                           Color="{StaticResource NeonPurpleBright}"
                            HorizontalOptions="Center"
                            VerticalOptions="Center"
                            InputTransparent="True" />
 
         <!-- Barra superior translúcida (HUD) -->
-        <Grid x:Name="TopHudBar"
-              VerticalOptions="Start"
-              BackgroundColor="#CC12141A"
-              Padding="12,10"
-              ColumnSpacing="8"
-              RowSpacing="6"
-              RowDefinitions="Auto,Auto"
-              ColumnDefinitions="Auto,*,Auto"
-              IsVisible="{Binding IsHudVisible}">
-            <Button Grid.Row="0"
-                    Grid.Column="0"
-                    Text="Volver"
-                    FontSize="12"
-                    Padding="10,6"
-                    Command="{Binding CloseReaderCommand}" />
+        <Border x:Name="TopHudBar"
+                VerticalOptions="Start"
+                Margin="10,10,10,0"
+                BackgroundColor="{StaticResource HudOverlay}"
+                Stroke="{StaticResource NeonPurpleDeep}"
+                StrokeThickness="1"
+                StrokeShape="RoundRectangle 14"
+                Padding="12,10"
+                IsVisible="{Binding IsHudVisible}">
+            <Grid ColumnSpacing="8"
+                  RowSpacing="8"
+                  RowDefinitions="Auto,Auto"
+                  ColumnDefinitions="Auto,*,Auto">
+                <Button Grid.Row="0"
+                        Grid.Column="0"
+                        Text="← Volver"
+                        Style="{StaticResource HudButton}"
+                        Command="{Binding CloseReaderCommand}" />
 
-            <Label Grid.Row="0"
-                   Grid.Column="1"
-                   Text="{Binding Title}"
-                   TextColor="White"
-                   FontAttributes="Bold"
-                   FontSize="15"
-                   LineBreakMode="TailTruncation"
-                   VerticalTextAlignment="Center"
-                   HorizontalTextAlignment="Center" />
+                <Label Grid.Row="0"
+                       Grid.Column="1"
+                       Text="{Binding Title}"
+                       TextColor="{StaticResource TextPrimary}"
+                       FontFamily="OpenSansSemibold"
+                       FontAttributes="Bold"
+                       FontSize="15"
+                       LineBreakMode="TailTruncation"
+                       VerticalTextAlignment="Center"
+                       HorizontalTextAlignment="Center" />
 
-            <Button Grid.Row="0"
-                    Grid.Column="2"
-                    Text="{Binding RotationLockLabel}"
-                    FontSize="12"
-                    Padding="10,6"
-                    Command="{Binding ToggleRotationLockCommand}" />
+                <Button Grid.Row="0"
+                        Grid.Column="2"
+                        Text="{Binding RotationLockLabel}"
+                        Style="{StaticResource HudButton}"
+                        Command="{Binding ToggleRotationLockCommand}" />
 
-            <FlexLayout Grid.Row="1"
-                        Grid.ColumnSpan="3"
-                        Wrap="Wrap"
-                        JustifyContent="Center"
-                        AlignItems="Center">
-                <Button Text="{Binding LayoutModeLabel}"
-                        FontSize="12"
-                        Padding="10,5"
-                        Margin="3"
-                        Command="{Binding CycleLayoutModeCommand}" />
-                <Button Text="{Binding FitModeLabel}"
-                        FontSize="12"
-                        Padding="10,5"
-                        Margin="3"
-                        Command="{Binding CyclePageFitModeCommand}" />
-                <Button Text="{Binding FullScreenButtonLabel}"
-                        FontSize="12"
-                        Padding="10,5"
-                        Margin="3"
-                        Command="{Binding ToggleFullScreenCommand}" />
-                <Button Text="{Binding DirectionModeLabel}"
-                        FontSize="12"
-                        Padding="10,5"
-                        Margin="3"
-                        Command="{Binding ToggleReadingDirectionCommand}" />
-                <Button Text="{Binding FilterModeLabel}"
-                        FontSize="12"
-                        Padding="10,5"
-                        Margin="3"
-                        Command="{Binding CycleVisualFilterCommand}" />
-            </FlexLayout>
-        </Grid>
+                <FlexLayout Grid.Row="1"
+                            Grid.ColumnSpan="3"
+                            Wrap="Wrap"
+                            JustifyContent="Center"
+                            AlignItems="Center">
+                    <Button Text="{Binding LayoutModeLabel}"
+                            Style="{StaticResource HudButton}"
+                            Margin="3"
+                            Command="{Binding CycleLayoutModeCommand}" />
+                    <Button Text="{Binding FitModeLabel}"
+                            Style="{StaticResource HudButton}"
+                            Margin="3"
+                            Command="{Binding CyclePageFitModeCommand}" />
+                    <Button Text="{Binding FullScreenButtonLabel}"
+                            Style="{StaticResource HudButton}"
+                            Margin="3"
+                            Command="{Binding ToggleFullScreenCommand}" />
+                    <Button Text="{Binding DirectionModeLabel}"
+                            Style="{StaticResource HudButton}"
+                            Margin="3"
+                            Command="{Binding ToggleReadingDirectionCommand}" />
+                    <Button Text="{Binding FilterModeLabel}"
+                            Style="{StaticResource HudButton}"
+                            Margin="3"
+                            Command="{Binding CycleVisualFilterCommand}" />
+                </FlexLayout>
+            </Grid>
+        </Border>
 
         <!-- Barra inferior translúcida (HUD) -->
-        <VerticalStackLayout x:Name="BottomHudBar"
-                             VerticalOptions="End"
-                             BackgroundColor="#CC12141A"
-                             Padding="16,10,16,14"
-                             Spacing="6"
-                             IsVisible="{Binding IsHudVisible}">
-            <Slider x:Name="PageSlider"
-                    Minimum="1"
-                    Maximum="{Binding SliderMaximum}"
-                    Value="{Binding CurrentPageNumber, Mode=OneWay}"
-                    IsEnabled="{Binding CanScrubPages}"
-                    ValueChanged="OnPageSliderValueChanged"
-                    DragCompleted="OnPageSliderDragCompleted" />
+        <Border x:Name="BottomHudBar"
+                VerticalOptions="End"
+                Margin="10,0,10,10"
+                BackgroundColor="{StaticResource HudOverlay}"
+                Stroke="{StaticResource NeonPurpleDeep}"
+                StrokeThickness="1"
+                StrokeShape="RoundRectangle 14"
+                Padding="14,10,14,12"
+                IsVisible="{Binding IsHudVisible}">
+            <VerticalStackLayout Spacing="6">
+                <Slider x:Name="PageSlider"
+                        Minimum="1"
+                        Maximum="{Binding SliderMaximum}"
+                        Value="{Binding CurrentPageNumber, Mode=OneWay}"
+                        IsEnabled="{Binding CanScrubPages}"
+                        MinimumTrackColor="{StaticResource NeonPurple}"
+                        MaximumTrackColor="{StaticResource Surface3}"
+                        ThumbColor="{StaticResource NeonPurpleBright}"
+                        ValueChanged="OnPageSliderValueChanged"
+                        DragCompleted="OnPageSliderDragCompleted" />
 
-            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
-                <Button Grid.Column="0"
-                        Text="Anterior"
-                        FontSize="13"
-                        Command="{Binding GoPreviousVisualCommand}" />
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                    <Button Grid.Column="0"
+                            Text="Anterior"
+                            Style="{StaticResource HudButton}"
+                            Command="{Binding GoPreviousVisualCommand}" />
 
-                <Label Grid.Column="1"
-                       Text="{Binding PageIndicator}"
-                       TextColor="White"
-                       FontAttributes="Bold"
-                       FontSize="13"
-                       HorizontalTextAlignment="Center"
-                       VerticalTextAlignment="Center" />
+                    <Label Grid.Column="1"
+                           Text="{Binding PageIndicator}"
+                           TextColor="{StaticResource TextPrimary}"
+                           FontFamily="OpenSansSemibold"
+                           FontAttributes="Bold"
+                           FontSize="13"
+                           HorizontalTextAlignment="Center"
+                           VerticalTextAlignment="Center" />
 
-                <Button Grid.Column="2"
-                        Text="Siguiente"
-                        FontSize="13"
-                        Command="{Binding GoNextVisualCommand}" />
-            </Grid>
-        </VerticalStackLayout>
+                    <Button Grid.Column="2"
+                            Text="Siguiente"
+                            Style="{StaticResource HudButton}"
+                            Command="{Binding GoNextVisualCommand}" />
+                </Grid>
+            </VerticalStackLayout>
+        </Border>
     </Grid>
 </ContentPage>

@@ -4,43 +4,123 @@
              xmlns:vm="clr-namespace:NebulaReader.ViewModels"
              x:Class="NebulaReader.Views.SettingsPage"
              x:DataType="vm:SettingsViewModel"
+             BackgroundColor="{StaticResource BgCanvas}"
              Title="{Binding Title}">
 
     <ScrollView>
-        <VerticalStackLayout Padding="20" Spacing="16">
-            <Grid ColumnDefinitions="*,Auto">
-                <Label Text="Modo lectura nocturna (inversión suave)" VerticalOptions="Center" />
-                <Switch Grid.Column="1" IsToggled="{Binding NightReadingModeEnabled}" />
-            </Grid>
+        <VerticalStackLayout Padding="20"
+                             Spacing="16"
+                             MaximumWidthRequest="720"
+                             HorizontalOptions="Center">
 
-            <Grid ColumnDefinitions="*,Auto">
-                <Label Text="Filtro visual sepia" VerticalOptions="Center" />
-                <Switch Grid.Column="1" IsToggled="{Binding SepiaFilterEnabled}" />
-            </Grid>
+            <!-- Sección: Apariencia y lectura -->
+            <Border BackgroundColor="{StaticResource Surface1}"
+                    Stroke="{StaticResource SubtleBorder}"
+                    StrokeThickness="1"
+                    StrokeShape="RoundRectangle 14"
+                    Padding="16">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="APARIENCIA Y LECTURA"
+                           TextColor="{StaticResource NeonPurpleBright}"
+                           FontFamily="OpenSansSemibold"
+                           FontSize="12"
+                           CharacterSpacing="1.4" />
 
-            <Grid ColumnDefinitions="*,Auto">
-                <Label Text="Lectura derecha a izquierda (Manga)" VerticalOptions="Center" />
-                <Switch Grid.Column="1" IsToggled="{Binding RightToLeftMangaMode}" />
-            </Grid>
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <Label Text="Modo lectura nocturna (inversión suave)"
+                               TextColor="{StaticResource TextPrimary}"
+                               VerticalOptions="Center" />
+                        <Switch Grid.Column="1" IsToggled="{Binding NightReadingModeEnabled}" />
+                    </Grid>
 
-            <VerticalStackLayout Spacing="6">
-                <Label Text="Modo de vista" FontAttributes="Bold" />
-                <Picker ItemsSource="{Binding LayoutModeOptions}"
-                        SelectedIndex="{Binding SelectedLayoutModeIndex}" />
-            </VerticalStackLayout>
+                    <BoxView HeightRequest="1" BackgroundColor="{StaticResource SubtleBorder}" />
 
-            <VerticalStackLayout Spacing="6">
-                <Label Text="Ajuste de página" FontAttributes="Bold" />
-                <Picker ItemsSource="{Binding PageFitModeOptions}"
-                        SelectedIndex="{Binding SelectedPageFitModeIndex}" />
-            </VerticalStackLayout>
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <Label Text="Filtro visual sepia"
+                               TextColor="{StaticResource TextPrimary}"
+                               VerticalOptions="Center" />
+                        <Switch Grid.Column="1" IsToggled="{Binding SepiaFilterEnabled}" />
+                    </Grid>
 
-            <Grid ColumnDefinitions="*,Auto">
-                <Label Text="Pantalla completa" VerticalOptions="Center" />
-                <Switch Grid.Column="1" IsToggled="{Binding IsFullScreen}" />
-            </Grid>
+                    <BoxView HeightRequest="1" BackgroundColor="{StaticResource SubtleBorder}" />
 
-            <Button Text="Volver" Command="{Binding GoBackCommand}" />
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <Label Text="Lectura derecha a izquierda (Manga)"
+                               TextColor="{StaticResource TextPrimary}"
+                               VerticalOptions="Center" />
+                        <Switch Grid.Column="1" IsToggled="{Binding RightToLeftMangaMode}" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Sección: Disposición y ajuste -->
+            <Border BackgroundColor="{StaticResource Surface1}"
+                    Stroke="{StaticResource SubtleBorder}"
+                    StrokeThickness="1"
+                    StrokeShape="RoundRectangle 14"
+                    Padding="16">
+                <VerticalStackLayout Spacing="14">
+                    <Label Text="DISPOSICIÓN Y AJUSTE"
+                           TextColor="{StaticResource NeonPurpleBright}"
+                           FontFamily="OpenSansSemibold"
+                           FontSize="12"
+                           CharacterSpacing="1.4" />
+
+                    <VerticalStackLayout Spacing="6">
+                        <Label Text="Modo de vista"
+                               TextColor="{StaticResource TextSecondary}"
+                               FontSize="13" />
+                        <Border BackgroundColor="{StaticResource Surface2}"
+                                Stroke="{StaticResource NeonPurpleDeep}"
+                                StrokeThickness="1"
+                                StrokeShape="RoundRectangle 10"
+                                Padding="10,2">
+                            <Picker ItemsSource="{Binding LayoutModeOptions}"
+                                    SelectedIndex="{Binding SelectedLayoutModeIndex}" />
+                        </Border>
+                    </VerticalStackLayout>
+
+                    <VerticalStackLayout Spacing="6">
+                        <Label Text="Ajuste de página"
+                               TextColor="{StaticResource TextSecondary}"
+                               FontSize="13" />
+                        <Border BackgroundColor="{StaticResource Surface2}"
+                                Stroke="{StaticResource NeonPurpleDeep}"
+                                StrokeThickness="1"
+                                StrokeShape="RoundRectangle 10"
+                                Padding="10,2">
+                            <Picker ItemsSource="{Binding PageFitModeOptions}"
+                                    SelectedIndex="{Binding SelectedPageFitModeIndex}" />
+                        </Border>
+                    </VerticalStackLayout>
+                </VerticalStackLayout>
+            </Border>
+
+            <!-- Sección: Ventana -->
+            <Border BackgroundColor="{StaticResource Surface1}"
+                    Stroke="{StaticResource SubtleBorder}"
+                    StrokeThickness="1"
+                    StrokeShape="RoundRectangle 14"
+                    Padding="16">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="VENTANA"
+                           TextColor="{StaticResource NeonPurpleBright}"
+                           FontFamily="OpenSansSemibold"
+                           FontSize="12"
+                           CharacterSpacing="1.4" />
+
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                        <Label Text="Pantalla completa"
+                               TextColor="{StaticResource TextPrimary}"
+                               VerticalOptions="Center" />
+                        <Switch Grid.Column="1" IsToggled="{Binding IsFullScreen}" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <Button Text="Volver"
+                    Style="{StaticResource PrimaryNeonButton}"
+                    Command="{Binding GoBackCommand}" />
         </VerticalStackLayout>
     </ScrollView>
 </ContentPage>

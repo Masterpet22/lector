@@ -45,18 +45,18 @@ public partial class ReaderPage : ContentPage
     };
     private static readonly SKPaint PlaceholderFillPaint = new()
     {
-        Color = new SKColor(0x1B, 0x1E, 0x28),
+        Color = new SKColor(0x12, 0x10, 0x1E),
         Style = SKPaintStyle.Fill
     };
     private static readonly SKPaint PlaceholderBorderPaint = new()
     {
-        Color = new SKColor(0x2E, 0x34, 0x46),
+        Color = new SKColor(0x7C, 0x3A, 0xED),
         Style = SKPaintStyle.Stroke,
         StrokeWidth = 2f
     };
     private static readonly SKPaint PlaceholderTextPaint = new()
     {
-        Color = new SKColor(0xA0, 0xA8, 0xB8),
+        Color = new SKColor(0xD8, 0x84, 0xFF),
         IsAntialias = true
     };
     private static readonly SKFont PlaceholderFont = new()
@@ -205,8 +205,8 @@ public partial class ReaderPage : ContentPage
         var vm = ViewModel;
 
         var backgroundColor = vm?.IsNightMode ?? true
-            ? new SKColor(0x10, 0x12, 0x18)
-            : new SKColor(0xEC, 0xEE, 0xF2);
+            ? new SKColor(0x08, 0x07, 0x0E)
+            : new SKColor(0x12, 0x10, 0x1E);
         canvas.Clear(backgroundColor);
 
         if (vm == null || vm.TotalPages <= 0)

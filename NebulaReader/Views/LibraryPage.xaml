@@ -7,57 +7,66 @@
              x:Name="LibraryRootPage"
              x:DataType="vm:LibraryViewModel"
              Shell.NavBarIsVisible="{Binding IsNotFullScreen}"
+             BackgroundColor="{StaticResource BgCanvas}"
              Title="{Binding Title}">
 
-    <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="16" RowSpacing="12">
-        <!-- Barra superior -->
-        <FlexLayout Grid.Row="0"
-                    Wrap="Wrap"
-                    AlignItems="Center"
-                    JustifyContent="Start">
-            <Button Text="Abrir Archivo"
-                    Margin="0,0,10,8"
-                    Command="{Binding OpenFileCommand}" />
-            <Button Text="Escanear Carpeta"
-                    Margin="0,0,10,8"
-                    Command="{Binding ImportFolderCommand}" />
-            <Button Text="Configuración"
-                    Margin="0,0,10,8"
-                    Command="{Binding OpenSettingsCommand}" />
-            <Button Text="{Binding FullScreenButtonLabel}"
-                    Margin="0,0,10,8"
-                    Command="{Binding ToggleFullScreenCommand}" />
-            <ActivityIndicator IsRunning="{Binding IsBusy}"
-                               IsVisible="{Binding IsBusy}"
-                               Margin="4,0,0,8"
-                               VerticalOptions="Center" />
-        </FlexLayout>
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="14,12" RowSpacing="12">
+        <!-- Barra superior moderna -->
+        <Border Grid.Row="0"
+                BackgroundColor="{StaticResource Surface1}"
+                Stroke="{StaticResource SubtleBorder}"
+                StrokeThickness="1"
+                StrokeShape="RoundRectangle 14"
+                Padding="12,10,12,4">
+            <FlexLayout Wrap="Wrap"
+                        AlignItems="Center"
+                        JustifyContent="Start">
+                <Button Text="Abrir Archivo"
+                        Style="{StaticResource PrimaryNeonButton}"
+                        Margin="0,0,10,6"
+                        Command="{Binding OpenFileCommand}" />
+                <Button Text="Escanear Carpeta"
+                        Margin="0,0,10,6"
+                        Command="{Binding ImportFolderCommand}" />
+                <Button Text="Configuración"
+                        Margin="0,0,10,6"
+                        Command="{Binding OpenSettingsCommand}" />
+                <Button Text="{Binding FullScreenButtonLabel}"
+                        Margin="0,0,10,6"
+                        Command="{Binding ToggleFullScreenCommand}" />
+                <ActivityIndicator IsRunning="{Binding IsBusy}"
+                                   IsVisible="{Binding IsBusy}"
+                                   Color="{StaticResource NeonPurpleBright}"
+                                   Margin="6,0,0,6"
+                                   VerticalOptions="Center" />
+            </FlexLayout>
+        </Border>
 
         <!-- Barra de navegación dentro de una serie/saga -->
         <Border Grid.Row="1"
                 IsVisible="{Binding IsInsideGroup}"
-                BackgroundColor="{AppThemeBinding Light=#EEF2FF, Dark=#1A2033}"
-                Stroke="{AppThemeBinding Light=#C7D2FE, Dark=#2E3754}"
-                StrokeThickness="1"
-                StrokeShape="RoundRectangle 10"
-                Padding="10,6">
-            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                BackgroundColor="{StaticResource Surface2}"
+                Stroke="{StaticResource NeonPurple}"
+                StrokeThickness="1.2"
+                StrokeShape="RoundRectangle 12"
+                Padding="10,7">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
                 <Button Grid.Column="0"
                         Text="← Biblioteca"
-                        Command="{Binding ExitGroupCommand}"
-                        Padding="12,6"
-                        FontSize="13"
-                        FontAttributes="Bold" />
+                        Style="{StaticResource HudButton}"
+                        Command="{Binding ExitGroupCommand}" />
                 <Label Grid.Column="1"
                        Text="{Binding ActiveGroupTitle}"
                        VerticalOptions="Center"
+                       TextColor="{StaticResource TextPrimary}"
+                       FontFamily="OpenSansSemibold"
                        FontSize="15"
                        FontAttributes="Bold"
                        LineBreakMode="TailTruncation" />
             </Grid>
         </Border>
 
-        <!-- Cuadrícula de biblioteca (grupos de saga con mosaico 2x2 y documentos individuales) -->
+        <!-- Cuadrícula de biblioteca -->
         <CollectionView Grid.Row="2"
                         ItemsSource="{Binding DisplayItems}"
                         SelectionMode="None">
@@ -70,22 +79,47 @@
             </CollectionView.ItemsLayout>
 
             <CollectionView.EmptyView>
-                <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="8" Padding="24">
-                    <Label Text="Tu biblioteca está vacía"
-                           FontSize="18"
-                           FontAttributes="Bold"
-                           HorizontalTextAlignment="Center" />
-                    <Label Text="Pulsa 'Abrir Archivo' o 'Escanear Carpeta' para importar cómics (.cbz, .cbr) o PDF."
-                           HorizontalTextAlignment="Center"
-                           Opacity="0.7" />
-                </VerticalStackLayout>
+                <Border VerticalOptions="Center"
+                        HorizontalOptions="Center"
+                        MaximumWidthRequest="440"
+                        BackgroundColor="{StaticResource Surface1}"
+                        Stroke="{StaticResource NeonPurpleDeep}"
+                        StrokeThickness="1.2"
+                        StrokeShape="RoundRectangle 16"
+                        Padding="28,24"
+                        Margin="16">
+                    <VerticalStackLayout Spacing="10">
+                        <Label Text="NEBULA READER"
+                               TextColor="{StaticResource NeonPurpleBright}"
+                               FontFamily="OpenSansSemibold"
+                               FontSize="12"
+                               CharacterSpacing="2"
+                               HorizontalTextAlignment="Center" />
+                        <Label Text="Tu biblioteca está vacía"
+                               TextColor="{StaticResource TextPrimary}"
+                               FontSize="20"
+                               FontAttributes="Bold"
+                               HorizontalTextAlignment="Center" />
+                        <Label Text="Pulsa 'Abrir Archivo' o 'Escanear Carpeta' para importar cómics (.cbz, .cbr) o PDF."
+                               TextColor="{StaticResource TextSecondary}"
+                               HorizontalTextAlignment="Center" />
+                    </VerticalStackLayout>
+                </Border>
             </CollectionView.EmptyView>
 
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:LibraryDisplayItem">
                     <Border Padding="8"
+                            BackgroundColor="{StaticResource Surface1}"
+                            Stroke="{StaticResource SubtleBorder}"
                             StrokeThickness="1"
-                            StrokeShape="RoundRectangle 10">
+                            StrokeShape="RoundRectangle 14">
+                        <Border.Triggers>
+                            <DataTrigger TargetType="Border" Binding="{Binding IsGroup}" Value="True">
+                                <Setter Property="Stroke" Value="{StaticResource NeonPurple}" />
+                                <Setter Property="StrokeThickness" Value="1.5" />
+                            </DataTrigger>
+                        </Border.Triggers>
                         <Border.GestureRecognizers>
                             <TapGestureRecognizer
                                 x:DataType="{x:Null}"
@@ -93,85 +127,99 @@
                                 CommandParameter="{Binding .}" />
                         </Border.GestureRecognizers>
 
-                        <Grid RowDefinitions="200,Auto,Auto,Auto" RowSpacing="5">
-                            <Grid Grid.Row="0">
-                                <Border BackgroundColor="{AppThemeBinding Light=#E8EAF6, Dark=#1F2430}"
-                                        StrokeThickness="0"
-                                        StrokeShape="RoundRectangle 6">
+                        <Grid RowDefinitions="205,Auto,Auto,Auto" RowSpacing="5">
+                            <Border Grid.Row="0"
+                                    BackgroundColor="{StaticResource BgCanvas}"
+                                    StrokeThickness="0"
+                                    StrokeShape="RoundRectangle 10">
+                                <Grid>
                                     <Label Text="{Binding BadgeText}"
                                            HorizontalOptions="Center"
                                            VerticalOptions="Center"
-                                           FontAttributes="Bold"
-                                           Opacity="0.4" />
-                                </Border>
+                                           TextColor="{StaticResource TextMuted}"
+                                           FontAttributes="Bold" />
 
-                                <!-- Portada individual -->
-                                <Image IsVisible="{Binding IsSingleBook}"
-                                       Source="{Binding Cover1}"
-                                       Aspect="AspectFill" />
+                                    <!-- Portada individual -->
+                                    <Image IsVisible="{Binding IsSingleBook}"
+                                           Source="{Binding Cover1}"
+                                           Aspect="AspectFill" />
 
-                                <!-- Mosaico 2x2 de las primeras 4 portadas del grupo -->
-                                <Grid IsVisible="{Binding IsGroup}"
-                                      RowDefinitions="*,*"
-                                      ColumnDefinitions="*,*"
-                                      RowSpacing="2"
-                                      ColumnSpacing="2"
-                                      BackgroundColor="{AppThemeBinding Light=#CBD5E1, Dark=#111522}">
-                                    <Border Grid.Row="0" Grid.Column="0"
-                                            BackgroundColor="{AppThemeBinding Light=#E2E8F0, Dark=#23293D}"
-                                            StrokeThickness="0">
-                                        <Image IsVisible="{Binding HasCover1}" Source="{Binding Cover1}" Aspect="AspectFill" />
-                                    </Border>
-                                    <Border Grid.Row="0" Grid.Column="1"
-                                            BackgroundColor="{AppThemeBinding Light=#E2E8F0, Dark=#23293D}"
-                                            StrokeThickness="0">
-                                        <Image IsVisible="{Binding HasCover2}" Source="{Binding Cover2}" Aspect="AspectFill" />
-                                    </Border>
-                                    <Border Grid.Row="1" Grid.Column="0"
-                                            BackgroundColor="{AppThemeBinding Light=#E2E8F0, Dark=#23293D}"
-                                            StrokeThickness="0">
-                                        <Image IsVisible="{Binding HasCover3}" Source="{Binding Cover3}" Aspect="AspectFill" />
-                                    </Border>
-                                    <Border Grid.Row="1" Grid.Column="1"
-                                            BackgroundColor="{AppThemeBinding Light=#E2E8F0, Dark=#23293D}"
-                                            StrokeThickness="0">
-                                        <Image IsVisible="{Binding HasCover4}" Source="{Binding Cover4}" Aspect="AspectFill" />
+                                    <!-- Mosaico 2x2 de las primeras 4 portadas del grupo -->
+                                    <Grid IsVisible="{Binding IsGroup}"
+                                          RowDefinitions="*,*"
+                                          ColumnDefinitions="*,*"
+                                          RowSpacing="2"
+                                          ColumnSpacing="2"
+                                          BackgroundColor="{StaticResource BgCanvas}">
+                                        <Border Grid.Row="0" Grid.Column="0"
+                                                BackgroundColor="{StaticResource Surface2}"
+                                                StrokeThickness="0">
+                                            <Image IsVisible="{Binding HasCover1}" Source="{Binding Cover1}" Aspect="AspectFill" />
+                                        </Border>
+                                        <Border Grid.Row="0" Grid.Column="1"
+                                                BackgroundColor="{StaticResource Surface2}"
+                                                StrokeThickness="0">
+                                            <Image IsVisible="{Binding HasCover2}" Source="{Binding Cover2}" Aspect="AspectFill" />
+                                        </Border>
+                                        <Border Grid.Row="1" Grid.Column="0"
+                                                BackgroundColor="{StaticResource Surface2}"
+                                                StrokeThickness="0">
+                                            <Image IsVisible="{Binding HasCover3}" Source="{Binding Cover3}" Aspect="AspectFill" />
+                                        </Border>
+                                        <Border Grid.Row="1" Grid.Column="1"
+                                                BackgroundColor="{StaticResource Surface2}"
+                                                StrokeThickness="0">
+                                            <Image IsVisible="{Binding HasCover4}" Source="{Binding Cover4}" Aspect="AspectFill" />
+                                        </Border>
+                                    </Grid>
+
+                                    <!-- Insignia superior derecha -->
+                                    <Border HorizontalOptions="End"
+                                            VerticalOptions="Start"
+                                            Margin="6"
+                                            Padding="7,3"
+                                            StrokeThickness="1"
+                                            Stroke="{StaticResource SubtleBorder}"
+                                            StrokeShape="RoundRectangle 7"
+                                            BackgroundColor="#D90E0B1A">
+                                        <Border.Triggers>
+                                            <DataTrigger TargetType="Border" Binding="{Binding IsGroup}" Value="True">
+                                                <Setter Property="BackgroundColor" Value="#D97C3AED" />
+                                                <Setter Property="Stroke" Value="{StaticResource NeonPurpleBright}" />
+                                            </DataTrigger>
+                                        </Border.Triggers>
+                                        <Label Text="{Binding BadgeText}"
+                                               TextColor="{StaticResource White}"
+                                               FontFamily="OpenSansSemibold"
+                                               FontSize="10"
+                                               FontAttributes="Bold" />
                                     </Border>
                                 </Grid>
-
-                                <!-- Insignia superior derecha (formato o cantidad en saga) -->
-                                <Border HorizontalOptions="End"
-                                        VerticalOptions="Start"
-                                        Margin="5"
-                                        Padding="6,2"
-                                        StrokeThickness="0"
-                                        StrokeShape="RoundRectangle 6"
-                                        BackgroundColor="#CC111528">
-                                    <Label Text="{Binding BadgeText}"
-                                           TextColor="White"
-                                           FontSize="10"
-                                           FontAttributes="Bold" />
-                                </Border>
-                            </Grid>
+                            </Border>
 
                             <Label Grid.Row="1"
                                    Text="{Binding Title}"
+                                   TextColor="{StaticResource TextPrimary}"
+                                   FontFamily="OpenSansSemibold"
                                    FontAttributes="Bold"
                                    FontSize="14"
+                                   Margin="2,2,2,0"
                                    LineBreakMode="TailTruncation"
                                    MaxLines="2" />
 
                             <Label Grid.Row="2"
                                    Text="{Binding SubtitleText}"
+                                   TextColor="{StaticResource TextSecondary}"
                                    FontSize="11"
-                                   Opacity="0.75"
+                                   Margin="2,0"
                                    LineBreakMode="TailTruncation" />
 
                             <Label Grid.Row="3"
                                    IsVisible="{Binding HasTags}"
                                    Text="{Binding TagsText}"
                                    FontSize="11"
-                                   TextColor="#8B5CF6"
+                                   Margin="2,0"
+                                   TextColor="{StaticResource NeonPurpleBright}"
                                    LineBreakMode="TailTruncation" />
                         </Grid>
                     </Border>
@@ -179,9 +227,17 @@
             </CollectionView.ItemTemplate>
         </CollectionView>
 
-        <Label Grid.Row="3"
-               Text="{Binding StatusMessage}"
-               FontSize="12"
-               Opacity="0.8" />
+        <!-- Pie de estado -->
+        <Border Grid.Row="3"
+                BackgroundColor="{StaticResource Surface1}"
+                Stroke="{StaticResource SubtleBorder}"
+                StrokeThickness="1"
+                StrokeShape="RoundRectangle 10"
+                Padding="12,7">
+            <Label Text="{Binding StatusMessage}"
+                   TextColor="{StaticResource TextSecondary}"
+                   FontSize="12"
+                   LineBreakMode="TailTruncation" />
+        </Border>
     </Grid>
 </ContentPage>
