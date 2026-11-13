@@ -99,11 +99,11 @@
                 <Slider x:Name="PageSlider"
                         Minimum="1"
                         Maximum="{Binding SliderMaximum}"
-                        Value="{Binding CurrentPageNumber, Mode=OneWay}"
                         IsEnabled="{Binding CanScrubPages}"
                         MinimumTrackColor="{StaticResource NeonPurple}"
                         MaximumTrackColor="{StaticResource Surface3}"
                         ThumbColor="{StaticResource NeonPurpleBright}"
+                        DragStarted="OnPageSliderDragStarted"
                         ValueChanged="OnPageSliderValueChanged"
                         DragCompleted="OnPageSliderDragCompleted" />
 

@@ -89,7 +89,9 @@ public partial class ReaderPage : ContentPage
     private long _lastVSyncTickTimestamp;
     private bool _isActivelyInteracting;
     private bool _sliderDragActive;
+    private bool _isUpdatingSliderFromCode;
     private int _pendingSliderPage = 1;
+    private CancellationTokenSource? _sliderTrackClickCts;
     private bool _platformInputAttached;
 
     private SKSamplingOptions CurrentSampling => _isActivelyInteracting ? FastGestureSampling : HighQualitySampling;
@@ -141,6 +143,14 @@ public partial class ReaderPage : ContentPage
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (e.PropertyName is nameof(ReaderViewModel.CurrentPageNumber)
+            or nameof(ReaderViewModel.SliderMaximum)
+            or nameof(ReaderViewModel.TotalPages)
+            or nameof(ReaderViewModel.IsHudVisible))
+        {
+            MainThread.BeginInvokeOnMainThread(SyncSliderFromViewModel);
+        }
+
         if (e.PropertyName is nameof(ReaderViewModel.PageFitMode) or nameof(ReaderViewModel.LayoutMode))
         {
             ResetZoomAndVerticalPosition();
@@ -161,6 +171,7 @@ public partial class ReaderPage : ContentPage
     {
         base.OnAppearing();
         ViewModel?.UpdateViewportSize(Width, Height);
+        SyncSliderFromViewModel();
         InvalidateCanvasSurface();
     }
 
@@ -1140,17 +1151,86 @@ public partial class ReaderPage : ContentPage
         }
     }
 
+    private void SyncSliderFromViewModel()
+    {
+        var vm = ViewModel;
+        if (vm == null || _sliderDragActive || PageSlider == null)
+        {
+            return;
+        }
+
+        var targetMax = Math.Max(2.0, vm.SliderMaximum);
+        var targetVal = Math.Clamp((double)vm.CurrentPageNumber, 1.0, targetMax);
+
+        _isUpdatingSliderFromCode = true;
+        try
+        {
+            if (Math.Abs(PageSlider.Maximum - targetMax) > 0.01)
+            {
+                PageSlider.Maximum = targetMax;
+            }
+
+            if (Math.Abs(PageSlider.Value - targetVal) > 0.01)
+            {
+                PageSlider.Value = targetVal;
+            }
+        }
+        finally
+        {
+            _isUpdatingSliderFromCode = false;
+        }
+    }
+
+    private void OnPageSliderDragStarted(object? sender, EventArgs e)
+    {
+        _sliderDragActive = true;
+        _sliderTrackClickCts?.Cancel();
+    }
+
     private void OnPageSliderValueChanged(object? sender, ValueChangedEventArgs e)
     {
+        if (_isUpdatingSliderFromCode) return;
+
         var vm = ViewModel;
         if (vm == null || vm.TotalPages <= 0) return;
 
-        var targetPage = (int)Math.Round(e.NewValue);
-        if (targetPage == vm.CurrentPageNumber) return;
-
-        _sliderDragActive = true;
+        var targetPage = Math.Clamp((int)Math.Round(e.NewValue), 1, vm.TotalPages);
         _pendingSliderPage = targetPage;
         vm.PageIndicator = $"Página {targetPage} / {vm.TotalPages}";
+
+        if (_sliderDragActive)
+        {
+            return;
+        }
+
+        // Si el usuario pulsa directamente en la pista del Slider (p. ej. en Windows sin DragStarted/DragCompleted),
+        // aplicar el salto de página tras una breve pausa de estabilización.
+        _sliderTrackClickCts?.Cancel();
+        _sliderTrackClickCts?.Dispose();
+        var cts = new CancellationTokenSource();
+        _sliderTrackClickCts = cts;
+        var ct = cts.Token;
+
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await Task.Delay(75, ct).ConfigureAwait(false);
+                if (ct.IsCancellationRequested) return;
+
+                await MainThread.InvokeOnMainThreadAsync(async () =>
+                {
+                    if (ct.IsCancellationRequested || _sliderDragActive) return;
+                    ResetZoomAndVerticalPosition();
+                    await vm.OnSliderPageSelectedAsync(targetPage);
+                    SyncSliderFromViewModel();
+                });
+            }
+            catch (OperationCanceledException)
+            {
+                // Reemplazado por un ajuste más reciente
+            }
+        }, ct);
     }
 
     private async void OnPageSliderDragCompleted(object? sender, EventArgs e)
@@ -1158,15 +1238,20 @@ public partial class ReaderPage : ContentPage
         var vm = ViewModel;
         if (vm == null) return;
 
+        _sliderTrackClickCts?.Cancel();
         _sliderDragActive = false;
         ResetZoomAndVerticalPosition();
         await vm.OnSliderPageSelectedAsync(_pendingSliderPage);
+        SyncSliderFromViewModel();
     }
 
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
         StopFlingInertia();
+        _sliderTrackClickCts?.Cancel();
+        _sliderTrackClickCts?.Dispose();
+        _sliderTrackClickCts = null;
         if (_sliderDragActive)
         {
             _sliderDragActive = false;
