@@ -9,6 +9,9 @@ public interface IPageCacheService
 {
     int MaxCachedPages { get; }
     bool TryDrawBitmap(string bookId, int pageIndex, Action<SKBitmap> drawAction);
+    bool TryDrawPage(string bookId, int pageIndex, int? preferredFitWidthPx, Action<SKImage?, SKBitmap> drawAction);
+    IDisposable? TryPinBitmap(string bookId, int pageIndex, out SKBitmap? bitmap);
+    void SetFittedBitmap(string bookId, int pageIndex, SKBitmap fittedBitmap, int fittedWidthPx);
     bool ContainsPage(string bookId, int pageIndex);
     void StoreBitmap(string bookId, int pageIndex, SKBitmap bitmap, int centerPageIndex, int radius = 1);
     void StoreBitmapInRange(string bookId, int pageIndex, SKBitmap bitmap, int minKeepPageIndex, int maxKeepPageIndex);

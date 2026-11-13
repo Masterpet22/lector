@@ -32,6 +32,7 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     private readonly ConcurrentDictionary<int, float> _pageAspectRatios = new();
     private readonly object _pageLoadSync = new();
     private readonly HashSet<int> _inFlightPages = new();
+    private readonly HashSet<(int PageIndex, int WidthPx)> _inFlightFitBuilds = new();
     private float _defaultPageAspectRatio = 1.414f;
     private int _lastNavigationDirection = 1;
     private double _viewportWidth;
@@ -143,6 +144,16 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
             : _defaultPageAspectRatio;
     }
 
+    private int _preferredFitWidthPx;
+
+    public void SetPreferredFitWidthPx(int fitWidthPx)
+    {
+        if (fitWidthPx > 64)
+        {
+            _preferredFitWidthPx = fitWidthPx;
+        }
+    }
+
     public bool TryDrawCachedPage(int pageIndex, Action<SKBitmap> drawAction)
     {
         if (CurrentBook == null || (uint)pageIndex >= (uint)TotalPages)
@@ -151,6 +162,79 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
         }
 
         return _pageCacheService.TryDrawBitmap(CurrentBook.Id, pageIndex, drawAction);
+    }
+
+    public bool TryDrawCachedPage(int pageIndex, int? preferredFitWidthPx, Action<SKImage?, SKBitmap> drawAction)
+    {
+        var book = CurrentBook;
+        if (book == null || (uint)pageIndex >= (uint)TotalPages)
+        {
+            return false;
+        }
+
+        var drawn = _pageCacheService.TryDrawPage(book.Id, pageIndex, preferredFitWidthPx, (image, bitmap) =>
+        {
+            drawAction(image, bitmap);
+
+            // Si en modo CPU la imagen origen es mucho mayor al ancho mostrado, generar copia 1:1 en segundo plano
+            if (preferredFitWidthPx is > 64 && bitmap.Width > preferredFitWidthPx.Value * 1.15f)
+            {
+                ScheduleFittedBitmapCreation(book.Id, pageIndex, preferredFitWidthPx.Value);
+            }
+        });
+
+        return drawn;
+    }
+
+    private void ScheduleFittedBitmapCreation(string bookId, int pageIndex, int targetWidthPx)
+    {
+        if (targetWidthPx <= 64) return;
+
+        var key = (pageIndex, targetWidthPx);
+        lock (_pageLoadSync)
+        {
+            if (_inFlightFitBuilds.Contains(key)) return;
+            _inFlightFitBuilds.Add(key);
+        }
+
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                using var pin = _pageCacheService.TryPinBitmap(bookId, pageIndex, out var pinnedBitmap);
+                if (pin == null || pinnedBitmap == null) return;
+
+                var fitted = CreateFittedBitmapSafe(pinnedBitmap, targetWidthPx);
+                if (fitted != null)
+                {
+                    _pageCacheService.SetFittedBitmap(bookId, pageIndex, fitted, targetWidthPx);
+                }
+            }
+            catch
+            {
+                // Ignorar si la página fue expulsada antes de completar el reescalado
+            }
+            finally
+            {
+                lock (_pageLoadSync)
+                {
+                    _inFlightFitBuilds.Remove(key);
+                }
+            }
+        });
+    }
+
+    private static SKBitmap? CreateFittedBitmapSafe(SKBitmap sourceBitmap, int targetWidthPx)
+    {
+        if (sourceBitmap.Handle == IntPtr.Zero || sourceBitmap.Width <= targetWidthPx * 1.15f)
+        {
+            return null;
+        }
+
+        var scale = targetWidthPx / (double)sourceBitmap.Width;
+        var targetHeight = Math.Max(1, (int)Math.Round(sourceBitmap.Height * scale));
+        var info = new SKImageInfo(targetWidthPx, targetHeight, sourceBitmap.ColorType, sourceBitmap.AlphaType);
+        return sourceBitmap.Resize(info, new SKSamplingOptions(SKFilterMode.Linear, SKMipmapMode.Linear));
     }
 
     public void RequestPageLoadIfNeeded(int pageIndex)
@@ -198,7 +282,18 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
         return (Math.Max(0, center - behind), Math.Min(maxIdx, center + ahead));
     }
 
-    public async Task GoToPageAsync(int pageIndex)
+    public Task GoToPageAsync(int pageIndex)
+    {
+        UpdateActivePage(pageIndex, raiseCanvasInvalidate: true);
+        return Task.CompletedTask;
+    }
+
+    public void SyncContinuousPage(int pageIndex)
+    {
+        UpdateActivePage(pageIndex, raiseCanvasInvalidate: false);
+    }
+
+    private void UpdateActivePage(int pageIndex, bool raiseCanvasInvalidate)
     {
         if (CurrentBook == null || TotalPages <= 0) return;
 
@@ -213,10 +308,12 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
 
         var (minKeep, maxKeep) = GetKeepWindowRange(CurrentPageIndex);
         _pageCacheService.EvictOutsideRange(CurrentBook.Id, minKeep, maxKeep);
-        RaisePageContentReady();
+        if (raiseCanvasInvalidate)
+        {
+            RaisePageContentReady();
+        }
         SignalPreloadWorker();
         ScheduleDebouncedProgressPersist();
-        await Task.CompletedTask;
     }
 
     [RelayCommand]
@@ -600,6 +697,17 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
             RecordAspectRatio(pageIndex, bitmap.Width, bitmap.Height);
             var (minKeep, maxKeep) = GetKeepWindowRange(CurrentPageIndex);
             _pageCacheService.StoreBitmapInRange(bookId, pageIndex, bitmap, minKeep, maxKeep);
+
+            var preferredWidth = _preferredFitWidthPx;
+            if (preferredWidth > 64 && bitmap.Width > preferredWidth * 1.15f)
+            {
+                var fitted = CreateFittedBitmapSafe(bitmap, preferredWidth);
+                if (fitted != null)
+                {
+                    _pageCacheService.SetFittedBitmap(bookId, pageIndex, fitted, preferredWidth);
+                }
+            }
+
             RaisePageContentReady();
         }
         catch (OperationCanceledException)

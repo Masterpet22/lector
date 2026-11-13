@@ -3,10 +3,10 @@ using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
-using SkiaSharp.Views.Maui.Controls;
 using Windows.System;
 using Windows.UI.Core;
 using WinRT.Interop;
+using CompositionTarget = Microsoft.UI.Xaml.Media.CompositionTarget;
 
 namespace NebulaReader.Views;
 
@@ -16,10 +16,11 @@ public partial class ReaderPage
     private Windows.Foundation.Point _lastDragDip;
     private UIElement? _attachedNativeElement;
     private UIElement? _attachedWindowRoot;
+    private bool _vsyncRunning;
 
-    private partial void AttachPlatformInput(SKCanvasView canvasView)
+    private partial void AttachPlatformInput(View surfaceView)
     {
-        if (canvasView.Handler?.PlatformView is UIElement nativeElement && !ReferenceEquals(_attachedNativeElement, nativeElement))
+        if (surfaceView.Handler?.PlatformView is UIElement nativeElement && !ReferenceEquals(_attachedNativeElement, nativeElement))
         {
             _attachedNativeElement = nativeElement;
             nativeElement.PointerWheelChanged += OnNativePointerWheelChanged;
@@ -38,6 +39,8 @@ public partial class ReaderPage
 
     private partial void DetachPlatformInput()
     {
+        StopVSyncLoop();
+
         if (_attachedNativeElement != null)
         {
             _attachedNativeElement.PointerWheelChanged -= OnNativePointerWheelChanged;
@@ -55,6 +58,26 @@ public partial class ReaderPage
         }
 
         RestoreWindowedMode();
+    }
+
+    private partial void StartVSyncLoop()
+    {
+        if (_vsyncRunning) return;
+        _vsyncRunning = true;
+        CompositionTarget.Rendering += OnWindowsCompositionRendering;
+    }
+
+    private partial void StopVSyncLoop()
+    {
+        if (!_vsyncRunning) return;
+        _vsyncRunning = false;
+        CompositionTarget.Rendering -= OnWindowsCompositionRendering;
+    }
+
+    private void OnWindowsCompositionRendering(object? sender, object e)
+    {
+        if (!_vsyncRunning) return;
+        AdvanceVSyncAnimation();
     }
 
     private void OnWindowPreviewKeyDown(object sender, KeyRoutedEventArgs e)
@@ -91,8 +114,8 @@ public partial class ReaderPage
             case VirtualKey.Down:
                 if (vm.IsContinuousVertical)
                 {
-                    var stepPx = Math.Max(140f, ReaderCanvas.CanvasSize.Height * 0.16f);
-                    ApplyPanDelta(0f, -stepPx);
+                    var stepPx = Math.Max(140f, CanvasPixelHeight * 0.16f);
+                    QueueSmoothVerticalScroll(stepPx);
                     e.Handled = true;
                 }
                 break;
@@ -100,8 +123,8 @@ public partial class ReaderPage
             case VirtualKey.Up:
                 if (vm.IsContinuousVertical)
                 {
-                    var stepPx = Math.Max(140f, ReaderCanvas.CanvasSize.Height * 0.16f);
-                    ApplyPanDelta(0f, stepPx);
+                    var stepPx = Math.Max(140f, CanvasPixelHeight * 0.16f);
+                    QueueSmoothVerticalScroll(-stepPx);
                     e.Handled = true;
                 }
                 break;
@@ -109,8 +132,8 @@ public partial class ReaderPage
             case VirtualKey.Space:
                 if (vm.IsContinuousVertical)
                 {
-                    var stepPx = Math.Max(260f, ReaderCanvas.CanvasSize.Height * 0.72f);
-                    ApplyPanDelta(0f, -stepPx);
+                    var stepPx = Math.Max(260f, CanvasPixelHeight * 0.72f);
+                    QueueSmoothVerticalScroll(stepPx);
                     e.Handled = true;
                 }
                 break;
@@ -188,9 +211,15 @@ public partial class ReaderPage
         var vm = ViewModel;
         if (vm == null) return;
 
-        if (vm.IsContinuousVertical || _zoom > 1.02f)
+        if (vm.IsContinuousVertical && _zoom <= 1.02f)
         {
-            var stepPx = (wheelDelta > 0 ? 90f : -90f) * pixelScale;
+            var stepScrollPx = (wheelDelta > 0 ? -115f : 115f) * pixelScale;
+            QueueSmoothVerticalScroll(stepScrollPx);
+            e.Handled = true;
+        }
+        else if (_zoom > 1.02f)
+        {
+            var stepPx = (wheelDelta > 0 ? 115f : -115f) * pixelScale;
             ApplyPanDelta(0f, stepPx);
             e.Handled = true;
         }
@@ -215,6 +244,8 @@ public partial class ReaderPage
             return;
         }
 
+        StopFlingInertia();
+        _isActivelyInteracting = true;
         _isPointerDragging = true;
         _lastDragDip = point.Position;
         element.CapturePointer(e.Pointer);
@@ -239,9 +270,11 @@ public partial class ReaderPage
         if (!_isPointerDragging) return;
 
         _isPointerDragging = false;
+        _isActivelyInteracting = false;
         if (sender is UIElement element)
         {
             element.ReleasePointerCapture(e.Pointer);
         }
+        InvalidateCanvasSurface();
     }
 }

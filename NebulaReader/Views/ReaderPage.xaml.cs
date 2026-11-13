@@ -71,6 +71,12 @@ public partial class ReaderPage : ContentPage
     private float _lastCurrentPageFittedHeight;
     private float _lastPrevPageFittedHeight;
 
+#if ANDROID
+    private readonly SKGLView _readerSurfaceView = new();
+#else
+    private readonly SKCanvasView _readerSurfaceView = new();
+#endif
+
     private double _lastPanTotalX;
     private double _lastPanTotalY;
     private double _swipeAccumulatedX;
@@ -78,8 +84,8 @@ public partial class ReaderPage : ContentPage
     private int _panSampleCount;
     private int _panSampleWriteIndex;
     private float _flingVelocityPxPerSec;
-    private long _lastFlingTickTimestamp;
-    private IDispatcherTimer? _flingTimer;
+    private float _pendingSmoothScrollPx;
+    private long _lastVSyncTickTimestamp;
     private bool _isActivelyInteracting;
     private bool _sliderDragActive;
     private int _pendingSliderPage = 1;
@@ -87,14 +93,49 @@ public partial class ReaderPage : ContentPage
 
     private SKSamplingOptions CurrentSampling => _isActivelyInteracting ? FastGestureSampling : HighQualitySampling;
 
+    private float CanvasPixelWidth => _readerSurfaceView.CanvasSize.Width;
+    private float CanvasPixelHeight => _readerSurfaceView.CanvasSize.Height;
+
+    private void InvalidateCanvasSurface() => _readerSurfaceView.InvalidateSurface();
+
     private ReaderViewModel? ViewModel => BindingContext as ReaderViewModel;
 
     public ReaderPage(ReaderViewModel viewModel)
     {
         InitializeComponent();
+        ConfigureSurfaceView();
         BindingContext = viewModel;
         viewModel.PageContentReady += OnPageContentReady;
         viewModel.PropertyChanged += OnViewModelPropertyChanged;
+    }
+
+    private void ConfigureSurfaceView()
+    {
+#if ANDROID
+        _readerSurfaceView.PaintSurface += OnGlPaintSurface;
+#else
+        _readerSurfaceView.PaintSurface += OnCpuPaintSurface;
+#endif
+        _readerSurfaceView.HandlerChanged += OnCanvasHandlerChanged;
+
+        var pinch = new PinchGestureRecognizer();
+        pinch.PinchUpdated += OnPinchUpdated;
+
+        var pan = new PanGestureRecognizer();
+        pan.PanUpdated += OnPanUpdated;
+
+        var doubleTap = new TapGestureRecognizer { NumberOfTapsRequired = 2 };
+        doubleTap.Tapped += OnDoubleTapped;
+
+        var singleTap = new TapGestureRecognizer { NumberOfTapsRequired = 1 };
+        singleTap.Tapped += OnSingleTapped;
+
+        _readerSurfaceView.GestureRecognizers.Add(pinch);
+        _readerSurfaceView.GestureRecognizers.Add(pan);
+        _readerSurfaceView.GestureRecognizers.Add(doubleTap);
+        _readerSurfaceView.GestureRecognizers.Add(singleTap);
+
+        CanvasHost.Content = _readerSurfaceView;
     }
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -102,7 +143,7 @@ public partial class ReaderPage : ContentPage
         if (e.PropertyName == nameof(ReaderViewModel.CurrentPageIndex) && !(ViewModel?.IsContinuousVertical ?? false))
         {
             ResetZoomAndVerticalPosition();
-            ReaderCanvas.InvalidateSurface();
+            InvalidateCanvasSurface();
         }
     }
 
@@ -110,7 +151,7 @@ public partial class ReaderPage : ContentPage
     {
         base.OnAppearing();
         ViewModel?.UpdateViewportSize(Width, Height);
-        ReaderCanvas.InvalidateSurface();
+        InvalidateCanvasSurface();
     }
 
     protected override void OnSizeAllocated(double width, double height)
@@ -118,30 +159,40 @@ public partial class ReaderPage : ContentPage
         base.OnSizeAllocated(width, height);
         ViewModel?.UpdateViewportSize(width, height);
         ClampPan();
-        ReaderCanvas.InvalidateSurface();
+        InvalidateCanvasSurface();
     }
 
     private void OnCanvasHandlerChanged(object? sender, EventArgs e)
     {
-        if (_platformInputAttached || ReaderCanvas.Handler?.PlatformView == null)
+        if (_platformInputAttached || _readerSurfaceView.Handler?.PlatformView == null)
         {
             return;
         }
 
         _platformInputAttached = true;
-        AttachPlatformInput(ReaderCanvas);
+        AttachPlatformInput(_readerSurfaceView);
     }
 
     private void OnPageContentReady(object? sender, EventArgs e)
     {
-        ReaderCanvas.InvalidateSurface();
+        InvalidateCanvasSurface();
     }
 
-    private void OnPaintSurface(object? sender, SKPaintSurfaceEventArgs e)
+#if ANDROID
+    private void OnGlPaintSurface(object? sender, SKPaintGLSurfaceEventArgs e)
+    {
+        RenderSurface(e.Surface.Canvas, e.Info.Width, e.Info.Height);
+    }
+#else
+    private void OnCpuPaintSurface(object? sender, SKPaintSurfaceEventArgs e)
+    {
+        RenderSurface(e.Surface.Canvas, e.Info.Width, e.Info.Height);
+    }
+#endif
+
+    private void RenderSurface(SKCanvas canvas, int pixelWidth, int pixelHeight)
     {
         var vm = ViewModel;
-        var canvas = e.Surface.Canvas;
-        var info = e.Info;
 
         var backgroundColor = vm?.IsNightMode ?? true
             ? new SKColor(0x10, 0x12, 0x18)
@@ -153,8 +204,8 @@ public partial class ReaderPage : ContentPage
             return;
         }
 
-        float width = info.Width;
-        float height = info.Height;
+        float width = pixelWidth;
+        float height = pixelHeight;
         if (width <= 0 || height <= 0)
         {
             return;
@@ -194,14 +245,26 @@ public partial class ReaderPage : ContentPage
         };
     }
 
+    private void DrawSurfaceBitmapOrImage(SKCanvas canvas, SKImage? image, SKBitmap bitmap, SKRect dest, SKPaint? paint)
+    {
+#if ANDROID
+        if (image != null)
+        {
+            canvas.DrawImage(image, dest, CurrentSampling, paint);
+            return;
+        }
+#endif
+        canvas.DrawBitmap(bitmap, dest, CurrentSampling, paint);
+    }
+
     private void DrawSinglePage(SKCanvas canvas, ReaderViewModel vm, int pageIndex, float canvasWidth, float canvasHeight, SKPaint? paint)
     {
         vm.RequestPageLoadIfNeeded(pageIndex);
 
-        if (!vm.TryDrawCachedPage(pageIndex, bitmap =>
+        if (!vm.TryDrawCachedPage(pageIndex, preferredFitWidthPx: null, (image, bitmap) =>
         {
             var dest = CalculateAspectFitRect(bitmap.Width, bitmap.Height, 0, 0, canvasWidth, canvasHeight);
-            canvas.DrawBitmap(bitmap, dest, CurrentSampling, paint);
+            DrawSurfaceBitmapOrImage(canvas, image, bitmap, dest, paint);
         }))
         {
             DrawPlaceholderCard(canvas, pageIndex, 0, 0, canvasWidth, canvasHeight);
@@ -227,19 +290,19 @@ public partial class ReaderPage : ContentPage
 
         var halfWidth = (canvasWidth - PageGapPx) / 2f;
 
-        vm.TryDrawCachedPage(leftIndex, leftBitmap =>
+        vm.TryDrawCachedPage(leftIndex, preferredFitWidthPx: null, (image, leftBitmap) =>
         {
             var dest = CalculateAspectFitRect(leftBitmap.Width, leftBitmap.Height, 0, 0, halfWidth, canvasHeight);
             var aligned = new SKRect(halfWidth - dest.Width, dest.Top, halfWidth, dest.Bottom);
-            canvas.DrawBitmap(leftBitmap, aligned, CurrentSampling, paint);
+            DrawSurfaceBitmapOrImage(canvas, image, leftBitmap, aligned, paint);
         });
 
-        vm.TryDrawCachedPage(rightIndex, rightBitmap =>
+        vm.TryDrawCachedPage(rightIndex, preferredFitWidthPx: null, (image, rightBitmap) =>
         {
             var rightX = halfWidth + PageGapPx;
             var dest = CalculateAspectFitRect(rightBitmap.Width, rightBitmap.Height, rightX, 0, halfWidth, canvasHeight);
             var aligned = new SKRect(rightX, dest.Top, rightX + dest.Width, dest.Bottom);
-            canvas.DrawBitmap(rightBitmap, aligned, CurrentSampling, paint);
+            DrawSurfaceBitmapOrImage(canvas, image, rightBitmap, aligned, paint);
         });
     }
 
@@ -254,10 +317,26 @@ public partial class ReaderPage : ContentPage
         return maxPageWidth * vm.GetExpectedAspectRatio(pageIndex);
     }
 
+    private int? GetContinuousFitWidthPx(float maxPageWidth)
+    {
+#if ANDROID
+        // En Android SKGLView dibuja texturas directamente en GPU sin necesidad de copia CPU escalada
+        return null;
+#else
+        if (_zoom > 1.02f || maxPageWidth <= 64f) return null;
+        return (int)Math.Ceiling(maxPageWidth);
+#endif
+    }
+
     private void DrawContinuousVertical(SKCanvas canvas, ReaderViewModel vm, float canvasWidth, float canvasHeight, SKPaint? paint)
     {
         var current = vm.CurrentPageIndex;
         var maxPageWidth = GetContinuousMaxPageWidth(canvasWidth, canvasHeight);
+        var fitWidthPx = GetContinuousFitWidthPx(maxPageWidth);
+        if (fitWidthPx.HasValue)
+        {
+            vm.SetPreferredFitWidthPx(fitWidthPx.Value);
+        }
         var x = (canvasWidth - maxPageWidth) / 2f;
 
         // Dibuja todos los espacios de página visibles hacia abajo [actual, actual + 1, actual + 2, ...]
@@ -276,14 +355,19 @@ public partial class ReaderPage : ContentPage
                 var currentY = topY;
                 var currentSlotHeight = slotHeight;
 
-                var drew = vm.TryDrawCachedPage(pageIdx, bitmap =>
+                var drew = vm.TryDrawCachedPage(pageIdx, fitWidthPx, (image, bitmap) =>
                 {
                     currentSlotHeight = maxPageWidth * (bitmap.Height / (float)Math.Max(1, bitmap.Width));
                     if (pageIdx == current)
                     {
                         _lastCurrentPageFittedHeight = currentSlotHeight;
                     }
-                    canvas.DrawBitmap(bitmap, new SKRect(x, currentY, x + maxPageWidth, currentY + currentSlotHeight), CurrentSampling, paint);
+                    DrawSurfaceBitmapOrImage(
+                        canvas,
+                        image,
+                        bitmap,
+                        new SKRect(x, currentY, x + maxPageWidth, currentY + currentSlotHeight),
+                        paint);
                 });
 
                 if (!drew)
@@ -306,13 +390,18 @@ public partial class ReaderPage : ContentPage
             vm.RequestPageLoadIfNeeded(prevIdx);
 
             float drawnHeight = prevHeight;
-            var drawn = vm.TryDrawCachedPage(prevIdx, prevBitmap =>
+            var drawn = vm.TryDrawCachedPage(prevIdx, fitWidthPx, (image, prevBitmap) =>
             {
                 drawnHeight = maxPageWidth * (prevBitmap.Height / (float)Math.Max(1, prevBitmap.Width));
                 var prevTopY = bottomY - drawnHeight;
                 if (bottomY >= 0 && prevTopY <= canvasHeight)
                 {
-                    canvas.DrawBitmap(prevBitmap, new SKRect(x, prevTopY, x + maxPageWidth, bottomY), CurrentSampling, paint);
+                    DrawSurfaceBitmapOrImage(
+                        canvas,
+                        image,
+                        prevBitmap,
+                        new SKRect(x, prevTopY, x + maxPageWidth, bottomY),
+                        paint);
                 }
             });
 
@@ -366,8 +455,8 @@ public partial class ReaderPage : ContentPage
 
     private void ApplyZoomAtFocalPoint(float newZoom, float focalXPx, float focalYPx)
     {
-        var canvasWidth = ReaderCanvas.CanvasSize.Width;
-        var canvasHeight = ReaderCanvas.CanvasSize.Height;
+        var canvasWidth = CanvasPixelWidth;
+        var canvasHeight = CanvasPixelHeight;
         if (canvasWidth <= 0 || canvasHeight <= 0) return;
 
         var clampedZoom = Math.Clamp(newZoom, MinZoom, MaxZoom);
@@ -383,7 +472,7 @@ public partial class ReaderPage : ContentPage
         _panY = focalYPx - cy - (worldY - cy) * _zoom;
 
         ClampPan(canvasWidth, canvasHeight);
-        ReaderCanvas.InvalidateSurface();
+        InvalidateCanvasSurface();
     }
 
     private void ApplyPanDelta(float deltaXPx, float deltaYPx)
@@ -406,8 +495,8 @@ public partial class ReaderPage : ContentPage
         var prevPanY = _panY;
         _panY += deltaYPx;
 
-        var width = ReaderCanvas.CanvasSize.Width;
-        var height = ReaderCanvas.CanvasSize.Height;
+        var width = CanvasPixelWidth;
+        var height = CanvasPixelHeight;
         if (width > 0 && height > 0)
         {
             var maxPanY = height * (_zoom - 1f) / 2f;
@@ -431,7 +520,7 @@ public partial class ReaderPage : ContentPage
             ClampPan();
         }
 
-        ReaderCanvas.InvalidateSurface();
+        InvalidateCanvasSurface();
     }
 
     private void ScrollContinuousVertical(float deltaScrollPx)
@@ -439,8 +528,8 @@ public partial class ReaderPage : ContentPage
         var vm = ViewModel;
         if (vm == null || vm.TotalPages <= 0) return;
 
-        var canvasWidth = ReaderCanvas.CanvasSize.Width;
-        var canvasHeight = ReaderCanvas.CanvasSize.Height;
+        var canvasWidth = CanvasPixelWidth;
+        var canvasHeight = CanvasPixelHeight;
         var maxPageWidth = GetContinuousMaxPageWidth(canvasWidth, canvasHeight);
 
         _verticalScrollOffset += deltaScrollPx;
@@ -476,10 +565,10 @@ public partial class ReaderPage : ContentPage
 
         if (targetIndex != vm.CurrentPageIndex)
         {
-            _ = vm.GoToPageAsync(targetIndex);
+            vm.SyncContinuousPage(targetIndex);
         }
 
-        ReaderCanvas.InvalidateSurface();
+        InvalidateCanvasSurface();
     }
 
     private void ResetZoomAndVerticalPosition()
@@ -489,6 +578,17 @@ public partial class ReaderPage : ContentPage
         _panX = 0f;
         _panY = 0f;
         _verticalScrollOffset = 0f;
+    }
+
+    private void QueueSmoothVerticalScroll(float deltaScrollPx)
+    {
+        if (Math.Abs(deltaScrollPx) < 0.5f) return;
+
+        _flingVelocityPxPerSec = 0f;
+        _pendingSmoothScrollPx += deltaScrollPx;
+        _isActivelyInteracting = true;
+        _lastVSyncTickTimestamp = Stopwatch.GetTimestamp();
+        StartVSyncLoop();
     }
 
     private void StartFlingInertia(float velocityPxPerSec)
@@ -502,43 +602,61 @@ public partial class ReaderPage : ContentPage
         }
 
         _isActivelyInteracting = true;
-        _lastFlingTickTimestamp = Stopwatch.GetTimestamp();
-        _flingTimer ??= Dispatcher.CreateTimer();
-        _flingTimer.Interval = TimeSpan.FromMilliseconds(12);
-        _flingTimer.Tick -= OnFlingTick;
-        _flingTimer.Tick += OnFlingTick;
-        _flingTimer.Start();
+        _lastVSyncTickTimestamp = Stopwatch.GetTimestamp();
+        StartVSyncLoop();
     }
 
-    private void OnFlingTick(object? sender, EventArgs e)
+    private void AdvanceVSyncAnimation()
     {
-        if (Math.Abs(_flingVelocityPxPerSec) < 45f || ViewModel == null || !ViewModel.IsContinuousVertical)
+        if (ViewModel == null || !ViewModel.IsContinuousVertical)
         {
             StopFlingInertia();
             return;
         }
 
         var now = Stopwatch.GetTimestamp();
-        var dt = (float)((now - _lastFlingTickTimestamp) / (double)Stopwatch.Frequency);
+        var dt = (float)((now - _lastVSyncTickTimestamp) / (double)Stopwatch.Frequency);
         dt = Math.Clamp(dt, 0.001f, 0.05f);
-        _lastFlingTickTimestamp = now;
+        _lastVSyncTickTimestamp = now;
 
-        var stepPx = _flingVelocityPxPerSec * dt;
-        ApplyPanDelta(0f, stepPx);
+        if (Math.Abs(_pendingSmoothScrollPx) > 0.5f)
+        {
+            var ease = 1f - MathF.Exp(-20f * dt);
+            var step = _pendingSmoothScrollPx * ease;
+            _pendingSmoothScrollPx -= step;
+            ScrollContinuousVertical(step);
+            if (Math.Abs(_pendingSmoothScrollPx) <= 0.5f)
+            {
+                if (Math.Abs(_pendingSmoothScrollPx) > 0.01f)
+                {
+                    ScrollContinuousVertical(_pendingSmoothScrollPx);
+                }
+                _pendingSmoothScrollPx = 0f;
+                StopFlingInertia();
+            }
+            return;
+        }
+
+        if (Math.Abs(_flingVelocityPxPerSec) < 45f)
+        {
+            StopFlingInertia();
+            return;
+        }
+
+        var flingStepPx = _flingVelocityPxPerSec * dt;
+        ApplyPanDelta(0f, flingStepPx);
         _flingVelocityPxPerSec *= MathF.Exp(-2.6f * dt);
     }
 
     private void StopFlingInertia()
     {
-        if (_flingTimer != null && _flingTimer.IsRunning)
-        {
-            _flingTimer.Stop();
-        }
+        StopVSyncLoop();
         _flingVelocityPxPerSec = 0f;
+        _pendingSmoothScrollPx = 0f;
         if (_isActivelyInteracting)
         {
             _isActivelyInteracting = false;
-            ReaderCanvas.InvalidateSurface();
+            InvalidateCanvasSurface();
         }
     }
 
@@ -585,8 +703,8 @@ public partial class ReaderPage : ContentPage
 
     private void ClampPan()
     {
-        var width = ReaderCanvas.CanvasSize.Width;
-        var height = ReaderCanvas.CanvasSize.Height;
+        var width = CanvasPixelWidth;
+        var height = CanvasPixelHeight;
         if (width > 0 && height > 0)
         {
             ClampPan(width, height);
@@ -611,12 +729,12 @@ public partial class ReaderPage : ContentPage
 
     private float DipToPixelScale()
     {
-        if (ReaderCanvas.Width <= 0 || ReaderCanvas.CanvasSize.Width <= 0)
+        if (_readerSurfaceView.Width <= 0 || CanvasPixelWidth <= 0)
         {
             return (float)DeviceDisplay.Current.MainDisplayInfo.Density;
         }
 
-        return (float)(ReaderCanvas.CanvasSize.Width / ReaderCanvas.Width);
+        return (float)(CanvasPixelWidth / _readerSurfaceView.Width);
     }
 
     private void OnPinchUpdated(object? sender, PinchGestureUpdatedEventArgs e)
@@ -631,14 +749,14 @@ public partial class ReaderPage : ContentPage
         if (e.Status == GestureStatus.Completed || e.Status == GestureStatus.Canceled)
         {
             _isActivelyInteracting = false;
-            ReaderCanvas.InvalidateSurface();
+            InvalidateCanvasSurface();
             return;
         }
 
         if (e.Status != GestureStatus.Running) return;
 
-        var canvasWidth = ReaderCanvas.CanvasSize.Width;
-        var canvasHeight = ReaderCanvas.CanvasSize.Height;
+        var canvasWidth = CanvasPixelWidth;
+        var canvasHeight = CanvasPixelHeight;
         if (canvasWidth <= 0 || canvasHeight <= 0) return;
 
         _isActivelyInteracting = true;
@@ -700,13 +818,13 @@ public partial class ReaderPage : ContentPage
                     else
                     {
                         _isActivelyInteracting = false;
-                        ReaderCanvas.InvalidateSurface();
+                        InvalidateCanvasSurface();
                     }
                 }
                 else if (_zoom > 1.02f)
                 {
                     _isActivelyInteracting = false;
-                    ReaderCanvas.InvalidateSurface();
+                    InvalidateCanvasSurface();
                 }
                 else
                 {
@@ -726,19 +844,19 @@ public partial class ReaderPage : ContentPage
 
     private bool TryScrollContinuousEdgeTap(double tapYDips, float canvasHeight)
     {
-        if (ReaderCanvas.Height <= 0 || canvasHeight <= 0) return false;
+        if (_readerSurfaceView.Height <= 0 || canvasHeight <= 0) return false;
 
-        var normalizedY = tapYDips / ReaderCanvas.Height;
+        var normalizedY = tapYDips / _readerSurfaceView.Height;
         var scrollStepPx = Math.Max(220f, canvasHeight * 0.70f);
         if (normalizedY < 0.22)
         {
-            ApplyPanDelta(0f, scrollStepPx);
+            QueueSmoothVerticalScroll(-scrollStepPx);
             return true;
         }
 
         if (normalizedY > 0.78)
         {
-            ApplyPanDelta(0f, -scrollStepPx);
+            QueueSmoothVerticalScroll(scrollStepPx);
             return true;
         }
 
@@ -748,14 +866,14 @@ public partial class ReaderPage : ContentPage
     private void OnDoubleTapped(object? sender, TappedEventArgs e)
     {
         var vm = ViewModel;
-        var canvasWidth = ReaderCanvas.CanvasSize.Width;
-        var canvasHeight = ReaderCanvas.CanvasSize.Height;
-        if (vm == null || canvasWidth <= 0 || canvasHeight <= 0 || ReaderCanvas.Width <= 0) return;
+        var canvasWidth = CanvasPixelWidth;
+        var canvasHeight = CanvasPixelHeight;
+        if (vm == null || canvasWidth <= 0 || canvasHeight <= 0 || _readerSurfaceView.Width <= 0) return;
 
-        var pos = e.GetPosition(ReaderCanvas);
+        var pos = e.GetPosition(_readerSurfaceView);
         if (pos.HasValue)
         {
-            var normalizedX = pos.Value.X / ReaderCanvas.Width;
+            var normalizedX = pos.Value.X / _readerSurfaceView.Width;
             // Los extremos izquierdo y derecho están reservados para navegación rápida, nunca para zoom
             if (normalizedX < 0.25 || normalizedX > 0.75)
             {
@@ -784,11 +902,11 @@ public partial class ReaderPage : ContentPage
     private void OnSingleTapped(object? sender, TappedEventArgs e)
     {
         var vm = ViewModel;
-        if (vm == null || ReaderCanvas.Width <= 0) return;
+        if (vm == null || _readerSurfaceView.Width <= 0) return;
 
         StopFlingInertia();
 
-        var pos = e.GetPosition(ReaderCanvas);
+        var pos = e.GetPosition(_readerSurfaceView);
         if (!pos.HasValue)
         {
             vm.ToggleHudCommand.Execute(null);
@@ -797,14 +915,14 @@ public partial class ReaderPage : ContentPage
 
         if (vm.IsContinuousVertical)
         {
-            if (!TryScrollContinuousEdgeTap(pos.Value.Y, ReaderCanvas.CanvasSize.Height))
+            if (!TryScrollContinuousEdgeTap(pos.Value.Y, CanvasPixelHeight))
             {
                 vm.ToggleHudCommand.Execute(null);
             }
             return;
         }
 
-        var normalizedX = pos.Value.X / ReaderCanvas.Width;
+        var normalizedX = pos.Value.X / _readerSurfaceView.Width;
         if (normalizedX < 0.25)
         {
             ResetZoomAndVerticalPosition();
@@ -856,6 +974,8 @@ public partial class ReaderPage : ContentPage
         _platformInputAttached = false;
     }
 
-    private partial void AttachPlatformInput(SKCanvasView canvasView);
+    private partial void AttachPlatformInput(View surfaceView);
     private partial void DetachPlatformInput();
+    private partial void StartVSyncLoop();
+    private partial void StopVSyncLoop();
 }
