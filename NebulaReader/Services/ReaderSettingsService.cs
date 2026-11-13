@@ -23,7 +23,7 @@ public sealed class ReaderSettingsService : IReaderSettingsService
 
     public bool NightReadingModeEnabled
     {
-        get => Preferences.Default.Get(NightModeKey, true);
+        get => Preferences.Default.Get(NightModeKey, false);
         set
         {
             if (NightReadingModeEnabled == value) return;

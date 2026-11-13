@@ -35,9 +35,8 @@ public sealed class LibraryDatabase : ILibraryDatabase
         var items = await conn.Table<BookItem>().ToListAsync().ConfigureAwait(false);
 
         return items
-            .OrderByDescending(b => b.LastReadAtUtc ?? DateTime.MinValue)
-            .ThenByDescending(b => b.AddedAtUtc)
-            .ThenBy(b => b.Title, NaturalSortComparer.Instance)
+            .OrderBy(b => b.Title, NaturalSortComparer.Instance)
+            .ThenBy(b => b.FilePath, NaturalSortComparer.Instance)
             .ToList();
     }
 

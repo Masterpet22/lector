@@ -151,23 +151,35 @@ public partial class LibraryViewModel : BaseViewModel
 
     private void UpsertBookInCollection(BookItem book)
     {
-        var index = -1;
+        var existingIndex = -1;
         for (var i = 0; i < Books.Count; i++)
         {
             if (Books[i].Id == book.Id)
             {
-                index = i;
+                existingIndex = i;
                 break;
             }
         }
 
-        if (index >= 0)
+        if (existingIndex >= 0)
         {
-            Books[index] = book;
+            Books.RemoveAt(existingIndex);
         }
-        else
+
+        var insertIndex = 0;
+        while (insertIndex < Books.Count && CompareBooksAlphabetically(Books[insertIndex], book) <= 0)
         {
-            Books.Insert(0, book);
+            insertIndex++;
         }
+
+        Books.Insert(insertIndex, book);
+    }
+
+    private static int CompareBooksAlphabetically(BookItem left, BookItem right)
+    {
+        var titleCmp = NaturalSortComparer.Instance.Compare(left.Title, right.Title);
+        return titleCmp != 0
+            ? titleCmp
+            : NaturalSortComparer.Instance.Compare(left.FilePath, right.FilePath);
     }
 }
