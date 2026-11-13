@@ -18,13 +18,30 @@ public partial class LibraryViewModel : BaseViewModel
     public partial ObservableCollection<BookItem> Books { get; set; } = new();
 
     [ObservableProperty]
-    public partial string StatusMessage { get; set; } = "Biblioteca lista. Abre un archivo CBZ, CBR o PDF.";
+    public partial string StatusMessage { get; set; } = "Biblioteca lista. Abre un archivo o escanea una carpeta.";
 
     public LibraryViewModel(ILibraryService libraryService, IFilePickerService filePickerService)
     {
         _libraryService = libraryService;
         _filePickerService = filePickerService;
+        _libraryService.BookUpdated += OnBookUpdated;
         Title = "Biblioteca - Nebula Reader";
+    }
+
+    private void OnBookUpdated(object? sender, BookItem updated)
+    {
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            var existing = Books.FirstOrDefault(b => b.Id == updated.Id);
+            if (existing != null && !ReferenceEquals(existing, updated))
+            {
+                existing.CoverThumbnailPath = updated.CoverThumbnailPath;
+                existing.TotalPages = updated.TotalPages;
+                existing.CurrentPage = updated.CurrentPage;
+                existing.Status = updated.Status;
+                existing.LastReadAtUtc = updated.LastReadAtUtc;
+            }
+        });
     }
 
     [RelayCommand]
@@ -63,10 +80,7 @@ public partial class LibraryViewModel : BaseViewModel
             }
 
             var book = await _libraryService.ImportFileAsync(filePath);
-            if (!Books.Any(b => b.Id == book.Id))
-            {
-                Books.Add(book);
-            }
+            UpsertBookInCollection(book);
 
             StatusMessage = $"Importado: {book.Title}";
             await Shell.Current.GoToAsync("ReaderPage", new Dictionary<string, object>
@@ -77,6 +91,41 @@ public partial class LibraryViewModel : BaseViewModel
         catch (Exception ex)
         {
             StatusMessage = $"Error al abrir archivo: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
+        }
+    }
+
+    [RelayCommand]
+    private async Task ImportFolderAsync()
+    {
+        if (IsBusy) return;
+        IsBusy = true;
+        try
+        {
+            var folderPathOrUri = await _filePickerService.PickFolderAsync();
+            if (string.IsNullOrWhiteSpace(folderPathOrUri))
+            {
+                StatusMessage = "Selección de carpeta cancelada.";
+                return;
+            }
+
+            StatusMessage = "Escaneando carpeta...";
+            var imported = await _libraryService.ImportFolderAsync(folderPathOrUri);
+            foreach (var book in imported)
+            {
+                UpsertBookInCollection(book);
+            }
+
+            StatusMessage = imported.Count > 0
+                ? $"Se indexaron {imported.Count} documento(s). Total en biblioteca: {Books.Count}."
+                : "No se encontraron archivos CBZ, CBR o PDF en la carpeta seleccionada.";
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Error al escanear carpeta: {ex.Message}";
         }
         finally
         {
@@ -99,5 +148,26 @@ public partial class LibraryViewModel : BaseViewModel
     {
         return Shell.Current.GoToAsync("SettingsPage");
     }
-}
 
+    private void UpsertBookInCollection(BookItem book)
+    {
+        var index = -1;
+        for (var i = 0; i < Books.Count; i++)
+        {
+            if (Books[i].Id == book.Id)
+            {
+                index = i;
+                break;
+            }
+        }
+
+        if (index >= 0)
+        {
+            Books[index] = book;
+        }
+        else
+        {
+            Books.Insert(0, book);
+        }
+    }
+}

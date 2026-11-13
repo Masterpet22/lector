@@ -60,18 +60,18 @@ Aquí se construye el núcleo que unifica los tres formatos bajo una misma inter
 
 ---
 
-## Fase 3: Sistema de Biblioteca, Indexación y Permisos
+## Fase 3: Sistema de Biblioteca, Indexación y Permisos ✅ Completada
 
 En Windows el acceso a carpetas es directo, pero en Android es obligatorio respetar *Scoped Storage* para evitar bloqueos en versiones modernas del sistema.
 
-1. **Selector de Archivos y Carpetas:**
+- [x] **Selector de Archivos y Carpetas:**
    * Usar `FilePicker` de .NET MAUI para abrir archivos individuales (`.cbr`, `.cbz`, `.pdf`).
    * Implementar un selector de carpetas nativo (`Intent.ActionOpenDocumentTree` en Android con permisos persistentes y `FolderPicker` de WinUI en Windows) para escanear colecciones completas.
-2. **Base de Datos SQLite (`LibraryDatabase`):**
+- [x] **Base de Datos SQLite (`LibraryDatabase`):**
    * Almacenar ruta/URI del archivo, título, formato, total de páginas, última página leída, fecha de última lectura y estado (No leído, Leyendo, Completado).
-3. **Generación de Portadas en Segundo Plano:**
+- [x] **Generación de Portadas en Segundo Plano:**
    * Al importar archivos nuevos, extraer únicamente la página `0`, redimensionarla a un ancho fijo (ej. 300 px) con **SkiaSharp** y guardarla en `FileSystem.CacheDirectory` para que la cuadrícula de la biblioteca cargue de forma instantánea.
-4. **Interfaz de Biblioteca (`LibraryPage`):**
+- [x] **Interfaz de Biblioteca (`LibraryPage`):**
    * Usar `CollectionView` con `GridItemsLayout` adaptable: 2–3 columnas en pantallas táctiles verticales (Android) y 5–7 columnas dinámicas al redimensionar la ventana en escritorio (Windows).
 
 ---

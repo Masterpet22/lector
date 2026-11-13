@@ -8,41 +8,98 @@
              Title="{Binding Title}">
 
     <Grid RowDefinitions="Auto,*,Auto" Padding="16" RowSpacing="12">
-        <HorizontalStackLayout Grid.Row="0" Spacing="10">
+        <FlexLayout Grid.Row="0"
+                    Wrap="Wrap"
+                    AlignItems="Center"
+                    JustifyContent="Start">
             <Button Text="Abrir Archivo"
+                    Margin="0,0,10,8"
                     Command="{Binding OpenFileCommand}" />
+            <Button Text="Escanear Carpeta"
+                    Margin="0,0,10,8"
+                    Command="{Binding ImportFolderCommand}" />
             <Button Text="Configuración"
+                    Margin="0,0,10,8"
                     Command="{Binding OpenSettingsCommand}" />
-        </HorizontalStackLayout>
+            <ActivityIndicator IsRunning="{Binding IsBusy}"
+                               IsVisible="{Binding IsBusy}"
+                               Margin="4,0,0,8"
+                               VerticalOptions="Center" />
+        </FlexLayout>
 
         <CollectionView Grid.Row="1"
                         ItemsSource="{Binding Books}"
-                        SelectionMode="Single">
+                        SelectionMode="None">
             <CollectionView.ItemsLayout>
-                <GridItemsLayout Orientation="Vertical" Span="2" HorizontalItemSpacing="10" VerticalItemSpacing="10" />
+                <GridItemsLayout x:Name="LibraryGridLayout"
+                                 Orientation="Vertical"
+                                 Span="2"
+                                 HorizontalItemSpacing="12"
+                                 VerticalItemSpacing="12" />
             </CollectionView.ItemsLayout>
+
             <CollectionView.EmptyView>
-                <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="8">
+                <VerticalStackLayout VerticalOptions="Center" HorizontalOptions="Center" Spacing="8" Padding="24">
                     <Label Text="Tu biblioteca está vacía"
                            FontSize="18"
                            FontAttributes="Bold"
                            HorizontalTextAlignment="Center" />
-                    <Label Text="Pulsa 'Abrir Archivo' para importar un CBZ, CBR o PDF."
+                    <Label Text="Pulsa 'Abrir Archivo' o 'Escanear Carpeta' para importar cómics (.cbz, .cbr) o PDF."
                            HorizontalTextAlignment="Center"
                            Opacity="0.7" />
                 </VerticalStackLayout>
             </CollectionView.EmptyView>
+
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:BookItem">
-                    <Border Padding="12" StrokeThickness="1">
+                    <Border Padding="8"
+                            StrokeThickness="1"
+                            StrokeShape="RoundRectangle 10">
                         <Border.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:LibraryViewModel}}, Path=OpenBookCommand}"
                                                   CommandParameter="{Binding .}" />
                         </Border.GestureRecognizers>
-                        <VerticalStackLayout Spacing="4">
-                            <Label Text="{Binding Title}" FontAttributes="Bold" LineBreakMode="TailTruncation" />
-                            <Label Text="{Binding Format}" FontSize="12" Opacity="0.7" />
-                        </VerticalStackLayout>
+
+                        <Grid RowDefinitions="200,Auto,Auto" RowSpacing="6">
+                            <Grid Grid.Row="0">
+                                <Border BackgroundColor="{AppThemeBinding Light=#E8EAF6, Dark=#1F2430}"
+                                        StrokeThickness="0"
+                                        StrokeShape="RoundRectangle 6">
+                                    <Label Text="{Binding Format}"
+                                           HorizontalOptions="Center"
+                                           VerticalOptions="Center"
+                                           FontAttributes="Bold"
+                                           Opacity="0.45" />
+                                </Border>
+
+                                <Image Source="{Binding CoverThumbnailPath}"
+                                       Aspect="AspectFill" />
+                            </Grid>
+
+                            <Label Grid.Row="1"
+                                   Text="{Binding Title}"
+                                   FontAttributes="Bold"
+                                   FontSize="14"
+                                   LineBreakMode="TailTruncation"
+                                   MaxLines="2" />
+
+                            <Grid Grid.Row="2" ColumnDefinitions="*,Auto">
+                                <Label Grid.Column="0"
+                                       Text="{Binding Format}"
+                                       FontSize="11"
+                                       Opacity="0.7" />
+                                <Label Grid.Column="1"
+                                       FontSize="11"
+                                       Opacity="0.7">
+                                    <Label.Text>
+                                        <MultiBinding StringFormat="Pág. {0}/{1}">
+                                            <Binding Path="CurrentPage" />
+                                            <Binding Path="TotalPages" />
+                                        </MultiBinding>
+                                    </Label.Text>
+                                </Label>
+                            </Grid>
+                        </Grid>
                     </Border>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
@@ -54,4 +111,3 @@
                Opacity="0.8" />
     </Grid>
 </ContentPage>
-

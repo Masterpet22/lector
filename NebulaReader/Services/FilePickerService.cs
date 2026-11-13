@@ -5,14 +5,23 @@ namespace NebulaReader.Services;
 /// </summary>
 public partial class FilePickerService : IFilePickerService
 {
-    private static readonly string[] SupportedExtensions = [".cbz", ".cbr", ".pdf"];
+    internal static readonly HashSet<string> SupportedBookExtensions = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ".cbz",
+        ".cbr",
+        ".pdf"
+    };
+
+    private static readonly string[] PickerExtensions = [".cbz", ".cbr", ".pdf"];
 
     public async Task<string?> PickBookFileAsync(CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
+
         var fileTypes = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
         {
-            { DevicePlatform.Android, new[] { "application/pdf", "application/vnd.comicbook+zip", "application/vnd.comicbook-rar", "*/*" } },
-            { DevicePlatform.WinUI, SupportedExtensions }
+            { DevicePlatform.Android, new[] { "application/pdf", "application/vnd.comicbook+zip", "application/vnd.comicbook-rar", "application/zip", "application/x-rar-compressed", "*/*" } },
+            { DevicePlatform.WinUI, PickerExtensions }
         });
 
         var result = await FilePicker.Default.PickAsync(new PickOptions
@@ -29,6 +38,22 @@ public partial class FilePickerService : IFilePickerService
         return PickFolderPlatformAsync(ct);
     }
 
-    private partial Task<string?> PickFolderPlatformAsync(CancellationToken ct);
-}
+    public Task<IReadOnlyList<string>> EnumerateBookFilesAsync(string folderPathOrUri, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folderPathOrUri);
+        return EnumerateBookFilesPlatformAsync(folderPathOrUri, ct);
+    }
 
+    internal static bool IsSupportedBookFileName(string? fileName)
+    {
+        if (string.IsNullOrWhiteSpace(fileName) || fileName.StartsWith('.'))
+        {
+            return false;
+        }
+
+        return SupportedBookExtensions.Contains(Path.GetExtension(fileName));
+    }
+
+    private partial Task<string?> PickFolderPlatformAsync(CancellationToken ct);
+    private partial Task<IReadOnlyList<string>> EnumerateBookFilesPlatformAsync(string folderPathOrUri, CancellationToken ct);
+}
