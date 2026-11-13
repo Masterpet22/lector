@@ -22,6 +22,7 @@ public static class MauiProgram
             });
 
         // Servicios compartidos (Singleton)
+        builder.Services.AddSingleton<IBookSourceFactory, BookSourceFactory>();
         builder.Services.AddSingleton<ILibraryService, LibraryService>();
         builder.Services.AddSingleton<IFilePickerService, FilePickerService>();
         builder.Services.AddSingleton<IPageCacheService, PageCacheService>();

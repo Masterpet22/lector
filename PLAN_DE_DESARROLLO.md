@@ -32,11 +32,11 @@ El objetivo de esta fase es preparar la estructura limpia para que el 90 % del c
 
 ---
 
-## Fase 2: Motor de Lectura y Abstracción de Formatos (`Core`)
+## Fase 2: Motor de Lectura y Abstracción de Formatos (`Core`) ✅ Completada
 
 Aquí se construye el núcleo que unifica los tres formatos bajo una misma interfaz para que el visor no tenga que saber si está abriendo un PDF o un cómic comprimido.
 
-1. **Interfaz Unificada (`IBookSource`):**
+- [x] **Interfaz Unificada (`IBookSource`):**
    ```csharp
    public interface IBookSource : IDisposable
    {
@@ -46,17 +46,17 @@ Aquí se construye el núcleo que unifica los tres formatos bajo una misma inter
        Task<Stream> GetCoverThumbnailAsync();
    }
    ```
-2. **Implementación CBZ (`CbzBookSource`):**
+- [x] **Implementación CBZ (`CbzBookSource`):**
    * Abrir el archivo usando `ZipArchive` en modo lectura.
    * Filtrar entradas por extensiones de imagen (`.jpg`, `.jpeg`, `.png`, `.webp`) ignorando carpetas ocultas (`__MACOSX`).
    * **Ordenamiento Natural (*Natural Sort*):** Implementar un comparador alfanumérico para que `pagina_2.jpg` aparezca antes que `pagina_10.jpg`.
-3. **Implementación CBR (`CbrBookSource`):**
-   * Utilizar `RarArchive.Open(stream)` de **SharpCompress**.
+- [x] **Implementación CBR (`CbrBookSource`):**
+   * Utilizar `RarArchive.OpenArchive(stream)` de **SharpCompress**.
    * Indexar las entradas de imagen al abrir el archivo para permitir acceso directo por índice.
-4. **Implementación PDF (`PdfBookSource`):**
+- [x] **Implementación PDF (`PdfBookSource`):**
    * Usar **clases parciales** (`PdfBookSource.Android.cs` y `PdfBookSource.Windows.cs`).
-   * Renderizar cada página solicitada a un `Stream` en formato PNG/JPEG escalado a la densidad de pantalla del dispositivo (`DeviceDisplay.MainDisplayInfo.Density`) para evitar imágenes borrosas o excesivamente pesadas.
-5. **Fábrica (`BookSourceFactory`):** Clase que recibe la ruta o URI del archivo, inspecciona su extensión o cabecera (*magic bytes*) y devuelve la instancia correspondiente de `IBookSource`.
+   * Renderizar cada página solicitada a un `Stream` en formato PNG/JPEG escalado a la densidad de pantalla del dispositivo (`DeviceDisplay.Current.MainDisplayInfo.Density`) para evitar imágenes borrosas o excesivamente pesadas.
+- [x] **Fábrica (`BookSourceFactory`):** Clase que recibe la ruta o URI del archivo, inspecciona su extensión o cabecera (*magic bytes*) y devuelve la instancia correspondiente de `IBookSource`.
 
 ---
 

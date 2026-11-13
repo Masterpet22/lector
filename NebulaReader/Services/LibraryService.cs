@@ -8,33 +8,49 @@ namespace NebulaReader.Services;
 /// </summary>
 public class LibraryService : ILibraryService
 {
+    private readonly IBookSourceFactory _bookSourceFactory;
     private readonly List<BookItem> _books = new();
     private readonly Dictionary<string, ReadingProgress> _progressMap = new();
+
+    public LibraryService(IBookSourceFactory bookSourceFactory)
+    {
+        _bookSourceFactory = bookSourceFactory;
+    }
 
     public Task<IReadOnlyList<BookItem>> GetBooksAsync(CancellationToken ct = default)
     {
         return Task.FromResult<IReadOnlyList<BookItem>>(_books.ToList());
     }
 
-    public Task<BookItem> ImportFileAsync(string filePath, CancellationToken ct = default)
+    public async Task<BookItem> ImportFileAsync(string filePath, CancellationToken ct = default)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(filePath);
 
         var existing = _books.FirstOrDefault(b => string.Equals(b.FilePath, filePath, StringComparison.OrdinalIgnoreCase));
         if (existing != null)
         {
-            return Task.FromResult(existing);
+            return existing;
+        }
+
+        BookFormat format;
+        try
+        {
+            format = await _bookSourceFactory.DetectFormatAsync(filePath, ct).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is FileNotFoundException or DirectoryNotFoundException or UnauthorizedAccessException or NotSupportedException)
+        {
+            format = _bookSourceFactory.DetectFormat([], filePath);
         }
 
         var item = new BookItem
         {
             Title = Path.GetFileNameWithoutExtension(filePath),
             FilePath = filePath,
-            Format = DetectFormat(filePath)
+            Format = format
         };
 
         _books.Add(item);
-        return Task.FromResult(item);
+        return item;
     }
 
     public Task<IReadOnlyList<BookItem>> ImportFolderAsync(string folderPath, CancellationToken ct = default)
@@ -59,17 +75,6 @@ public class LibraryService : ILibraryService
         }
 
         return Task.CompletedTask;
-    }
-
-    private static BookFormat DetectFormat(string filePath)
-    {
-        return Path.GetExtension(filePath).ToLowerInvariant() switch
-        {
-            ".cbz" or ".zip" => BookFormat.Cbz,
-            ".cbr" or ".rar" => BookFormat.Cbr,
-            ".pdf" => BookFormat.Pdf,
-            _ => BookFormat.Unknown
-        };
     }
 }
 

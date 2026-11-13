@@ -12,6 +12,9 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
 {
     private readonly ILibraryService _libraryService;
     private readonly IPageCacheService _pageCacheService;
+    private readonly IBookSourceFactory _bookSourceFactory;
+    private IBookSource? _bookSource;
+    private CancellationTokenSource? _loadCts;
 
     [ObservableProperty]
     public partial BookItem? CurrentBook { get; set; }
@@ -25,10 +28,14 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     [ObservableProperty]
     public partial string PageIndicator { get; set; } = "Página 0 / 0";
 
-    public ReaderViewModel(ILibraryService libraryService, IPageCacheService pageCacheService)
+    public ReaderViewModel(
+        ILibraryService libraryService,
+        IPageCacheService pageCacheService,
+        IBookSourceFactory bookSourceFactory)
     {
         _libraryService = libraryService;
         _pageCacheService = pageCacheService;
+        _bookSourceFactory = bookSourceFactory;
         Title = "Lector";
     }
 
@@ -41,6 +48,56 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
             TotalPages = book.TotalPages;
             CurrentPageIndex = Math.Max(0, book.CurrentPage - 1);
             UpdateIndicator();
+            _ = LoadBookSourceAsync(book);
+        }
+    }
+
+    private async Task LoadBookSourceAsync(BookItem book)
+    {
+        _loadCts?.Cancel();
+        _loadCts?.Dispose();
+        _loadCts = new CancellationTokenSource();
+        var ct = _loadCts.Token;
+
+        IsBusy = true;
+        try
+        {
+            _bookSource?.Dispose();
+            _bookSource = null;
+
+            if (string.IsNullOrWhiteSpace(book.FilePath))
+            {
+                return;
+            }
+
+            var source = await _bookSourceFactory.CreateAsync(book.FilePath, ct);
+            if (ct.IsCancellationRequested)
+            {
+                source.Dispose();
+                return;
+            }
+
+            _bookSource = source;
+            TotalPages = source.PageCount;
+            book.TotalPages = source.PageCount;
+            if (TotalPages > 0 && CurrentPageIndex >= TotalPages)
+            {
+                CurrentPageIndex = TotalPages - 1;
+            }
+
+            UpdateIndicator();
+        }
+        catch (OperationCanceledException)
+        {
+            // Carga cancelada al abrir otro libro o cerrar el lector
+        }
+        catch (Exception ex)
+        {
+            PageIndicator = $"Error al cargar: {ex.Message}";
+        }
+        finally
+        {
+            IsBusy = false;
         }
     }
 
@@ -67,6 +124,13 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     [RelayCommand]
     private async Task CloseReaderAsync()
     {
+        _loadCts?.Cancel();
+        _loadCts?.Dispose();
+        _loadCts = null;
+
+        _bookSource?.Dispose();
+        _bookSource = null;
+
         if (CurrentBook != null)
         {
             _pageCacheService.ClearBook(CurrentBook.Id);
@@ -78,7 +142,7 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     {
         PageIndicator = TotalPages > 0
             ? $"Página {CurrentPageIndex + 1} / {TotalPages}"
-            : "Sin páginas cargadas (Fase 2)";
+            : "Sin páginas disponibles";
     }
 
     private Task PersistProgressAsync()
