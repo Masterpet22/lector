@@ -15,6 +15,8 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
 {
     private const int PhoneMaxDecodeDimensionPx = 2400;
     private const int DesktopMaxDecodeDimensionPx = 3600;
+    private const int PdfPhoneMaxDecodeDimensionPx = 1440;
+    private const int PdfDesktopMaxDecodeDimensionPx = 2000;
     private const int SpaceProbeLookaheadCount = 12;
     private static readonly TimeSpan ProgressPersistDebounce = TimeSpan.FromMilliseconds(750);
 
@@ -34,6 +36,7 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     private readonly object _pageLoadSync = new();
     private readonly HashSet<int> _inFlightPages = new();
     private readonly HashSet<(int PageIndex, int WidthPx)> _inFlightFitBuilds = new();
+    private volatile bool _pdfAspectScanStarted;
     private float _defaultPageAspectRatio = 1.414f;
     private int _lastNavigationDirection = 1;
     private double _viewportWidth;
@@ -461,6 +464,7 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
 
         _pageAspectRatios.Clear();
         _defaultPageAspectRatio = 1.414f;
+        _pdfAspectScanStarted = false;
 
         _bookSource?.Dispose();
         _bookSource = null;
@@ -500,6 +504,7 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
 
         _pageAspectRatios.Clear();
         _defaultPageAspectRatio = 1.414f;
+        _pdfAspectScanStarted = false;
 
         IsBusy = true;
         try
@@ -566,8 +571,6 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     {
         _ = Task.Run(async () =>
         {
-            var pdfAspectScanStarted = source is not ISkiaBookSource;
-
             while (!ct.IsCancellationRequested)
             {
                 var nextBitmapPage = FindNextPageToPreload(book.Id);
@@ -576,11 +579,14 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
                     await EnsurePageDecodedAsync(book.Id, source, nextBitmapPage, ct).ConfigureAwait(false);
                 }
 
-                // Lanza el escaneo de proporciones PDF después de tener listas la(s) página(s) iniciales visibles
-                // para evitar que compita por el lock nativo del PDF durante la apertura.
-                if (!pdfAspectScanStarted && source is ISkiaBookSource skiaSource && AreInitialVisiblePagesCached(book.Id))
+                // El escaneo completo de proporciones PDF solo hace falta en lectura continua;
+                // evitarlo en vista normal/doble elimina contención sobre _renderLock/_renderGate al pasar páginas.
+                if (IsContinuousVertical
+                    && !_pdfAspectScanStarted
+                    && source is ISkiaBookSource skiaSource
+                    && AreInitialVisiblePagesCached(book.Id))
                 {
-                    pdfAspectScanStarted = true;
+                    _pdfAspectScanStarted = true;
                     _ = LoadPdfAspectRatiosAsync(skiaSource, ct);
                 }
 
@@ -685,7 +691,18 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
             return center + 1;
         }
 
+        // Prioriza los próximos 2 pasos en la dirección de lectura antes de rellenar páginas anteriores.
         var maxStep = Math.Max(center - minKeep, maxKeep - center);
+        var forwardLead = Math.Min(maxStep, IsDoublePageActive ? 3 : 2);
+        for (var step = 1; step <= forwardLead; step++)
+        {
+            var forward = center + (step * dir);
+            if (forward >= minKeep && forward <= maxKeep && IsCandidateNeeded(bookId, forward))
+            {
+                return forward;
+            }
+        }
+
         for (var step = 1; step <= maxStep; step++)
         {
             var forward = center + (step * dir);
@@ -764,7 +781,8 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
 
         try
         {
-            var maxDim = GetPlatformMaxDecodeDimensionPx();
+            var isPdf = source is ISkiaBookSource;
+            var maxDim = GetPlatformMaxDecodeDimensionPx(isPdf);
             SKBitmap? bitmap = null;
 
             if (source is ISkiaBookSource skiaSource)
@@ -781,20 +799,24 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
             if (bitmap == null) return;
 
             RecordAspectRatio(pageIndex, bitmap.Width, bitmap.Height);
+
+            // Crea la copia ajustada mientras este método aún posee de forma exclusiva el bitmap,
+            // evitando lecturas concurrentes sobre bitmaps ya expulsados/liberados al cambiar de página.
+            var preferredWidth = _preferredFitWidthPx;
+            SKBitmap? fitted = null;
+            if (preferredWidth > 64 && bitmap.Width > preferredWidth * 1.15f)
+            {
+                fitted = CreateFittedBitmapSafe(bitmap, preferredWidth);
+            }
+
             var (minKeep, maxKeep) = GetKeepWindowRange(CurrentPageIndex);
             _pageCacheService.StoreBitmapInRange(bookId, pageIndex, bitmap, minKeep, maxKeep);
-            RaisePageContentReady();
-
-            var preferredWidth = _preferredFitWidthPx;
-            if (preferredWidth > 64 && bitmap.Width > preferredWidth * 1.35f)
+            if (fitted != null)
             {
-                var fitted = CreateFittedBitmapSafe(bitmap, preferredWidth);
-                if (fitted != null)
-                {
-                    _pageCacheService.SetFittedBitmap(bookId, pageIndex, fitted, preferredWidth);
-                    RaisePageContentReady();
-                }
+                _pageCacheService.SetFittedBitmap(bookId, pageIndex, fitted, preferredWidth);
             }
+
+            RaisePageContentReady();
         }
         catch (OperationCanceledException)
         {
@@ -882,8 +904,15 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
         }
     }
 
-    private static int GetPlatformMaxDecodeDimensionPx()
+    private static int GetPlatformMaxDecodeDimensionPx(bool isPdf)
     {
+        if (isPdf)
+        {
+            return IsPhoneDevice()
+                ? PdfPhoneMaxDecodeDimensionPx
+                : PdfDesktopMaxDecodeDimensionPx;
+        }
+
         return IsPhoneDevice()
             ? PhoneMaxDecodeDimensionPx
             : DesktopMaxDecodeDimensionPx;

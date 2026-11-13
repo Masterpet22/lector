@@ -9,11 +9,10 @@ public sealed partial class PdfBookSource : ISkiaBookSource
 {
     private const int DefaultMaxRenderDimensionPx = 2800;
     private const int ThumbnailWidthPx = 300;
-    private const int AspectRatioBatchSize = 20;
+    private const int AspectRatioBatchSize = 8;
     private bool _disposed;
     private int _activeRenderWaiters;
     private double _cachedDensity;
-    private bool _densitySubscribed;
 
     public string Title { get; }
     public int PageCount { get; private set; }
@@ -98,7 +97,6 @@ public sealed partial class PdfBookSource : ISkiaBookSource
     {
         if (_disposed) return;
         _disposed = true;
-        UnsubscribeDensityChanges();
         DisposePlatform();
     }
 
@@ -147,17 +145,17 @@ public sealed partial class PdfBookSource : ISkiaBookSource
 
         try
         {
-            double density = 1.0;
+            double density = 1.5;
             if (MainThread.IsMainThread)
             {
-                density = ReadAndSubscribeDensity();
+                density = DeviceDisplay.Current.MainDisplayInfo.Density;
             }
             else if (Application.Current != null)
             {
-                density = await MainThread.InvokeOnMainThreadAsync(ReadAndSubscribeDensity).ConfigureAwait(false);
+                density = await MainThread.InvokeOnMainThreadAsync(() => DeviceDisplay.Current.MainDisplayInfo.Density).ConfigureAwait(false);
             }
 
-            _cachedDensity = density > 0 ? Math.Clamp(density, 1.0, 3.0) : 1.0;
+            _cachedDensity = density > 0 ? Math.Clamp(density, 1.35, 2.5) : 1.5;
             return _cachedDensity;
         }
         catch
@@ -165,43 +163,8 @@ public sealed partial class PdfBookSource : ISkiaBookSource
             // Respaldo seguro si aún no existe ventana/display inicializado
         }
 
-        _cachedDensity = 1.0;
-        return 1.0;
-    }
-
-    private double ReadAndSubscribeDensity()
-    {
-        if (!_densitySubscribed)
-        {
-            _densitySubscribed = true;
-            DeviceDisplay.Current.MainDisplayInfoChanged += OnMainDisplayInfoChanged;
-        }
-
-        return DeviceDisplay.Current.MainDisplayInfo.Density;
-    }
-
-    private void OnMainDisplayInfoChanged(object? sender, DisplayInfoChangedEventArgs e)
-    {
-        var density = e.DisplayInfo.Density;
-        if (density > 0)
-        {
-            _cachedDensity = Math.Clamp(density, 1.0, 3.0);
-        }
-    }
-
-    private void UnsubscribeDensityChanges()
-    {
-        if (!_densitySubscribed) return;
-        _densitySubscribed = false;
-
-        try
-        {
-            DeviceDisplay.Current.MainDisplayInfoChanged -= OnMainDisplayInfoChanged;
-        }
-        catch
-        {
-            // Ignorar si el subsistema de pantalla ya fue liberado
-        }
+        _cachedDensity = 1.5;
+        return 1.5;
     }
 
     private partial Task InitializeFromPathOrUriAsync(string filePathOrUri, CancellationToken ct);

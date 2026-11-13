@@ -129,11 +129,7 @@ public sealed partial class PdfBookSource
         var bitmap = Bitmap.CreateBitmap(width, height, Bitmap.Config.Argb8888!)
             ?? throw new InvalidOperationException("No se pudo asignar el bitmap para renderizar la página PDF.");
 
-        using (var canvas = new Canvas(bitmap))
-        {
-            canvas.DrawColor(AndroidColor.White);
-        }
-
+        bitmap.EraseColor(AndroidColor.White);
         page.Render(bitmap, null, null, PdfRenderMode.ForDisplay);
         return bitmap;
     }
