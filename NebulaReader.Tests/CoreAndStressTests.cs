@@ -223,6 +223,77 @@ public class CoreAndStressTests
         Assert.False(groups[4].IsGroup); // Watchmen suelto
     }
 
+    [Fact]
+    public async Task CoverThumbnailService_GeneratesJpegCovers_ForSmallJpegAndLargePngBookSources()
+    {
+        var tempRoot = Path.Combine(Path.GetTempPath(), $"nebula_cover_test_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(tempRoot);
+
+        try
+        {
+            var smallJpegPath = Path.Combine(tempRoot, "small_pdf_like.cbz");
+            var largePngPath = Path.Combine(tempRoot, "large_comic.cbz");
+
+            CreateImageZip(smallJpegPath, "cover.jpg", 300, 450, SKEncodedImageFormat.Jpeg);
+            CreateImageZip(largePngPath, "cover.png", 900, 1400, SKEncodedImageFormat.Png);
+
+            var factory = new TestFileBookSourceFactory();
+            var coverDir = Path.Combine(tempRoot, "covers");
+            var service = new CoverThumbnailService(factory, coverDir);
+
+            var (smallThumb, smallPages) = await service.GenerateCoverAsync("book_small", smallJpegPath);
+            var (largeThumb, largePages) = await service.GenerateCoverAsync("book_large", largePngPath);
+
+            Assert.Equal(1, smallPages);
+            Assert.Equal(1, largePages);
+            Assert.NotNull(smallThumb);
+            Assert.NotNull(largeThumb);
+            Assert.True(File.Exists(smallThumb));
+            Assert.True(File.Exists(largeThumb));
+
+            using var smallBmp = SKBitmap.Decode(smallThumb);
+            using var largeBmp = SKBitmap.Decode(largeThumb);
+            Assert.NotNull(smallBmp);
+            Assert.Equal(300, smallBmp.Width);
+            Assert.NotNull(largeBmp);
+            Assert.Equal(300, largeBmp.Width);
+        }
+        finally
+        {
+            if (Directory.Exists(tempRoot))
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+        }
+    }
+
+    private sealed class TestFileBookSourceFactory : IBookSourceFactory
+    {
+        public Task<IBookSource> CreateAsync(string filePathOrUri, CancellationToken ct = default)
+            => Task.FromResult<IBookSource>(new CbzBookSource(filePathOrUri));
+
+        public Task<BookFormat> DetectFormatAsync(string filePathOrUri, CancellationToken ct = default)
+            => Task.FromResult(BookFormat.Cbz);
+
+        public Task<BookMetadata> ExtractMetadataAsync(string filePathOrUri, CancellationToken ct = default)
+            => Task.FromResult(new BookMetadata(null, Array.Empty<string>(), null));
+
+        public BookFormat DetectFormat(ReadOnlySpan<byte> headerBytes, string? fileNameOrExtension = null)
+            => BookFormat.Cbz;
+    }
+
+    private static void CreateImageZip(string path, string entryName, int width, int height, SKEncodedImageFormat format)
+    {
+        using var bmp = new SKBitmap(width, height);
+        bmp.Erase(SKColors.MediumPurple);
+        using var img = SKImage.FromBitmap(bmp);
+        using var data = img.Encode(format, 85);
+
+        using var fs = File.Create(path);
+        using var zip = new ZipArchive(fs, ZipArchiveMode.Create);
+        AddEntry(zip, entryName, data.ToArray());
+    }
+
     private sealed record TestDoc(string Title, string? Series, string? Tags);
 
     private static void AddEntry(ZipArchive archive, string name, byte[] content)

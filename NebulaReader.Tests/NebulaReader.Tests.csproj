@@ -21,6 +21,9 @@
   <ItemGroup>
     <Compile Include="..\NebulaReader\Models\BookFormat.cs" Link="Core\BookFormat.cs" />
     <Compile Include="..\NebulaReader\Services\IBookSource.cs" Link="Core\IBookSource.cs" />
+    <Compile Include="..\NebulaReader\Services\IBookSourceFactory.cs" Link="Core\IBookSourceFactory.cs" />
+    <Compile Include="..\NebulaReader\Services\ICoverThumbnailService.cs" Link="Core\ICoverThumbnailService.cs" />
+    <Compile Include="..\NebulaReader\Services\CoverThumbnailService.cs" Link="Core\CoverThumbnailService.cs" />
     <Compile Include="..\NebulaReader\Services\NaturalSortComparer.cs" Link="Core\NaturalSortComparer.cs" />
     <Compile Include="..\NebulaReader\Services\BookMetadataExtractor.cs" Link="Core\BookMetadataExtractor.cs" />
     <Compile Include="..\NebulaReader\Services\CbzBookSource.cs" Link="Core\CbzBookSource.cs" />

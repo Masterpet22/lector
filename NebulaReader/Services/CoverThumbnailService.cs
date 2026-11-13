@@ -13,9 +13,18 @@ public sealed class CoverThumbnailService : ICoverThumbnailService
     private readonly string _coversCacheDir;
 
     public CoverThumbnailService(IBookSourceFactory bookSourceFactory)
+#if ANDROID || WINDOWS
+        : this(bookSourceFactory, Path.Combine(FileSystem.CacheDirectory, "covers"))
+#else
+        : this(bookSourceFactory, Path.Combine(Path.GetTempPath(), "NebulaReader", "covers"))
+#endif
+    {
+    }
+
+    public CoverThumbnailService(IBookSourceFactory bookSourceFactory, string coversCacheDir)
     {
         _bookSourceFactory = bookSourceFactory;
-        _coversCacheDir = Path.Combine(FileSystem.CacheDirectory, "covers");
+        _coversCacheDir = coversCacheDir;
     }
 
     public async Task<(string? ThumbnailPath, int PageCount)> GenerateCoverAsync(
@@ -60,14 +69,23 @@ public sealed class CoverThumbnailService : ICoverThumbnailService
         if (sourceStream.CanSeek)
         {
             sourceStream.Position = 0;
-            using var codec = SKCodec.Create(sourceStream);
-            if (codec != null
-                && codec.EncodedFormat == SKEncodedImageFormat.Jpeg
-                && codec.Info.Width > 0
-                && codec.Info.Width <= TargetCoverWidthPx)
+            using var managedStream = new SKManagedStream(sourceStream, disposeManagedStream: false);
+            using var codec = SKCodec.Create(managedStream);
+            if (codec != null)
             {
-                sourceStream.Position = 0;
-                return SaveStreamAtomic(sourceStream, destinationPath, ct);
+                if (codec.EncodedFormat == SKEncodedImageFormat.Jpeg
+                    && codec.Info.Width > 0
+                    && codec.Info.Width <= TargetCoverWidthPx)
+                {
+                    sourceStream.Position = 0;
+                    return SaveStreamAtomic(sourceStream, destinationPath, ct);
+                }
+
+                using var decodedFromCodec = SKBitmap.Decode(codec);
+                if (decodedFromCodec != null && decodedFromCodec.Width > 0 && decodedFromCodec.Height > 0)
+                {
+                    return ResizeBitmapAndSaveCover(decodedFromCodec, destinationPath, ct);
+                }
             }
 
             sourceStream.Position = 0;
@@ -78,6 +96,12 @@ public sealed class CoverThumbnailService : ICoverThumbnailService
         {
             return false;
         }
+
+        return ResizeBitmapAndSaveCover(original, destinationPath, ct);
+    }
+
+    private static bool ResizeBitmapAndSaveCover(SKBitmap original, string destinationPath, CancellationToken ct)
+    {
 
         var targetWidth = Math.Min(TargetCoverWidthPx, original.Width);
         var targetHeight = Math.Max(1, (int)Math.Round(original.Height * (targetWidth / (double)original.Width)));

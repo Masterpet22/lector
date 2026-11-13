@@ -1,4 +1,5 @@
 using Android.Provider;
+using Microsoft.Win32.SafeHandles;
 using AndroidUri = Android.Net.Uri;
 using AppContext = Android.App.Application;
 
@@ -18,10 +19,40 @@ public partial class BookSourceFactory
 
         var fileName = ResolveDisplayName(resolver, uri) ?? uri.LastPathSegment ?? "documento";
         var title = Path.GetFileNameWithoutExtension(fileName);
-        var stream = resolver.OpenInputStream(uri)
+        var stream = TryOpenSeekableDescriptorStream(resolver, uri)
+            ?? resolver.OpenInputStream(uri)
             ?? throw new FileNotFoundException($"No se pudo abrir la URI: {uriString}");
 
         return Task.FromResult((stream, string.IsNullOrWhiteSpace(title) ? fileName : title, (string?)fileName));
+    }
+
+    private static Stream? TryOpenSeekableDescriptorStream(Android.Content.ContentResolver resolver, AndroidUri uri)
+    {
+        try
+        {
+            using var pfd = resolver.OpenFileDescriptor(uri, "r");
+            if (pfd == null)
+            {
+                return null;
+            }
+
+            // DetachFd transfiere la propiedad del descriptor al SafeFileHandle para lectura seekable sin copias en caché.
+            var rawFd = pfd.DetachFd();
+            var handle = new SafeFileHandle(new IntPtr(rawFd), ownsHandle: true);
+            var fileStream = new FileStream(handle, FileAccess.Read, bufferSize: 65536, isAsync: false);
+
+            if (!fileStream.CanSeek || fileStream.Length <= 0)
+            {
+                fileStream.Dispose();
+                return null;
+            }
+
+            return fileStream;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
     private static string? ResolveDisplayName(Android.Content.ContentResolver resolver, AndroidUri uri)
