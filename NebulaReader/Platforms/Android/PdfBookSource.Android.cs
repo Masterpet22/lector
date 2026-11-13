@@ -1,6 +1,7 @@
 using Android.Graphics;
 using Android.Graphics.Pdf;
 using Android.OS;
+using SkiaSharp;
 using AndroidColor = Android.Graphics.Color;
 using AndroidUri = Android.Net.Uri;
 using AppContext = Android.App.Application;
@@ -71,21 +72,7 @@ public sealed partial class PdfBookSource
 
             lock (_renderLock)
             {
-                ObjectDisposedException.ThrowIf(_disposed || _renderer == null, this);
-
-                using var page = _renderer.OpenPage(pageIndex);
-                var (width, height) = CalculateTargetSize(page.Width, page.Height, density, maxWidthPx);
-
-                using var bitmap = Bitmap.CreateBitmap(width, height, Bitmap.Config.Argb8888!)
-                    ?? throw new InvalidOperationException("No se pudo asignar el bitmap para renderizar la página PDF.");
-
-                using (var canvas = new Canvas(bitmap))
-                {
-                    canvas.DrawColor(AndroidColor.White);
-                }
-
-                page.Render(bitmap, null, null, PdfRenderMode.ForDisplay);
-
+                using var bitmap = RenderAndroidBitmap(pageIndex, density, maxWidthPx, DefaultMaxRenderDimensionPx);
                 var memoryStream = new MemoryStream();
                 var format = maxWidthPx.HasValue ? Bitmap.CompressFormat.Jpeg! : Bitmap.CompressFormat.Png!;
                 var quality = maxWidthPx.HasValue ? 85 : 100;
@@ -94,6 +81,84 @@ public sealed partial class PdfBookSource
                 return memoryStream;
             }
         }, ct);
+    }
+
+    private partial Task<SKBitmap?> RenderPageBitmapPlatformAsync(int pageIndex, double density, int maxDimensionPx, CancellationToken ct)
+    {
+        return Task.Run<SKBitmap?>(() =>
+        {
+            ct.ThrowIfCancellationRequested();
+
+            lock (_renderLock)
+            {
+                using var bitmap = RenderAndroidBitmap(pageIndex, density, maxWidthPx: null, maxDimensionPx);
+                return CopyAndroidBitmapToSkBitmap(bitmap);
+            }
+        }, ct);
+    }
+
+    private Bitmap RenderAndroidBitmap(int pageIndex, double density, int? maxWidthPx, int maxDimensionPx)
+    {
+        ObjectDisposedException.ThrowIf(_disposed || _renderer == null, this);
+
+        using var page = _renderer.OpenPage(pageIndex);
+        var (width, height) = CalculateTargetSize(page.Width, page.Height, density, maxWidthPx, maxDimensionPx);
+
+        var bitmap = Bitmap.CreateBitmap(width, height, Bitmap.Config.Argb8888!)
+            ?? throw new InvalidOperationException("No se pudo asignar el bitmap para renderizar la página PDF.");
+
+        using (var canvas = new Canvas(bitmap))
+        {
+            canvas.DrawColor(AndroidColor.White);
+        }
+
+        page.Render(bitmap, null, null, PdfRenderMode.ForDisplay);
+        return bitmap;
+    }
+
+    private static unsafe SKBitmap CopyAndroidBitmapToSkBitmap(Bitmap bitmap)
+    {
+        var width = bitmap.Width;
+        var height = bitmap.Height;
+        var skBitmap = new SKBitmap(width, height, SKColorType.Rgba8888, SKAlphaType.Premul);
+
+        var srcPtr = bitmap.LockPixels();
+        if (srcPtr == IntPtr.Zero)
+        {
+            skBitmap.Dispose();
+            throw new InvalidOperationException("No se pudo bloquear los píxeles del bitmap PDF en Android.");
+        }
+
+        try
+        {
+            var dstPtr = skBitmap.GetPixels();
+            var srcRowBytes = bitmap.RowBytes;
+            var dstRowBytes = skBitmap.RowBytes;
+
+            if (srcRowBytes == dstRowBytes)
+            {
+                var totalBytes = (long)srcRowBytes * height;
+                Buffer.MemoryCopy((void*)srcPtr, (void*)dstPtr, totalBytes, totalBytes);
+            }
+            else
+            {
+                var copyBytes = Math.Min(srcRowBytes, dstRowBytes);
+                for (var row = 0; row < height; row++)
+                {
+                    Buffer.MemoryCopy(
+                        (byte*)srcPtr + ((long)row * srcRowBytes),
+                        (byte*)dstPtr + ((long)row * dstRowBytes),
+                        copyBytes,
+                        copyBytes);
+                }
+            }
+        }
+        finally
+        {
+            bitmap.UnlockPixels();
+        }
+
+        return skBitmap;
     }
 
     private partial void DisposePlatform()

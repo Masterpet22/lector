@@ -23,7 +23,7 @@
         </Grid>
 
         <Grid ColumnDefinitions="*,Auto">
-            <Label Text="Desplazamiento vertical continuo" VerticalOptions="Center" />
+            <Label Text="Lectura continua (de arriba a abajo)" VerticalOptions="Center" />
             <Switch Grid.Column="1" IsToggled="{Binding ContinuousVerticalScroll}" />
         </Grid>
 

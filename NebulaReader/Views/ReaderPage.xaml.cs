@@ -16,7 +16,8 @@ public partial class ReaderPage : ContentPage
     private const float MaxZoom = 5.0f;
     private const float DoubleTapZoom = 2.25f;
     private const float PageGapPx = 16.0f;
-    private static readonly SKSamplingOptions PageSampling = new(SKFilterMode.Linear, SKMipmapMode.Linear);
+    private static readonly SKSamplingOptions HighQualitySampling = new(SKFilterMode.Linear, SKMipmapMode.Linear);
+    private static readonly SKSamplingOptions FastGestureSampling = new(SKFilterMode.Linear, SKMipmapMode.None);
     private static readonly float[] SoftNightInvertMatrix =
     [
         -0.80f,  0.00f,  0.00f, 0.00f, 0.88f,
@@ -32,6 +33,30 @@ public partial class ReaderPage : ContentPage
         0.000f, 0.000f, 0.000f, 1.00f,  0.00f
     ];
 
+    // Instancias reutilizables para evitar asignaciones GC por frame
+    private static readonly SKPaint NightInvertPaint = new()
+    {
+        ColorFilter = SKColorFilter.CreateColorMatrix(SoftNightInvertMatrix)
+    };
+    private static readonly SKPaint SepiaPaint = new()
+    {
+        ColorFilter = SKColorFilter.CreateColorMatrix(SepiaMatrix)
+    };
+    private static readonly SKPaint PlaceholderFillPaint = new()
+    {
+        Color = new SKColor(0x1B, 0x1E, 0x28),
+        Style = SKPaintStyle.Fill
+    };
+    private static readonly SKPaint PlaceholderTextPaint = new()
+    {
+        Color = new SKColor(0xA0, 0xA8, 0xB8),
+        IsAntialias = true
+    };
+    private static readonly SKFont PlaceholderFont = new()
+    {
+        Size = 28f
+    };
+
     private float _zoom = 1.0f;
     private float _panX;
     private float _panY;
@@ -42,9 +67,16 @@ public partial class ReaderPage : ContentPage
     private double _lastPanTotalX;
     private double _lastPanTotalY;
     private double _swipeAccumulatedX;
+    private float _lastVerticalDeltaPx;
+    private DateTime _lastPanTimestampUtc;
+    private float _flingVelocityPxPerFrame;
+    private IDispatcherTimer? _flingTimer;
+    private bool _isActivelyInteracting;
     private bool _sliderDragActive;
     private int _pendingSliderPage = 1;
     private bool _platformInputAttached;
+
+    private SKSamplingOptions CurrentSampling => _isActivelyInteracting ? FastGestureSampling : HighQualitySampling;
 
     private ReaderViewModel? ViewModel => BindingContext as ReaderViewModel;
 
@@ -125,7 +157,7 @@ public partial class ReaderPage : ContentPage
         canvas.Save();
         canvas.SetMatrix(transform);
 
-        using var filterPaint = CreatePageFilterPaint(vm.VisualFilter);
+        var filterPaint = GetCachedFilterPaint(vm.VisualFilter);
 
         if (vm.IsContinuousVertical)
         {
@@ -143,18 +175,12 @@ public partial class ReaderPage : ContentPage
         canvas.Restore();
     }
 
-    private static SKPaint? CreatePageFilterPaint(ReaderVisualFilter filter)
+    private static SKPaint? GetCachedFilterPaint(ReaderVisualFilter filter)
     {
         return filter switch
         {
-            ReaderVisualFilter.NightInvert => new SKPaint
-            {
-                ColorFilter = SKColorFilter.CreateColorMatrix(SoftNightInvertMatrix)
-            },
-            ReaderVisualFilter.Sepia => new SKPaint
-            {
-                ColorFilter = SKColorFilter.CreateColorMatrix(SepiaMatrix)
-            },
+            ReaderVisualFilter.NightInvert => NightInvertPaint,
+            ReaderVisualFilter.Sepia => SepiaPaint,
             _ => null
         };
     }
@@ -163,11 +189,14 @@ public partial class ReaderPage : ContentPage
     {
         vm.RequestPageLoadIfNeeded(pageIndex);
 
-        vm.TryDrawCachedPage(pageIndex, bitmap =>
+        if (!vm.TryDrawCachedPage(pageIndex, bitmap =>
         {
             var dest = CalculateAspectFitRect(bitmap.Width, bitmap.Height, 0, 0, canvasWidth, canvasHeight);
-            canvas.DrawBitmap(bitmap, dest, PageSampling, paint);
-        });
+            canvas.DrawBitmap(bitmap, dest, CurrentSampling, paint);
+        }))
+        {
+            DrawPlaceholderCard(canvas, pageIndex, 0, 0, canvasWidth, canvasHeight);
+        }
     }
 
     private void DrawDoublePageSpread(SKCanvas canvas, ReaderViewModel vm, float canvasWidth, float canvasHeight, SKPaint? paint)
@@ -192,18 +221,16 @@ public partial class ReaderPage : ContentPage
         vm.TryDrawCachedPage(leftIndex, leftBitmap =>
         {
             var dest = CalculateAspectFitRect(leftBitmap.Width, leftBitmap.Height, 0, 0, halfWidth, canvasHeight);
-            // Alinear la página izquierda hacia el lomo central
             var aligned = new SKRect(halfWidth - dest.Width, dest.Top, halfWidth, dest.Bottom);
-            canvas.DrawBitmap(leftBitmap, aligned, PageSampling, paint);
+            canvas.DrawBitmap(leftBitmap, aligned, CurrentSampling, paint);
         });
 
         vm.TryDrawCachedPage(rightIndex, rightBitmap =>
         {
             var rightX = halfWidth + PageGapPx;
             var dest = CalculateAspectFitRect(rightBitmap.Width, rightBitmap.Height, rightX, 0, halfWidth, canvasHeight);
-            // Alinear la página derecha hacia el lomo central
             var aligned = new SKRect(rightX, dest.Top, rightX + dest.Width, dest.Bottom);
-            canvas.DrawBitmap(rightBitmap, aligned, PageSampling, paint);
+            canvas.DrawBitmap(rightBitmap, aligned, CurrentSampling, paint);
         });
     }
 
@@ -212,19 +239,27 @@ public partial class ReaderPage : ContentPage
         var current = vm.CurrentPageIndex;
         var maxPageWidth = Math.Min(canvasWidth, canvasHeight * 1.15f);
         var defaultPageHeight = maxPageWidth * 1.414f;
+        var x = (canvasWidth - maxPageWidth) / 2f;
 
         float currentHeight = defaultPageHeight;
         vm.RequestPageLoadIfNeeded(current);
-        vm.TryDrawCachedPage(current, bitmap =>
+        var drewCurrent = vm.TryDrawCachedPage(current, bitmap =>
         {
             currentHeight = maxPageWidth * (bitmap.Height / (float)Math.Max(1, bitmap.Width));
-            var x = (canvasWidth - maxPageWidth) / 2f;
             var y = -_verticalScrollOffset;
             if (y + currentHeight >= 0 && y <= canvasHeight)
             {
-                canvas.DrawBitmap(bitmap, new SKRect(x, y, x + maxPageWidth, y + currentHeight), PageSampling, paint);
+                canvas.DrawBitmap(bitmap, new SKRect(x, y, x + maxPageWidth, y + currentHeight), CurrentSampling, paint);
             }
         });
+        if (!drewCurrent)
+        {
+            var y = -_verticalScrollOffset;
+            if (y + currentHeight >= 0 && y <= canvasHeight)
+            {
+                DrawPlaceholderCard(canvas, current, x, y, maxPageWidth, currentHeight);
+            }
+        }
         _lastCurrentPageFittedHeight = currentHeight;
 
         // Página anterior [actual - 1]
@@ -232,16 +267,23 @@ public partial class ReaderPage : ContentPage
         {
             float prevHeight = defaultPageHeight;
             vm.RequestPageLoadIfNeeded(current - 1);
-            vm.TryDrawCachedPage(current - 1, prevBitmap =>
+            var drewPrev = vm.TryDrawCachedPage(current - 1, prevBitmap =>
             {
                 prevHeight = maxPageWidth * (prevBitmap.Height / (float)Math.Max(1, prevBitmap.Width));
-                var x = (canvasWidth - maxPageWidth) / 2f;
                 var y = -_verticalScrollOffset - PageGapPx - prevHeight;
                 if (y + prevHeight >= 0 && y <= canvasHeight)
                 {
-                    canvas.DrawBitmap(prevBitmap, new SKRect(x, y, x + maxPageWidth, y + prevHeight), PageSampling, paint);
+                    canvas.DrawBitmap(prevBitmap, new SKRect(x, y, x + maxPageWidth, y + prevHeight), CurrentSampling, paint);
                 }
             });
+            if (!drewPrev)
+            {
+                var y = -_verticalScrollOffset - PageGapPx - prevHeight;
+                if (y + prevHeight >= 0 && y <= canvasHeight)
+                {
+                    DrawPlaceholderCard(canvas, current - 1, x, y, maxPageWidth, prevHeight);
+                }
+            }
             _lastPrevPageFittedHeight = prevHeight;
         }
         else
@@ -253,17 +295,37 @@ public partial class ReaderPage : ContentPage
         if (current + 1 < vm.TotalPages)
         {
             vm.RequestPageLoadIfNeeded(current + 1);
-            vm.TryDrawCachedPage(current + 1, nextBitmap =>
+            var drewNext = vm.TryDrawCachedPage(current + 1, nextBitmap =>
             {
                 var nextHeight = maxPageWidth * (nextBitmap.Height / (float)Math.Max(1, nextBitmap.Width));
-                var x = (canvasWidth - maxPageWidth) / 2f;
                 var y = -_verticalScrollOffset + currentHeight + PageGapPx;
                 if (y + nextHeight >= 0 && y <= canvasHeight)
                 {
-                    canvas.DrawBitmap(nextBitmap, new SKRect(x, y, x + maxPageWidth, y + nextHeight), PageSampling, paint);
+                    canvas.DrawBitmap(nextBitmap, new SKRect(x, y, x + maxPageWidth, y + nextHeight), CurrentSampling, paint);
                 }
             });
+            if (!drewNext)
+            {
+                var y = -_verticalScrollOffset + currentHeight + PageGapPx;
+                if (y + defaultPageHeight >= 0 && y <= canvasHeight)
+                {
+                    DrawPlaceholderCard(canvas, current + 1, x, y, maxPageWidth, defaultPageHeight);
+                }
+            }
         }
+    }
+
+    private static void DrawPlaceholderCard(SKCanvas canvas, int pageIndex, float x, float y, float width, float height)
+    {
+        var rect = new SKRect(x, y, x + width, y + height);
+        canvas.DrawRect(rect, PlaceholderFillPaint);
+        canvas.DrawText(
+            $"Cargando página {pageIndex + 1}...",
+            x + (width / 2f),
+            y + (height / 2f),
+            SKTextAlign.Center,
+            PlaceholderFont,
+            PlaceholderTextPaint);
     }
 
     private static SKRect CalculateAspectFitRect(float bmpWidth, float bmpHeight, float areaX, float areaY, float areaWidth, float areaHeight)
@@ -321,8 +383,34 @@ public partial class ReaderPage : ContentPage
         }
 
         _panX += deltaXPx;
+        var prevPanY = _panY;
         _panY += deltaYPx;
-        ClampPan();
+
+        var width = ReaderCanvas.CanvasSize.Width;
+        var height = ReaderCanvas.CanvasSize.Height;
+        if (width > 0 && height > 0)
+        {
+            var maxPanY = height * (_zoom - 1f) / 2f;
+            var unclampedPanY = _panY;
+            ClampPan(width, height);
+
+            // En lectura continua con zoom, al tocar el borde superior/inferior el resto del desplazamiento
+            // continúa avanzando de arriba a abajo entre páginas.
+            if (vm.IsContinuousVertical && Math.Abs(unclampedPanY) > maxPanY)
+            {
+                var overflowY = unclampedPanY - _panY;
+                if (Math.Abs(overflowY) > 0.5f && Math.Abs(prevPanY - _panY) < Math.Abs(deltaYPx))
+                {
+                    ScrollContinuousVertical(-overflowY / _zoom);
+                    return;
+                }
+            }
+        }
+        else
+        {
+            ClampPan();
+        }
+
         ReaderCanvas.InvalidateSurface();
     }
 
@@ -365,10 +453,51 @@ public partial class ReaderPage : ContentPage
 
     private void ResetZoomAndVerticalPosition()
     {
+        StopFlingInertia();
         _zoom = 1.0f;
         _panX = 0f;
         _panY = 0f;
         _verticalScrollOffset = 0f;
+    }
+
+    private void StartFlingInertia(float initialDeltaPx)
+    {
+        StopFlingInertia();
+        _flingVelocityPxPerFrame = Math.Clamp(initialDeltaPx, -140f, 140f);
+        if (Math.Abs(_flingVelocityPxPerFrame) < 2.5f) return;
+
+        _isActivelyInteracting = true;
+        _flingTimer ??= Dispatcher.CreateTimer();
+        _flingTimer.Interval = TimeSpan.FromMilliseconds(16);
+        _flingTimer.Tick -= OnFlingTick;
+        _flingTimer.Tick += OnFlingTick;
+        _flingTimer.Start();
+    }
+
+    private void OnFlingTick(object? sender, EventArgs e)
+    {
+        if (Math.Abs(_flingVelocityPxPerFrame) < 0.75f || ViewModel == null || !ViewModel.IsContinuousVertical)
+        {
+            StopFlingInertia();
+            return;
+        }
+
+        ApplyPanDelta(0f, _flingVelocityPxPerFrame);
+        _flingVelocityPxPerFrame *= 0.90f;
+    }
+
+    private void StopFlingInertia()
+    {
+        if (_flingTimer != null && _flingTimer.IsRunning)
+        {
+            _flingTimer.Stop();
+        }
+        _flingVelocityPxPerFrame = 0f;
+        if (_isActivelyInteracting)
+        {
+            _isActivelyInteracting = false;
+            ReaderCanvas.InvalidateSurface();
+        }
     }
 
     private void ClampPan()
@@ -409,12 +538,27 @@ public partial class ReaderPage : ContentPage
 
     private void OnPinchUpdated(object? sender, PinchGestureUpdatedEventArgs e)
     {
+        if (e.Status == GestureStatus.Started)
+        {
+            StopFlingInertia();
+            _isActivelyInteracting = true;
+            return;
+        }
+
+        if (e.Status == GestureStatus.Completed || e.Status == GestureStatus.Canceled)
+        {
+            _isActivelyInteracting = false;
+            ReaderCanvas.InvalidateSurface();
+            return;
+        }
+
         if (e.Status != GestureStatus.Running) return;
 
         var canvasWidth = ReaderCanvas.CanvasSize.Width;
         var canvasHeight = ReaderCanvas.CanvasSize.Height;
         if (canvasWidth <= 0 || canvasHeight <= 0) return;
 
+        _isActivelyInteracting = true;
         var focalX = (float)(e.ScaleOrigin.X * canvasWidth);
         var focalY = (float)(e.ScaleOrigin.Y * canvasHeight);
         ApplyZoomAtFocalPoint(_zoom * (float)e.Scale, focalX, focalY);
@@ -430,9 +574,13 @@ public partial class ReaderPage : ContentPage
         switch (e.StatusType)
         {
             case GestureStatus.Started:
+                StopFlingInertia();
                 _lastPanTotalX = 0;
                 _lastPanTotalY = 0;
                 _swipeAccumulatedX = 0;
+                _lastVerticalDeltaPx = 0f;
+                _lastPanTimestampUtc = DateTime.UtcNow;
+                _isActivelyInteracting = _zoom > 1.02f || vm.IsContinuousVertical;
                 break;
 
             case GestureStatus.Running:
@@ -443,7 +591,22 @@ public partial class ReaderPage : ContentPage
 
                 if (_zoom > 1.02f || vm.IsContinuousVertical)
                 {
-                    ApplyPanDelta((float)(dx * scale), (float)(dy * scale));
+                    _isActivelyInteracting = true;
+                    var deltaYPx = (float)(dy * scale);
+                    var now = DateTime.UtcNow;
+                    var elapsedMs = (float)(now - _lastPanTimestampUtc).TotalMilliseconds;
+                    if (elapsedMs is > 1f and < 120f)
+                    {
+                        var perFrame = deltaYPx * (16f / elapsedMs);
+                        _lastVerticalDeltaPx = (_lastVerticalDeltaPx * 0.35f) + (perFrame * 0.65f);
+                    }
+                    else
+                    {
+                        _lastVerticalDeltaPx = deltaYPx;
+                    }
+                    _lastPanTimestampUtc = now;
+
+                    ApplyPanDelta((float)(dx * scale), deltaYPx);
                 }
                 else
                 {
@@ -453,12 +616,34 @@ public partial class ReaderPage : ContentPage
 
             case GestureStatus.Completed:
             case GestureStatus.Canceled:
-                if (_zoom <= 1.02f && !vm.IsContinuousVertical && Math.Abs(_swipeAccumulatedX) > 65)
+                if (vm.IsContinuousVertical)
                 {
-                    ResetZoomAndVerticalPosition();
-                    var swipeLeft = _swipeAccumulatedX < 0;
-                    var command = swipeLeft ? vm.GoNextVisualCommand : vm.GoPreviousVisualCommand;
-                    _ = command.ExecuteAsync(null);
+                    var msSinceLastMove = (DateTime.UtcNow - _lastPanTimestampUtc).TotalMilliseconds;
+                    if (e.StatusType == GestureStatus.Completed && msSinceLastMove < 120 && Math.Abs(_lastVerticalDeltaPx) >= 3.0f)
+                    {
+                        StartFlingInertia(_lastVerticalDeltaPx);
+                    }
+                    else
+                    {
+                        _isActivelyInteracting = false;
+                        ReaderCanvas.InvalidateSurface();
+                    }
+                }
+                else if (_zoom > 1.02f)
+                {
+                    _isActivelyInteracting = false;
+                    ReaderCanvas.InvalidateSurface();
+                }
+                else
+                {
+                    _isActivelyInteracting = false;
+                    if (Math.Abs(_swipeAccumulatedX) > 65)
+                    {
+                        ResetZoomAndVerticalPosition();
+                        var swipeLeft = _swipeAccumulatedX < 0;
+                        var command = swipeLeft ? vm.GoNextVisualCommand : vm.GoPreviousVisualCommand;
+                        _ = command.ExecuteAsync(null);
+                    }
                 }
                 _swipeAccumulatedX = 0;
                 break;
@@ -485,6 +670,8 @@ public partial class ReaderPage : ContentPage
         var vm = ViewModel;
         if (vm == null || ReaderCanvas.Width <= 0) return;
 
+        StopFlingInertia();
+
         var pos = e.GetPosition(ReaderCanvas);
         if (!pos.HasValue)
         {
@@ -492,13 +679,32 @@ public partial class ReaderPage : ContentPage
             return;
         }
 
+        if (vm.IsContinuousVertical && ReaderCanvas.Height > 0)
+        {
+            var normalizedY = pos.Value.Y / ReaderCanvas.Height;
+            var scrollStepPx = Math.Max(220f, ReaderCanvas.CanvasSize.Height * 0.70f);
+            if (normalizedY < 0.22)
+            {
+                ApplyPanDelta(0f, scrollStepPx);
+            }
+            else if (normalizedY > 0.78)
+            {
+                ApplyPanDelta(0f, -scrollStepPx);
+            }
+            else
+            {
+                vm.ToggleHudCommand.Execute(null);
+            }
+            return;
+        }
+
         var normalizedX = pos.Value.X / ReaderCanvas.Width;
-        if (normalizedX < 0.25 && !vm.IsContinuousVertical)
+        if (normalizedX < 0.25)
         {
             ResetZoomAndVerticalPosition();
             _ = vm.GoPreviousVisualCommand.ExecuteAsync(null);
         }
-        else if (normalizedX > 0.75 && !vm.IsContinuousVertical)
+        else if (normalizedX > 0.75)
         {
             ResetZoomAndVerticalPosition();
             _ = vm.GoNextVisualCommand.ExecuteAsync(null);
@@ -535,6 +741,7 @@ public partial class ReaderPage : ContentPage
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
+        StopFlingInertia();
         if (_sliderDragActive)
         {
             _sliderDragActive = false;

@@ -88,6 +88,33 @@ public partial class ReaderPage
                 e.Handled = true;
                 break;
 
+            case VirtualKey.Down:
+                if (vm.IsContinuousVertical)
+                {
+                    var stepPx = Math.Max(140f, ReaderCanvas.CanvasSize.Height * 0.16f);
+                    ApplyPanDelta(0f, -stepPx);
+                    e.Handled = true;
+                }
+                break;
+
+            case VirtualKey.Up:
+                if (vm.IsContinuousVertical)
+                {
+                    var stepPx = Math.Max(140f, ReaderCanvas.CanvasSize.Height * 0.16f);
+                    ApplyPanDelta(0f, stepPx);
+                    e.Handled = true;
+                }
+                break;
+
+            case VirtualKey.Space:
+                if (vm.IsContinuousVertical)
+                {
+                    var stepPx = Math.Max(260f, ReaderCanvas.CanvasSize.Height * 0.72f);
+                    ApplyPanDelta(0f, -stepPx);
+                    e.Handled = true;
+                }
+                break;
+
             case VirtualKey.F11:
                 ToggleFullScreen();
                 e.Handled = true;

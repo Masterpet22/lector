@@ -185,12 +185,32 @@ public partial class BookSourceFactory : IBookSourceFactory
             return stream;
         }
 
-        // Si el stream de origen (p. ej. ContentResolver) no soporta Seek, se vuelca a memoria y se cierra el original.
-        var memoryStream = new MemoryStream();
-        await stream.CopyToAsync(memoryStream, ct).ConfigureAwait(false);
-        await stream.DisposeAsync().ConfigureAwait(false);
-        memoryStream.Position = 0;
-        return memoryStream;
+        // Respalda streams no buscables (p. ej. Android SAF content://) en caché en disco con DeleteOnClose
+        // para evitar cargar archivos CBR/CBZ grandes completos en RAM.
+        var tempDir = Path.Combine(FileSystem.CacheDirectory, "stream_cache");
+        Directory.CreateDirectory(tempDir);
+        var tempPath = Path.Combine(tempDir, $"nebula_{Guid.NewGuid():N}.tmp");
+
+        var backingStream = new FileStream(
+            tempPath,
+            FileMode.Create,
+            FileAccess.ReadWrite,
+            FileShare.None,
+            bufferSize: 81920,
+            FileOptions.Asynchronous | FileOptions.DeleteOnClose);
+
+        try
+        {
+            await stream.CopyToAsync(backingStream, 81920, ct).ConfigureAwait(false);
+            await stream.DisposeAsync().ConfigureAwait(false);
+            backingStream.Position = 0;
+            return backingStream;
+        }
+        catch
+        {
+            await backingStream.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
     }
 
     private partial Task<(Stream Stream, string Title, string? FileName)> OpenPlatformUriAsync(string uriString, CancellationToken ct);

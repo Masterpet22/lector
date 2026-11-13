@@ -1,11 +1,13 @@
+using SkiaSharp;
+
 namespace NebulaReader.Services;
 
 /// <summary>
-/// Implementación multiplataforma de IBookSource para archivos PDF mediante clases parciales nativas.
+/// Implementación multiplataforma de ISkiaBookSource para archivos PDF mediante clases parciales nativas.
 /// </summary>
-public sealed partial class PdfBookSource : IBookSource
+public sealed partial class PdfBookSource : ISkiaBookSource
 {
-    private const int MaxRenderDimensionPx = 2800;
+    private const int DefaultMaxRenderDimensionPx = 2800;
     private const int ThumbnailWidthPx = 300;
     private bool _disposed;
 
@@ -52,6 +54,19 @@ public sealed partial class PdfBookSource : IBookSource
         return await RenderPagePlatformAsync(pageIndex, density, maxWidthPx: null, ct).ConfigureAwait(false);
     }
 
+    public async Task<SKBitmap?> GetPageBitmapAsync(int pageIndex, int maxDimensionPx, CancellationToken ct = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if ((uint)pageIndex >= (uint)PageCount)
+        {
+            throw new ArgumentOutOfRangeException(nameof(pageIndex), pageIndex, $"El índice de página debe estar entre 0 y {Math.Max(0, PageCount - 1)}.");
+        }
+
+        ct.ThrowIfCancellationRequested();
+        var density = await GetDisplayDensitySafeAsync().ConfigureAwait(false);
+        return await RenderPageBitmapPlatformAsync(pageIndex, density, Math.Max(256, maxDimensionPx), ct).ConfigureAwait(false);
+    }
+
     public async Task<Stream> GetCoverThumbnailAsync()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -70,7 +85,12 @@ public sealed partial class PdfBookSource : IBookSource
         DisposePlatform();
     }
 
-    private static (int Width, int Height) CalculateTargetSize(double sourceWidth, double sourceHeight, double density, int? maxWidthPx)
+    private static (int Width, int Height) CalculateTargetSize(
+        double sourceWidth,
+        double sourceHeight,
+        double density,
+        int? maxWidthPx,
+        int maxDimensionPx = DefaultMaxRenderDimensionPx)
     {
         var safeWidth = Math.Max(1.0, sourceWidth);
         var safeHeight = Math.Max(1.0, sourceHeight);
@@ -90,9 +110,9 @@ public sealed partial class PdfBookSource : IBookSource
             targetHeight = safeHeight * density;
 
             var maxDim = Math.Max(targetWidth, targetHeight);
-            if (maxDim > MaxRenderDimensionPx)
+            if (maxDim > maxDimensionPx)
             {
-                var clampScale = MaxRenderDimensionPx / maxDim;
+                var clampScale = maxDimensionPx / maxDim;
                 targetWidth *= clampScale;
                 targetHeight *= clampScale;
             }
@@ -128,6 +148,7 @@ public sealed partial class PdfBookSource : IBookSource
     private partial Task InitializeFromPathOrUriAsync(string filePathOrUri, CancellationToken ct);
     private partial Task InitializeFromStreamAsync(Stream stream, CancellationToken ct);
     private partial Task<Stream> RenderPagePlatformAsync(int pageIndex, double density, int? maxWidthPx, CancellationToken ct);
+    private partial Task<SKBitmap?> RenderPageBitmapPlatformAsync(int pageIndex, double density, int maxDimensionPx, CancellationToken ct);
     private partial void DisposePlatform();
 }
 

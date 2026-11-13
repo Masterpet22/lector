@@ -1,3 +1,4 @@
+using SkiaSharp;
 using Windows.Data.Pdf;
 using Windows.Graphics.Imaging;
 using Windows.Storage.Streams;
@@ -55,20 +56,46 @@ public sealed partial class PdfBookSource
 
     private async partial Task<Stream> RenderPagePlatformAsync(int pageIndex, double density, int? maxWidthPx, CancellationToken ct)
     {
+        var encoderId = maxWidthPx.HasValue ? BitmapEncoder.JpegEncoderId : BitmapEncoder.PngEncoderId;
+        return await RenderPageToMemoryStreamAsync(pageIndex, density, maxWidthPx, DefaultMaxRenderDimensionPx, encoderId, ct).ConfigureAwait(false);
+    }
+
+    private async partial Task<SKBitmap?> RenderPageBitmapPlatformAsync(int pageIndex, double density, int maxDimensionPx, CancellationToken ct)
+    {
+        // BMP sin compresión evita el coste CPU de codificación deflate/PNG antes de decodificar a SKBitmap.
+        await using var bmpStream = await RenderPageToMemoryStreamAsync(
+            pageIndex,
+            density,
+            maxWidthPx: null,
+            maxDimensionPx,
+            BitmapEncoder.BmpEncoderId,
+            ct).ConfigureAwait(false);
+
+        return SKBitmap.Decode(bmpStream);
+    }
+
+    private async Task<MemoryStream> RenderPageToMemoryStreamAsync(
+        int pageIndex,
+        double density,
+        int? maxWidthPx,
+        int maxDimensionPx,
+        Guid encoderId,
+        CancellationToken ct)
+    {
         await _renderGate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
             ObjectDisposedException.ThrowIf(_disposed || _pdfDocument == null, this);
 
             using var page = _pdfDocument.GetPage((uint)pageIndex);
-            var (width, height) = CalculateTargetSize(page.Size.Width, page.Size.Height, density, maxWidthPx);
+            var (width, height) = CalculateTargetSize(page.Size.Width, page.Size.Height, density, maxWidthPx, maxDimensionPx);
 
             var options = new PdfPageRenderOptions
             {
                 DestinationWidth = (uint)width,
                 DestinationHeight = (uint)height,
                 BackgroundColor = WindowsColor.FromArgb(255, 255, 255, 255),
-                BitmapEncoderId = maxWidthPx.HasValue ? BitmapEncoder.JpegEncoderId : BitmapEncoder.PngEncoderId
+                BitmapEncoderId = encoderId
             };
 
             using var winrtStream = new InMemoryRandomAccessStream();
