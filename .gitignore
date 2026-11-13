@@ -1,0 +1,18 @@
+# .NET / MAUI
+bin/
+obj/
+.vs/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+TestResults/
+*.log
+
+# Carpetas locales heredadas de main (JS/Capacitor)
+/node_modules/
+/dist/
+/android/
+/releases/
+

@@ -17,18 +17,18 @@ Este plan de desarrollo está estructurado en **5 fases progresivas** para const
 
 ---
 
-## Fase 1: Configuración Base y Arquitectura del Proyecto
+## Fase 1: Configuración Base y Arquitectura del Proyecto ✅ Completada
 
 El objetivo de esta fase es preparar la estructura limpia para que el 90 % del código funcione sin cambios en ambos sistemas operativos.
 
-1. **Limpieza de Targets:** Configurar el archivo `.csproj` para compilar exclusivamente hacia **Android** y **Windows**, eliminando iOS y MacCatalyst para agilizar las compilaciones.
-2. **Estructura de Carpetas:**
-   * `Models/`: Entidades (`BookItem`, `ReadingProgress`, `PageInfo`).
-   * `Services/`: Contratos (`IBookSource`, `ILibraryService`, `IFilePickerService`).
-   * `ViewModels/`: Lógica de pantalla con `[ObservableProperty]` y `[RelayCommand]`.
-   * `Views/`: Pantallas XAML (`LibraryPage`, `ReaderPage`, `SettingsPage`).
-   * `Platforms/Android` y `Platforms/Windows`: Implementaciones específicas de permisos y renderizado PDF.
-3. **Inyección de Dependencias (`MauiProgram.cs`):** Registrar servicios como *Singleton* (gestor de biblioteca y caché) y páginas/ViewModels como *Transient*.
+- [x] **Limpieza de Targets:** Configurar el archivo `.csproj` para compilar exclusivamente hacia **Android** y **Windows**, eliminando iOS y MacCatalyst para agilizar las compilaciones.
+- [x] **Estructura de Carpetas:**
+  * `Models/`: Entidades (`BookItem`, `ReadingProgress`, `PageInfo`).
+  * `Services/`: Contratos (`IBookSource`, `ILibraryService`, `IFilePickerService`).
+  * `ViewModels/`: Lógica de pantalla con `[ObservableProperty]` y `[RelayCommand]`.
+  * `Views/`: Pantallas XAML (`LibraryPage`, `ReaderPage`, `SettingsPage`).
+  * `Platforms/Android` y `Platforms/Windows`: Implementaciones específicas de permisos y renderizado PDF.
+- [x] **Inyección de Dependencias (`MauiProgram.cs`):** Registrar servicios como *Singleton* (gestor de biblioteca y caché) y páginas/ViewModels como *Transient*.
 
 ---
 
@@ -108,3 +108,4 @@ Esta es la fase más crítica para la experiencia de usuario, donde se garantiza
 4. **Compilación y Distribución:**
    * **Android:** Generar el paquete firmado `.aab` (para Google Play) o `.apk` (para instalación directa) en modo `Release` con *Trimming* activado.
    * **Windows:** Generar el paquete `.msix` (instalador nativo de Windows 10/11) o publicación autocontenida (*Self-Contained*) en formato `.exe`.
+

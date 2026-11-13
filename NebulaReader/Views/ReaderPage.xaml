@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:NebulaReader.ViewModels"
+             x:Class="NebulaReader.Views.ReaderPage"
+             x:DataType="vm:ReaderViewModel"
+             Title="{Binding Title}">
+
+    <Grid RowDefinitions="*,Auto" Padding="16" RowSpacing="12">
+        <VerticalStackLayout Grid.Row="0" VerticalOptions="Center" HorizontalOptions="Center" Spacing="10">
+            <Label Text="{Binding CurrentBook.Title}" FontSize="20" FontAttributes="Bold" HorizontalTextAlignment="Center" />
+            <Label Text="{Binding PageIndicator}" HorizontalTextAlignment="Center" Opacity="0.8" />
+        </VerticalStackLayout>
+
+        <HorizontalStackLayout Grid.Row="1" HorizontalOptions="Center" Spacing="12">
+            <Button Text="Anterior" Command="{Binding PreviousPageCommand}" />
+            <Button Text="Volver" Command="{Binding CloseReaderCommand}" />
+            <Button Text="Siguiente" Command="{Binding NextPageCommand}" />
+        </HorizontalStackLayout>
+    </Grid>
+</ContentPage>
+
