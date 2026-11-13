@@ -52,23 +52,37 @@
                     Padding="10,6"
                     Command="{Binding ToggleRotationLockCommand}" />
 
-            <HorizontalStackLayout Grid.Row="1"
-                                   Grid.ColumnSpan="3"
-                                   HorizontalOptions="Center"
-                                   Spacing="8">
-                <Button Text="{Binding DirectionModeLabel}"
-                        FontSize="12"
-                        Padding="10,5"
-                        Command="{Binding ToggleReadingDirectionCommand}" />
+            <FlexLayout Grid.Row="1"
+                        Grid.ColumnSpan="3"
+                        Wrap="Wrap"
+                        JustifyContent="Center"
+                        AlignItems="Center">
                 <Button Text="{Binding LayoutModeLabel}"
                         FontSize="12"
                         Padding="10,5"
-                        Command="{Binding ToggleVerticalScrollCommand}" />
+                        Margin="3"
+                        Command="{Binding CycleLayoutModeCommand}" />
+                <Button Text="{Binding FitModeLabel}"
+                        FontSize="12"
+                        Padding="10,5"
+                        Margin="3"
+                        Command="{Binding CyclePageFitModeCommand}" />
+                <Button Text="{Binding FullScreenButtonLabel}"
+                        FontSize="12"
+                        Padding="10,5"
+                        Margin="3"
+                        Command="{Binding ToggleFullScreenCommand}" />
+                <Button Text="{Binding DirectionModeLabel}"
+                        FontSize="12"
+                        Padding="10,5"
+                        Margin="3"
+                        Command="{Binding ToggleReadingDirectionCommand}" />
                 <Button Text="{Binding FilterModeLabel}"
                         FontSize="12"
                         Padding="10,5"
+                        Margin="3"
                         Command="{Binding CycleVisualFilterCommand}" />
-            </HorizontalStackLayout>
+            </FlexLayout>
         </Grid>
 
         <!-- Barra inferior translúcida (HUD) -->

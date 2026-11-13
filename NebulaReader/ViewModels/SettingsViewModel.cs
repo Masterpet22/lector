@@ -11,6 +11,21 @@ namespace NebulaReader.ViewModels;
 public partial class SettingsViewModel : BaseViewModel
 {
     private readonly IReaderSettingsService _settingsService;
+    private readonly IFullScreenService _fullScreenService;
+
+    public IReadOnlyList<string> LayoutModeOptions { get; } =
+    [
+        "Una sola página",
+        "Doble página (pantallas amplias)",
+        "Lectura continua (de arriba a abajo)"
+    ];
+
+    public IReadOnlyList<string> PageFitModeOptions { get; } =
+    [
+        "Completo (toda la página)",
+        "Ajustar al ancho",
+        "Ajustar al alto"
+    ];
 
     [ObservableProperty]
     public partial bool NightReadingModeEnabled { get; set; }
@@ -22,21 +37,44 @@ public partial class SettingsViewModel : BaseViewModel
     public partial bool RightToLeftMangaMode { get; set; }
 
     [ObservableProperty]
-    public partial bool ContinuousVerticalScroll { get; set; }
+    public partial int SelectedLayoutModeIndex { get; set; }
 
     [ObservableProperty]
-    public partial bool DoublePageSpreadEnabled { get; set; }
+    public partial int SelectedPageFitModeIndex { get; set; }
 
-    public SettingsViewModel(IReaderSettingsService settingsService)
+    [ObservableProperty]
+    public partial bool IsFullScreen { get; set; }
+
+    public SettingsViewModel(IReaderSettingsService settingsService, IFullScreenService fullScreenService)
     {
         _settingsService = settingsService;
+        _fullScreenService = fullScreenService;
         Title = "Configuración";
 
         NightReadingModeEnabled = _settingsService.VisualFilter == ReaderVisualFilter.NightInvert;
         SepiaFilterEnabled = _settingsService.VisualFilter == ReaderVisualFilter.Sepia;
         RightToLeftMangaMode = _settingsService.RightToLeftMangaMode;
-        ContinuousVerticalScroll = _settingsService.ContinuousVerticalScroll;
-        DoublePageSpreadEnabled = _settingsService.DoublePageSpreadEnabled;
+        SelectedLayoutModeIndex = _settingsService.LayoutMode switch
+        {
+            ReaderLayoutMode.SinglePage => 0,
+            ReaderLayoutMode.DoublePage => 1,
+            ReaderLayoutMode.ContinuousVertical => 2,
+            _ => 1
+        };
+        SelectedPageFitModeIndex = _settingsService.PageFitMode switch
+        {
+            PageFitMode.FitPage => 0,
+            PageFitMode.FitWidth => 1,
+            PageFitMode.FitHeight => 2,
+            _ => 0
+        };
+        IsFullScreen = _fullScreenService.IsFullScreen;
+        _fullScreenService.FullScreenChanged += OnFullScreenChanged;
+    }
+
+    private void OnFullScreenChanged(object? sender, bool enabled)
+    {
+        MainThread.BeginInvokeOnMainThread(() => IsFullScreen = enabled);
     }
 
     partial void OnNightReadingModeEnabledChanged(bool value)
@@ -66,8 +104,33 @@ public partial class SettingsViewModel : BaseViewModel
     }
 
     partial void OnRightToLeftMangaModeChanged(bool value) => _settingsService.RightToLeftMangaMode = value;
-    partial void OnContinuousVerticalScrollChanged(bool value) => _settingsService.ContinuousVerticalScroll = value;
-    partial void OnDoublePageSpreadEnabledChanged(bool value) => _settingsService.DoublePageSpreadEnabled = value;
+
+    partial void OnSelectedLayoutModeIndexChanged(int value)
+    {
+        _settingsService.LayoutMode = value switch
+        {
+            0 => ReaderLayoutMode.SinglePage,
+            1 => ReaderLayoutMode.DoublePage,
+            2 => ReaderLayoutMode.ContinuousVertical,
+            _ => ReaderLayoutMode.DoublePage
+        };
+    }
+
+    partial void OnSelectedPageFitModeIndexChanged(int value)
+    {
+        _settingsService.PageFitMode = value switch
+        {
+            0 => PageFitMode.FitPage,
+            1 => PageFitMode.FitWidth,
+            2 => PageFitMode.FitHeight,
+            _ => PageFitMode.FitPage
+        };
+    }
+
+    partial void OnIsFullScreenChanged(bool value)
+    {
+        _fullScreenService.SetFullScreen(value);
+    }
 
     [RelayCommand]
     private Task GoBackAsync()

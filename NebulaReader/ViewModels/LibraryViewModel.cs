@@ -13,6 +13,7 @@ public partial class LibraryViewModel : BaseViewModel
 {
     private readonly ILibraryService _libraryService;
     private readonly IFilePickerService _filePickerService;
+    private readonly IFullScreenService _fullScreenService;
 
     [ObservableProperty]
     public partial ObservableCollection<BookItem> Books { get; set; } = new();
@@ -27,14 +28,39 @@ public partial class LibraryViewModel : BaseViewModel
     public bool IsInsideGroup => !string.IsNullOrWhiteSpace(ActiveGroupTitle);
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsNotFullScreen))]
+    [NotifyPropertyChangedFor(nameof(FullScreenButtonLabel))]
+    public partial bool IsFullScreen { get; set; }
+
+    public bool IsNotFullScreen => !IsFullScreen;
+    public string FullScreenButtonLabel => IsFullScreen ? "Salir pantalla completa" : "Pantalla completa";
+
+    [ObservableProperty]
     public partial string StatusMessage { get; set; } = "Biblioteca lista. Abre un archivo o escanea una carpeta.";
 
-    public LibraryViewModel(ILibraryService libraryService, IFilePickerService filePickerService)
+    public LibraryViewModel(
+        ILibraryService libraryService,
+        IFilePickerService filePickerService,
+        IFullScreenService fullScreenService)
     {
         _libraryService = libraryService;
         _filePickerService = filePickerService;
+        _fullScreenService = fullScreenService;
         _libraryService.BookUpdated += OnBookUpdated;
+        _fullScreenService.FullScreenChanged += OnFullScreenChanged;
+        IsFullScreen = _fullScreenService.IsFullScreen;
         Title = "Biblioteca - Nebula Reader";
+    }
+
+    private void OnFullScreenChanged(object? sender, bool enabled)
+    {
+        MainThread.BeginInvokeOnMainThread(() => IsFullScreen = enabled);
+    }
+
+    [RelayCommand]
+    private void ToggleFullScreen()
+    {
+        _fullScreenService.ToggleFullScreen();
     }
 
     private void OnBookUpdated(object? sender, BookItem updated)

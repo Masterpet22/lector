@@ -1,11 +1,8 @@
-using Microsoft.UI;
 using Microsoft.UI.Input;
-using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
 using Windows.System;
 using Windows.UI.Core;
-using WinRT.Interop;
 using CompositionTarget = Microsoft.UI.Xaml.Media.CompositionTarget;
 
 namespace NebulaReader.Views;
@@ -56,8 +53,6 @@ public partial class ReaderPage
             _attachedWindowRoot.PreviewKeyDown -= OnWindowPreviewKeyDown;
             _attachedWindowRoot = null;
         }
-
-        RestoreWindowedMode();
     }
 
     private partial void StartVSyncLoop()
@@ -118,6 +113,12 @@ public partial class ReaderPage
                     QueueSmoothVerticalScroll(stepPx);
                     e.Handled = true;
                 }
+                else if (CanPanY())
+                {
+                    var stepPx = Math.Max(120f, CanvasPixelHeight * 0.16f);
+                    ApplyPanDelta(0f, -stepPx);
+                    e.Handled = true;
+                }
                 break;
 
             case VirtualKey.Up:
@@ -125,6 +126,12 @@ public partial class ReaderPage
                 {
                     var stepPx = Math.Max(140f, CanvasPixelHeight * 0.16f);
                     QueueSmoothVerticalScroll(-stepPx);
+                    e.Handled = true;
+                }
+                else if (CanPanY())
+                {
+                    var stepPx = Math.Max(120f, CanvasPixelHeight * 0.16f);
+                    ApplyPanDelta(0f, stepPx);
                     e.Handled = true;
                 }
                 break;
@@ -139,13 +146,19 @@ public partial class ReaderPage
                 break;
 
             case VirtualKey.F11:
-                ToggleFullScreen();
+                vm.ToggleFullScreenCommand.Execute(null);
                 e.Handled = true;
                 break;
 
             case VirtualKey.Escape:
-                RestoreWindowedMode();
-                _ = vm.CloseReaderCommand.ExecuteAsync(null);
+                if (vm.IsFullScreen)
+                {
+                    vm.ToggleFullScreenCommand.Execute(null);
+                }
+                else
+                {
+                    _ = vm.CloseReaderCommand.ExecuteAsync(null);
+                }
                 e.Handled = true;
                 break;
         }
@@ -154,36 +167,6 @@ public partial class ReaderPage
     private Microsoft.UI.Xaml.Window? GetNativeWindow()
     {
         return (this.Window?.Handler?.PlatformView ?? Microsoft.Maui.Controls.Application.Current?.Windows.FirstOrDefault()?.Handler?.PlatformView) as Microsoft.UI.Xaml.Window;
-    }
-
-    private AppWindow? GetAppWindow()
-    {
-        var nativeWindow = GetNativeWindow();
-        if (nativeWindow == null) return null;
-
-        var hwnd = WindowNative.GetWindowHandle(nativeWindow);
-        var windowId = Win32Interop.GetWindowIdFromWindow(hwnd);
-        return AppWindow.GetFromWindowId(windowId);
-    }
-
-    private void ToggleFullScreen()
-    {
-        var appWindow = GetAppWindow();
-        if (appWindow == null) return;
-
-        var nextKind = appWindow.Presenter.Kind == AppWindowPresenterKind.FullScreen
-            ? AppWindowPresenterKind.Default
-            : AppWindowPresenterKind.FullScreen;
-        appWindow.SetPresenter(nextKind);
-    }
-
-    private void RestoreWindowedMode()
-    {
-        var appWindow = GetAppWindow();
-        if (appWindow != null && appWindow.Presenter.Kind == AppWindowPresenterKind.FullScreen)
-        {
-            appWindow.SetPresenter(AppWindowPresenterKind.Default);
-        }
     }
 
     private void OnNativePointerWheelChanged(object sender, PointerRoutedEventArgs e)
@@ -217,7 +200,7 @@ public partial class ReaderPage
             QueueSmoothVerticalScroll(stepScrollPx);
             e.Handled = true;
         }
-        else if (_zoom > 1.02f)
+        else if (_zoom > 1.02f || CanPanY())
         {
             var stepPx = (wheelDelta > 0 ? 115f : -115f) * pixelScale;
             ApplyPanDelta(0f, stepPx);
@@ -239,7 +222,7 @@ public partial class ReaderPage
         var point = e.GetCurrentPoint(element);
         if (!point.Properties.IsLeftButtonPressed) return;
 
-        if (_zoom <= 1.02f && !(ViewModel?.IsContinuousVertical ?? false))
+        if (!CanPanContent() && !(ViewModel?.IsContinuousVertical ?? false))
         {
             return;
         }

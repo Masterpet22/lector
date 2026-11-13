@@ -6,33 +6,41 @@
              x:DataType="vm:SettingsViewModel"
              Title="{Binding Title}">
 
-    <VerticalStackLayout Padding="20" Spacing="16">
-        <Grid ColumnDefinitions="*,Auto">
-            <Label Text="Modo lectura nocturna (inversión suave)" VerticalOptions="Center" />
-            <Switch Grid.Column="1" IsToggled="{Binding NightReadingModeEnabled}" />
-        </Grid>
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="16">
+            <Grid ColumnDefinitions="*,Auto">
+                <Label Text="Modo lectura nocturna (inversión suave)" VerticalOptions="Center" />
+                <Switch Grid.Column="1" IsToggled="{Binding NightReadingModeEnabled}" />
+            </Grid>
 
-        <Grid ColumnDefinitions="*,Auto">
-            <Label Text="Filtro visual sepia" VerticalOptions="Center" />
-            <Switch Grid.Column="1" IsToggled="{Binding SepiaFilterEnabled}" />
-        </Grid>
+            <Grid ColumnDefinitions="*,Auto">
+                <Label Text="Filtro visual sepia" VerticalOptions="Center" />
+                <Switch Grid.Column="1" IsToggled="{Binding SepiaFilterEnabled}" />
+            </Grid>
 
-        <Grid ColumnDefinitions="*,Auto">
-            <Label Text="Lectura derecha a izquierda (Manga)" VerticalOptions="Center" />
-            <Switch Grid.Column="1" IsToggled="{Binding RightToLeftMangaMode}" />
-        </Grid>
+            <Grid ColumnDefinitions="*,Auto">
+                <Label Text="Lectura derecha a izquierda (Manga)" VerticalOptions="Center" />
+                <Switch Grid.Column="1" IsToggled="{Binding RightToLeftMangaMode}" />
+            </Grid>
 
-        <Grid ColumnDefinitions="*,Auto">
-            <Label Text="Lectura continua (de arriba a abajo)" VerticalOptions="Center" />
-            <Switch Grid.Column="1" IsToggled="{Binding ContinuousVerticalScroll}" />
-        </Grid>
+            <VerticalStackLayout Spacing="6">
+                <Label Text="Modo de vista" FontAttributes="Bold" />
+                <Picker ItemsSource="{Binding LayoutModeOptions}"
+                        SelectedIndex="{Binding SelectedLayoutModeIndex}" />
+            </VerticalStackLayout>
 
-        <Grid ColumnDefinitions="*,Auto">
-            <Label Text="Doble página en pantallas amplias (&gt; 800 dp)" VerticalOptions="Center" />
-            <Switch Grid.Column="1" IsToggled="{Binding DoublePageSpreadEnabled}" />
-        </Grid>
+            <VerticalStackLayout Spacing="6">
+                <Label Text="Ajuste de página" FontAttributes="Bold" />
+                <Picker ItemsSource="{Binding PageFitModeOptions}"
+                        SelectedIndex="{Binding SelectedPageFitModeIndex}" />
+            </VerticalStackLayout>
 
-        <Button Text="Volver" Command="{Binding GoBackCommand}" />
-    </VerticalStackLayout>
+            <Grid ColumnDefinitions="*,Auto">
+                <Label Text="Pantalla completa" VerticalOptions="Center" />
+                <Switch Grid.Column="1" IsToggled="{Binding IsFullScreen}" />
+            </Grid>
+
+            <Button Text="Volver" Command="{Binding GoBackCommand}" />
+        </VerticalStackLayout>
+    </ScrollView>
 </ContentPage>
-

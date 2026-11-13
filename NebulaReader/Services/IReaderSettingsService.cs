@@ -14,4 +14,6 @@ public interface IReaderSettingsService
     bool RightToLeftMangaMode { get; set; }
     bool ContinuousVerticalScroll { get; set; }
     bool DoublePageSpreadEnabled { get; set; }
+    ReaderLayoutMode LayoutMode { get; set; }
+    PageFitMode PageFitMode { get; set; }
 }

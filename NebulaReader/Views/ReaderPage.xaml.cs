@@ -70,6 +70,7 @@ public partial class ReaderPage : ContentPage
     private float _verticalScrollOffset;
     private float _lastCurrentPageFittedHeight;
     private float _lastPrevPageFittedHeight;
+    private SKRect _activeContentBounds;
 
 #if ANDROID
     private readonly SKGLView _readerSurfaceView = new();
@@ -140,9 +141,18 @@ public partial class ReaderPage : ContentPage
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (e.PropertyName is nameof(ReaderViewModel.PageFitMode) or nameof(ReaderViewModel.LayoutMode))
+        {
+            ResetZoomAndVerticalPosition();
+            _activeContentBounds = SKRect.Empty;
+            InvalidateCanvasSurface();
+            return;
+        }
+
         if (e.PropertyName == nameof(ReaderViewModel.CurrentPageIndex) && !(ViewModel?.IsContinuousVertical ?? false))
         {
             ResetZoomAndVerticalPosition();
+            _activeContentBounds = SKRect.Empty;
             InvalidateCanvasSurface();
         }
     }
@@ -211,6 +221,7 @@ public partial class ReaderPage : ContentPage
             return;
         }
 
+        UpdateExpectedContentBounds(vm, width, height);
         ClampPan(width, height);
 
         var transform = BuildTransformMatrix(width, height);
@@ -233,6 +244,33 @@ public partial class ReaderPage : ContentPage
         }
 
         canvas.Restore();
+    }
+
+    private void UpdateExpectedContentBounds(ReaderViewModel vm, float canvasWidth, float canvasHeight)
+    {
+        if (vm.IsContinuousVertical)
+        {
+            var expectedSize = GetContinuousPageSize(vm, vm.CurrentPageIndex, canvasWidth, canvasHeight);
+            var left = (canvasWidth - expectedSize.Width) / 2f;
+            _activeContentBounds = new SKRect(left, 0f, left + expectedSize.Width, canvasHeight);
+            return;
+        }
+
+        if (vm.IsDoublePageActive && vm.CurrentPageIndex + 1 < vm.TotalPages)
+        {
+            var halfWidth = (canvasWidth - PageGapPx) / 2f;
+            var leftAspect = vm.GetExpectedAspectRatio(vm.IsRightToLeftManga ? vm.CurrentPageIndex + 1 : vm.CurrentPageIndex);
+            var rightAspect = vm.GetExpectedAspectRatio(vm.IsRightToLeftManga ? vm.CurrentPageIndex : vm.CurrentPageIndex + 1);
+            var leftRect = CalculateFittedRect(1000f, 1000f * leftAspect, 0, 0, halfWidth, canvasHeight, vm.PageFitMode);
+            var rightRect = CalculateFittedRect(1000f, 1000f * rightAspect, halfWidth + PageGapPx, 0, halfWidth, canvasHeight, vm.PageFitMode);
+            var leftAligned = new SKRect(halfWidth - leftRect.Width, leftRect.Top, halfWidth, leftRect.Bottom);
+            var rightAligned = new SKRect(halfWidth + PageGapPx, rightRect.Top, halfWidth + PageGapPx + rightRect.Width, rightRect.Bottom);
+            _activeContentBounds = SKRect.Union(leftAligned, rightAligned);
+            return;
+        }
+
+        var aspect = vm.GetExpectedAspectRatio(vm.CurrentPageIndex);
+        _activeContentBounds = CalculateFittedRect(1000f, 1000f * aspect, 0, 0, canvasWidth, canvasHeight, vm.PageFitMode);
     }
 
     private static SKPaint? GetCachedFilterPaint(ReaderVisualFilter filter)
@@ -263,11 +301,14 @@ public partial class ReaderPage : ContentPage
 
         if (!vm.TryDrawCachedPage(pageIndex, preferredFitWidthPx: null, (image, bitmap) =>
         {
-            var dest = CalculateAspectFitRect(bitmap.Width, bitmap.Height, 0, 0, canvasWidth, canvasHeight);
+            var dest = CalculateFittedRect(bitmap.Width, bitmap.Height, 0, 0, canvasWidth, canvasHeight, vm.PageFitMode);
+            _activeContentBounds = dest;
             DrawSurfaceBitmapOrImage(canvas, image, bitmap, dest, paint);
         }))
         {
-            DrawPlaceholderCard(canvas, pageIndex, 0, 0, canvasWidth, canvasHeight);
+            var fallbackRect = CalculateFittedRect(1000f, 1000f * vm.GetExpectedAspectRatio(pageIndex), 0, 0, canvasWidth, canvasHeight, vm.PageFitMode);
+            _activeContentBounds = fallbackRect;
+            DrawPlaceholderCard(canvas, pageIndex, fallbackRect.Left, fallbackRect.Top, fallbackRect.Width, fallbackRect.Height);
         }
     }
 
@@ -289,21 +330,38 @@ public partial class ReaderPage : ContentPage
         vm.RequestPageLoadIfNeeded(rightIndex);
 
         var halfWidth = (canvasWidth - PageGapPx) / 2f;
+        SKRect? leftBounds = null;
+        SKRect? rightBounds = null;
 
         vm.TryDrawCachedPage(leftIndex, preferredFitWidthPx: null, (image, leftBitmap) =>
         {
-            var dest = CalculateAspectFitRect(leftBitmap.Width, leftBitmap.Height, 0, 0, halfWidth, canvasHeight);
+            var dest = CalculateFittedRect(leftBitmap.Width, leftBitmap.Height, 0, 0, halfWidth, canvasHeight, vm.PageFitMode);
             var aligned = new SKRect(halfWidth - dest.Width, dest.Top, halfWidth, dest.Bottom);
+            leftBounds = aligned;
             DrawSurfaceBitmapOrImage(canvas, image, leftBitmap, aligned, paint);
         });
 
         vm.TryDrawCachedPage(rightIndex, preferredFitWidthPx: null, (image, rightBitmap) =>
         {
             var rightX = halfWidth + PageGapPx;
-            var dest = CalculateAspectFitRect(rightBitmap.Width, rightBitmap.Height, rightX, 0, halfWidth, canvasHeight);
+            var dest = CalculateFittedRect(rightBitmap.Width, rightBitmap.Height, rightX, 0, halfWidth, canvasHeight, vm.PageFitMode);
             var aligned = new SKRect(rightX, dest.Top, rightX + dest.Width, dest.Bottom);
+            rightBounds = aligned;
             DrawSurfaceBitmapOrImage(canvas, image, rightBitmap, aligned, paint);
         });
+
+        if (leftBounds.HasValue && rightBounds.HasValue)
+        {
+            _activeContentBounds = SKRect.Union(leftBounds.Value, rightBounds.Value);
+        }
+        else if (leftBounds.HasValue)
+        {
+            _activeContentBounds = leftBounds.Value;
+        }
+        else if (rightBounds.HasValue)
+        {
+            _activeContentBounds = rightBounds.Value;
+        }
     }
 
     private static float GetContinuousMaxPageWidth(float canvasWidth, float canvasHeight)
@@ -312,38 +370,58 @@ public partial class ReaderPage : ContentPage
         return Math.Min(canvasWidth, canvasHeight * 1.15f);
     }
 
-    private static float GetContinuousPageHeight(ReaderViewModel vm, int pageIndex, float maxPageWidth)
+    private static SKSize GetContinuousPageSize(ReaderViewModel vm, int pageIndex, float canvasWidth, float canvasHeight, float? knownAspectRatio = null)
     {
-        return maxPageWidth * vm.GetExpectedAspectRatio(pageIndex);
+        var aspect = knownAspectRatio ?? vm.GetExpectedAspectRatio(pageIndex);
+        aspect = Math.Clamp(aspect, 0.2f, 4.5f);
+
+        return vm.PageFitMode switch
+        {
+            PageFitMode.FitWidth => new SKSize(Math.Max(1f, canvasWidth), Math.Max(1f, canvasWidth) * aspect),
+            PageFitMode.FitHeight => new SKSize(Math.Max(1f, canvasHeight) / aspect, Math.Max(1f, canvasHeight)),
+            _ => new SKSize(
+                GetContinuousMaxPageWidth(canvasWidth, canvasHeight),
+                GetContinuousMaxPageWidth(canvasWidth, canvasHeight) * aspect)
+        };
     }
 
-    private int? GetContinuousFitWidthPx(float maxPageWidth)
+    private static float GetContinuousPageHeight(ReaderViewModel vm, int pageIndex, float canvasWidth, float canvasHeight)
+    {
+        return GetContinuousPageSize(vm, pageIndex, canvasWidth, canvasHeight).Height;
+    }
+
+    private int? GetContinuousFitWidthPx(float targetPageWidth)
     {
 #if ANDROID
         // En Android SKGLView dibuja texturas directamente en GPU sin necesidad de copia CPU escalada
         return null;
 #else
-        if (_zoom > 1.02f || maxPageWidth <= 64f) return null;
-        return (int)Math.Ceiling(maxPageWidth);
+        if (_zoom > 1.02f || targetPageWidth <= 64f) return null;
+        return (int)Math.Ceiling(targetPageWidth);
 #endif
     }
 
     private void DrawContinuousVertical(SKCanvas canvas, ReaderViewModel vm, float canvasWidth, float canvasHeight, SKPaint? paint)
     {
         var current = vm.CurrentPageIndex;
-        var maxPageWidth = GetContinuousMaxPageWidth(canvasWidth, canvasHeight);
-        var fitWidthPx = GetContinuousFitWidthPx(maxPageWidth);
+        var referenceSize = GetContinuousPageSize(vm, current, canvasWidth, canvasHeight);
+        var fitWidthPx = GetContinuousFitWidthPx(referenceSize.Width);
         if (fitWidthPx.HasValue)
         {
             vm.SetPreferredFitWidthPx(fitWidthPx.Value);
         }
-        var x = (canvasWidth - maxPageWidth) / 2f;
+
+        var widestPageWidth = referenceSize.Width;
 
         // Dibuja todos los espacios de página visibles hacia abajo [actual, actual + 1, actual + 2, ...]
         var topY = -_verticalScrollOffset;
         for (var pageIdx = current; pageIdx < vm.TotalPages && topY <= canvasHeight; pageIdx++)
         {
-            var slotHeight = GetContinuousPageHeight(vm, pageIdx, maxPageWidth);
+            var expectedSize = GetContinuousPageSize(vm, pageIdx, canvasWidth, canvasHeight);
+            var slotWidth = expectedSize.Width;
+            var slotHeight = expectedSize.Height;
+            widestPageWidth = Math.Max(widestPageWidth, slotWidth);
+
             if (pageIdx == current)
             {
                 _lastCurrentPageFittedHeight = slotHeight;
@@ -353,26 +431,35 @@ public partial class ReaderPage : ContentPage
             {
                 vm.RequestPageLoadIfNeeded(pageIdx);
                 var currentY = topY;
+                var currentSlotWidth = slotWidth;
                 var currentSlotHeight = slotHeight;
 
                 var drew = vm.TryDrawCachedPage(pageIdx, fitWidthPx, (image, bitmap) =>
                 {
-                    currentSlotHeight = maxPageWidth * (bitmap.Height / (float)Math.Max(1, bitmap.Width));
+                    var aspect = bitmap.Height / (float)Math.Max(1, bitmap.Width);
+                    var actualSize = GetContinuousPageSize(vm, pageIdx, canvasWidth, canvasHeight, aspect);
+                    currentSlotWidth = actualSize.Width;
+                    currentSlotHeight = actualSize.Height;
+                    widestPageWidth = Math.Max(widestPageWidth, currentSlotWidth);
+
                     if (pageIdx == current)
                     {
                         _lastCurrentPageFittedHeight = currentSlotHeight;
                     }
+
+                    var x = (canvasWidth - currentSlotWidth) / 2f;
                     DrawSurfaceBitmapOrImage(
                         canvas,
                         image,
                         bitmap,
-                        new SKRect(x, currentY, x + maxPageWidth, currentY + currentSlotHeight),
+                        new SKRect(x, currentY, x + currentSlotWidth, currentY + currentSlotHeight),
                         paint);
                 });
 
                 if (!drew)
                 {
-                    DrawPlaceholderCard(canvas, pageIdx, x, currentY, maxPageWidth, currentSlotHeight);
+                    var x = (canvasWidth - currentSlotWidth) / 2f;
+                    DrawPlaceholderCard(canvas, pageIdx, x, currentY, currentSlotWidth, currentSlotHeight);
                 }
 
                 slotHeight = currentSlotHeight;
@@ -386,21 +473,30 @@ public partial class ReaderPage : ContentPage
         var bottomY = -_verticalScrollOffset - PageGapPx;
         for (var prevIdx = current - 1; prevIdx >= 0 && bottomY >= 0; prevIdx--)
         {
-            var prevHeight = GetContinuousPageHeight(vm, prevIdx, maxPageWidth);
+            var expectedPrevSize = GetContinuousPageSize(vm, prevIdx, canvasWidth, canvasHeight);
             vm.RequestPageLoadIfNeeded(prevIdx);
 
-            float drawnHeight = prevHeight;
+            var drawnWidth = expectedPrevSize.Width;
+            var drawnHeight = expectedPrevSize.Height;
+            widestPageWidth = Math.Max(widestPageWidth, drawnWidth);
+
             var drawn = vm.TryDrawCachedPage(prevIdx, fitWidthPx, (image, prevBitmap) =>
             {
-                drawnHeight = maxPageWidth * (prevBitmap.Height / (float)Math.Max(1, prevBitmap.Width));
+                var aspect = prevBitmap.Height / (float)Math.Max(1, prevBitmap.Width);
+                var actualSize = GetContinuousPageSize(vm, prevIdx, canvasWidth, canvasHeight, aspect);
+                drawnWidth = actualSize.Width;
+                drawnHeight = actualSize.Height;
+                widestPageWidth = Math.Max(widestPageWidth, drawnWidth);
+
                 var prevTopY = bottomY - drawnHeight;
                 if (bottomY >= 0 && prevTopY <= canvasHeight)
                 {
+                    var x = (canvasWidth - drawnWidth) / 2f;
                     DrawSurfaceBitmapOrImage(
                         canvas,
                         image,
                         prevBitmap,
-                        new SKRect(x, prevTopY, x + maxPageWidth, bottomY),
+                        new SKRect(x, prevTopY, x + drawnWidth, bottomY),
                         paint);
                 }
             });
@@ -410,7 +506,8 @@ public partial class ReaderPage : ContentPage
                 var prevTopY = bottomY - drawnHeight;
                 if (bottomY >= 0 && prevTopY <= canvasHeight)
                 {
-                    DrawPlaceholderCard(canvas, prevIdx, x, prevTopY, maxPageWidth, drawnHeight);
+                    var x = (canvasWidth - drawnWidth) / 2f;
+                    DrawPlaceholderCard(canvas, prevIdx, x, prevTopY, drawnWidth, drawnHeight);
                 }
             }
 
@@ -421,6 +518,9 @@ public partial class ReaderPage : ContentPage
 
             bottomY -= drawnHeight + PageGapPx;
         }
+
+        var boundsLeft = (canvasWidth - widestPageWidth) / 2f;
+        _activeContentBounds = new SKRect(boundsLeft, 0f, boundsLeft + widestPageWidth, canvasHeight);
     }
 
     private static void DrawPlaceholderCard(SKCanvas canvas, int pageIndex, float x, float y, float width, float height)
@@ -437,13 +537,30 @@ public partial class ReaderPage : ContentPage
             PlaceholderTextPaint);
     }
 
-    private static SKRect CalculateAspectFitRect(float bmpWidth, float bmpHeight, float areaX, float areaY, float areaWidth, float areaHeight)
+    private static SKRect CalculateFittedRect(
+        float bmpWidth,
+        float bmpHeight,
+        float areaX,
+        float areaY,
+        float areaWidth,
+        float areaHeight,
+        PageFitMode fitMode)
     {
-        var scale = Math.Min(areaWidth / Math.Max(1f, bmpWidth), areaHeight / Math.Max(1f, bmpHeight));
-        var drawW = bmpWidth * scale;
-        var drawH = bmpHeight * scale;
+        var safeW = Math.Max(1f, bmpWidth);
+        var safeH = Math.Max(1f, bmpHeight);
+        var scale = fitMode switch
+        {
+            PageFitMode.FitWidth => areaWidth / safeW,
+            PageFitMode.FitHeight => areaHeight / safeH,
+            _ => Math.Min(areaWidth / safeW, areaHeight / safeH)
+        };
+
+        var drawW = safeW * scale;
+        var drawH = safeH * scale;
         var x = areaX + (areaWidth - drawW) / 2f;
-        var y = areaY + (areaHeight - drawH) / 2f;
+        var y = drawH <= areaHeight
+            ? areaY + (areaHeight - drawH) / 2f
+            : areaY;
         return new SKRect(x, y, x + drawW, y + drawH);
     }
 
@@ -486,7 +603,7 @@ public partial class ReaderPage : ContentPage
             return;
         }
 
-        if (_zoom <= 1.02f)
+        if (!CanPanContent())
         {
             return;
         }
@@ -499,13 +616,13 @@ public partial class ReaderPage : ContentPage
         var height = CanvasPixelHeight;
         if (width > 0 && height > 0)
         {
-            var maxPanY = height * (_zoom - 1f) / 2f;
+            var (_, _, minPanY, maxPanY) = GetPanBounds(width, height);
             var unclampedPanY = _panY;
             ClampPan(width, height);
 
             // En lectura continua con zoom, al tocar el borde superior/inferior el resto del desplazamiento
             // continúa avanzando de arriba a abajo entre páginas.
-            if (vm.IsContinuousVertical && Math.Abs(unclampedPanY) > maxPanY)
+            if (vm.IsContinuousVertical && (unclampedPanY > maxPanY || unclampedPanY < minPanY))
             {
                 var overflowY = unclampedPanY - _panY;
                 if (Math.Abs(overflowY) > 0.5f && Math.Abs(prevPanY - _panY) < Math.Abs(deltaYPx))
@@ -530,24 +647,23 @@ public partial class ReaderPage : ContentPage
 
         var canvasWidth = CanvasPixelWidth;
         var canvasHeight = CanvasPixelHeight;
-        var maxPageWidth = GetContinuousMaxPageWidth(canvasWidth, canvasHeight);
 
         _verticalScrollOffset += deltaScrollPx;
 
         var targetIndex = vm.CurrentPageIndex;
-        var currentSpan = GetContinuousPageHeight(vm, targetIndex, maxPageWidth) + PageGapPx;
+        var currentSpan = GetContinuousPageHeight(vm, targetIndex, canvasWidth, canvasHeight) + PageGapPx;
 
         while (_verticalScrollOffset >= currentSpan && targetIndex + 1 < vm.TotalPages)
         {
             _verticalScrollOffset -= currentSpan;
             targetIndex++;
-            currentSpan = GetContinuousPageHeight(vm, targetIndex, maxPageWidth) + PageGapPx;
+            currentSpan = GetContinuousPageHeight(vm, targetIndex, canvasWidth, canvasHeight) + PageGapPx;
         }
 
         while (_verticalScrollOffset < 0 && targetIndex > 0)
         {
             targetIndex--;
-            var prevSpan = GetContinuousPageHeight(vm, targetIndex, maxPageWidth) + PageGapPx;
+            var prevSpan = GetContinuousPageHeight(vm, targetIndex, canvasWidth, canvasHeight) + PageGapPx;
             _verticalScrollOffset += prevSpan;
             currentSpan = prevSpan;
         }
@@ -701,6 +817,73 @@ public partial class ReaderPage : ContentPage
         return (float)((latest.TotalYPx - oldestInWindow.TotalYPx) / dtSec);
     }
 
+    private (float MinPanX, float MaxPanX, float MinPanY, float MaxPanY) GetPanBounds(float canvasWidth, float canvasHeight)
+    {
+        var isContinuous = ViewModel?.IsContinuousVertical ?? false;
+        var bounds = _activeContentBounds.IsEmpty
+            ? new SKRect(0, 0, canvasWidth, canvasHeight)
+            : _activeContentBounds;
+
+        var cx = canvasWidth / 2f;
+        var cy = canvasHeight / 2f;
+
+        var scaledLeft = cx + (bounds.Left - cx) * _zoom;
+        var scaledRight = cx + (bounds.Right - cx) * _zoom;
+        var scaledWidth = scaledRight - scaledLeft;
+
+        var minPanX = 0f;
+        var maxPanX = 0f;
+        if (scaledWidth > canvasWidth + 0.5f)
+        {
+            minPanX = canvasWidth - scaledRight;
+            maxPanX = -scaledLeft;
+        }
+
+        var minPanY = 0f;
+        var maxPanY = 0f;
+        if (isContinuous)
+        {
+            if (_zoom > 1.001f)
+            {
+                maxPanY = canvasHeight * (_zoom - 1f) / 2f;
+                minPanY = -maxPanY;
+            }
+        }
+        else
+        {
+            var scaledTop = cy + (bounds.Top - cy) * _zoom;
+            var scaledBottom = cy + (bounds.Bottom - cy) * _zoom;
+            var scaledHeight = scaledBottom - scaledTop;
+            if (scaledHeight > canvasHeight + 0.5f)
+            {
+                minPanY = canvasHeight - scaledBottom;
+                maxPanY = -scaledTop;
+            }
+        }
+
+        return (minPanX, maxPanX, minPanY, maxPanY);
+    }
+
+    private bool CanPanX()
+    {
+        var width = CanvasPixelWidth;
+        var height = CanvasPixelHeight;
+        if (width <= 0 || height <= 0) return false;
+        var (minX, maxX, _, _) = GetPanBounds(width, height);
+        return maxX - minX > 1.0f;
+    }
+
+    private bool CanPanY()
+    {
+        var width = CanvasPixelWidth;
+        var height = CanvasPixelHeight;
+        if (width <= 0 || height <= 0) return false;
+        var (_, _, minY, maxY) = GetPanBounds(width, height);
+        return maxY - minY > 1.0f;
+    }
+
+    private bool CanPanContent() => _zoom > 1.02f || CanPanX() || CanPanY();
+
     private void ClampPan()
     {
         var width = CanvasPixelWidth;
@@ -716,15 +899,11 @@ public partial class ReaderPage : ContentPage
         if (_zoom <= 1.001f)
         {
             _zoom = 1.0f;
-            _panX = 0f;
-            _panY = 0f;
-            return;
         }
 
-        var maxPanX = canvasWidth * (_zoom - 1f) / 2f;
-        var maxPanY = canvasHeight * (_zoom - 1f) / 2f;
-        _panX = Math.Clamp(_panX, -maxPanX, maxPanX);
-        _panY = Math.Clamp(_panY, -maxPanY, maxPanY);
+        var (minPanX, maxPanX, minPanY, maxPanY) = GetPanBounds(canvasWidth, canvasHeight);
+        _panX = minPanX <= maxPanX ? Math.Clamp(_panX, minPanX, maxPanX) : 0f;
+        _panY = minPanY <= maxPanY ? Math.Clamp(_panY, minPanY, maxPanY) : 0f;
     }
 
     private float DipToPixelScale()
@@ -791,11 +970,23 @@ public partial class ReaderPage : ContentPage
                 _lastPanTotalX = e.TotalX;
                 _lastPanTotalY = e.TotalY;
 
-                if (_zoom > 1.02f || vm.IsContinuousVertical)
+                if (CanPanContent() || vm.IsContinuousVertical)
                 {
-                    _isActivelyInteracting = true;
-                    RecordPanSample(Stopwatch.GetTimestamp(), (float)(e.TotalY * scale));
-                    ApplyPanDelta((float)(dx * scale), (float)(dy * scale));
+                    // Si solo hay desborde vertical (p. ej. Ajuste al ancho) sin zoom, un gesto horizontal marcado sigue pasando página
+                    if (!vm.IsContinuousVertical &&
+                        _zoom <= 1.02f &&
+                        !CanPanX() &&
+                        Math.Abs(e.TotalX) > Math.Abs(e.TotalY) * 1.4 &&
+                        Math.Abs(e.TotalX) > 25)
+                    {
+                        _swipeAccumulatedX += dx;
+                    }
+                    else
+                    {
+                        _isActivelyInteracting = true;
+                        RecordPanSample(Stopwatch.GetTimestamp(), (float)(e.TotalY * scale));
+                        ApplyPanDelta((float)(dx * scale), (float)(dy * scale));
+                    }
                 }
                 else
                 {
@@ -821,10 +1012,20 @@ public partial class ReaderPage : ContentPage
                         InvalidateCanvasSurface();
                     }
                 }
-                else if (_zoom > 1.02f)
+                else if (CanPanContent())
                 {
                     _isActivelyInteracting = false;
-                    InvalidateCanvasSurface();
+                    if (_zoom <= 1.02f && !CanPanX() && Math.Abs(_swipeAccumulatedX) > 65)
+                    {
+                        ResetZoomAndVerticalPosition();
+                        var swipeLeft = _swipeAccumulatedX < 0;
+                        var command = swipeLeft ? vm.GoNextVisualCommand : vm.GoPreviousVisualCommand;
+                        _ = command.ExecuteAsync(null);
+                    }
+                    else
+                    {
+                        InvalidateCanvasSurface();
+                    }
                 }
                 else
                 {

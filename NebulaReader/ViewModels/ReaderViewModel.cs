@@ -23,6 +23,7 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     private readonly IBookSourceFactory _bookSourceFactory;
     private readonly IReaderSettingsService _settingsService;
     private readonly IOrientationService _orientationService;
+    private readonly IFullScreenService _fullScreenService;
 
     private IBookSource? _bookSource;
     private CancellationTokenSource? _loadCts;
@@ -78,6 +79,16 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     public partial bool IsDoublePageActive { get; set; }
 
     [ObservableProperty]
+    public partial ReaderLayoutMode LayoutMode { get; set; }
+
+    [ObservableProperty]
+    public partial PageFitMode PageFitMode { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(FullScreenButtonLabel))]
+    public partial bool IsFullScreen { get; set; }
+
+    [ObservableProperty]
     public partial bool IsNightMode { get; set; }
 
     [ObservableProperty]
@@ -86,9 +97,19 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     public bool CanScrubPages => TotalPages > 1;
     public string RotationLockLabel => IsRotationLocked ? "Rotación: Fija" : "Rotación: Libre";
     public string DirectionModeLabel => IsRightToLeftManga ? "Manga (D→I)" : "Cómic (I→D)";
-    public string LayoutModeLabel => IsContinuousVertical
-        ? "Continua (↓)"
-        : (IsDoublePageActive ? "Doble Pág." : "Paginado");
+    public string LayoutModeLabel => LayoutMode switch
+    {
+        ReaderLayoutMode.SinglePage => "Vista: 1 Pág.",
+        ReaderLayoutMode.ContinuousVertical => "Vista: Continua ↓",
+        _ => IsDoublePageActive ? "Vista: Doble" : "Vista: Doble (Auto)"
+    };
+    public string FitModeLabel => PageFitMode switch
+    {
+        PageFitMode.FitWidth => "Ajuste: Ancho",
+        PageFitMode.FitHeight => "Ajuste: Alto",
+        _ => "Ajuste: Auto"
+    };
+    public string FullScreenButtonLabel => IsFullScreen ? "Ventana" : "Pant. Completa";
     public string FilterModeLabel => VisualFilter switch
     {
         ReaderVisualFilter.NightInvert => "Filtro: Nocturno",
@@ -101,17 +122,26 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
         IPageCacheService pageCacheService,
         IBookSourceFactory bookSourceFactory,
         IReaderSettingsService settingsService,
-        IOrientationService orientationService)
+        IOrientationService orientationService,
+        IFullScreenService fullScreenService)
     {
         _libraryService = libraryService;
         _pageCacheService = pageCacheService;
         _bookSourceFactory = bookSourceFactory;
         _settingsService = settingsService;
         _orientationService = orientationService;
+        _fullScreenService = fullScreenService;
 
         Title = "Lector";
         SyncFromSettings();
+        IsFullScreen = _fullScreenService.IsFullScreen;
         _settingsService.SettingsChanged += OnSettingsChanged;
+        _fullScreenService.FullScreenChanged += OnFullScreenChanged;
+    }
+
+    private void OnFullScreenChanged(object? sender, bool enabled)
+    {
+        MainThread.BeginInvokeOnMainThread(() => IsFullScreen = enabled);
     }
 
     public void ApplyQueryAttributes(IDictionary<string, object> query)
@@ -372,6 +402,34 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     private void ToggleVerticalScroll()
     {
         _settingsService.ContinuousVerticalScroll = !_settingsService.ContinuousVerticalScroll;
+    }
+
+    [RelayCommand]
+    private void CycleLayoutMode()
+    {
+        _settingsService.LayoutMode = LayoutMode switch
+        {
+            ReaderLayoutMode.SinglePage => ReaderLayoutMode.DoublePage,
+            ReaderLayoutMode.DoublePage => ReaderLayoutMode.ContinuousVertical,
+            _ => ReaderLayoutMode.SinglePage
+        };
+    }
+
+    [RelayCommand]
+    private void CyclePageFitMode()
+    {
+        _settingsService.PageFitMode = PageFitMode switch
+        {
+            PageFitMode.FitPage => PageFitMode.FitWidth,
+            PageFitMode.FitWidth => PageFitMode.FitHeight,
+            _ => PageFitMode.FitPage
+        };
+    }
+
+    [RelayCommand]
+    private void ToggleFullScreen()
+    {
+        _fullScreenService.ToggleFullScreen();
     }
 
     [RelayCommand]
@@ -902,18 +960,21 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
         IsNightMode = _settingsService.NightReadingModeEnabled;
         VisualFilter = _settingsService.VisualFilter;
         IsRightToLeftManga = _settingsService.RightToLeftMangaMode;
-        IsContinuousVertical = _settingsService.ContinuousVerticalScroll;
+        LayoutMode = _settingsService.LayoutMode;
+        IsContinuousVertical = LayoutMode == ReaderLayoutMode.ContinuousVertical;
         IsDoublePageEnabled = _settingsService.DoublePageSpreadEnabled;
+        PageFitMode = _settingsService.PageFitMode;
 
         RecalculateDoublePageState();
         OnPropertyChanged(nameof(DirectionModeLabel));
+        OnPropertyChanged(nameof(LayoutModeLabel));
+        OnPropertyChanged(nameof(FitModeLabel));
         OnPropertyChanged(nameof(FilterModeLabel));
     }
 
     private void RecalculateDoublePageState()
     {
-        var active = !IsContinuousVertical
-            && IsDoublePageEnabled
+        var active = LayoutMode == ReaderLayoutMode.DoublePage
             && _viewportWidth > 800
             && _viewportWidth > _viewportHeight;
 

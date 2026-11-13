@@ -32,6 +32,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<IPageCacheService, PageCacheService>();
         builder.Services.AddSingleton<IReaderSettingsService, ReaderSettingsService>();
         builder.Services.AddSingleton<IOrientationService, OrientationService>();
+        builder.Services.AddSingleton<IFullScreenService, FullScreenService>();
 
         // ViewModels (Transient)
         builder.Services.AddTransient<LibraryViewModel>();
