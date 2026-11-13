@@ -34,10 +34,20 @@ public partial class SettingsViewModel : BaseViewModel
     public partial bool SepiaFilterEnabled { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ReadingDirectionIcon))]
     public partial bool RightToLeftMangaMode { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LayoutModeIcon))]
     public partial int SelectedLayoutModeIndex { get; set; }
+
+    public string ReadingDirectionIcon => RightToLeftMangaMode ? "reading_manga.png" : "reading_comic.png";
+    public string LayoutModeIcon => SelectedLayoutModeIndex switch
+    {
+        0 => "reading_single.png",
+        2 => "reading_continuous.png",
+        _ => "reading_spread.png"
+    };
 
     [ObservableProperty]
     public partial int SelectedPageFitModeIndex { get; set; }

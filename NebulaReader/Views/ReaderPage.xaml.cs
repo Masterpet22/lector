@@ -195,16 +195,14 @@ public partial class ReaderPage : ContentPage
 
         var isCompactHeight = height < 520;
 
-        TopHudBar.Margin = isCompactHeight ? new Thickness(8, 6, 8, 0) : new Thickness(10, 10, 10, 0);
-        TopHudBar.Padding = isCompactHeight ? new Thickness(10, 6) : new Thickness(12, 10);
-        TopHudGrid.RowSpacing = isCompactHeight ? 4 : 6;
-        TopButtonsScroll.MaximumHeightRequest = isCompactHeight
-            ? Math.Max(42, height * 0.26)
-            : 220;
+        TopHudBar.Margin = isCompactHeight ? new Thickness(8, 6, 8, 0) : new Thickness(14, 14, 14, 0);
+        TopHudBar.Padding = isCompactHeight ? new Thickness(10, 8) : new Thickness(14, 12);
+        TopHudGrid.RowSpacing = isCompactHeight ? 6 : 10;
+        TopButtonsScroll.MaximumHeightRequest = 48;
 
-        BottomHudBar.Margin = isCompactHeight ? new Thickness(8, 0, 8, 6) : new Thickness(10, 0, 10, 10);
-        BottomHudBar.Padding = isCompactHeight ? new Thickness(12, 6, 12, 6) : new Thickness(14, 8, 14, 10);
-        BottomHudStack.Spacing = isCompactHeight ? 2 : 4;
+        BottomHudBar.Margin = isCompactHeight ? new Thickness(8, 0, 8, 6) : new Thickness(14, 0, 14, 14);
+        BottomHudBar.Padding = isCompactHeight ? new Thickness(12, 6) : new Thickness(16, 10, 16, 12);
+        BottomHudStack.Spacing = isCompactHeight ? 2 : 6;
 
         if (width > 980)
         {

@@ -10,7 +10,7 @@ obj/
 TestResults/
 *.log
 
-# Carpetas locales heredadas de main (JS/Capacitor)
+# Dependencias y artefactos locales generados
 /node_modules/
 /dist/
 /android/

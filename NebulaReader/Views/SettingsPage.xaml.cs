@@ -21,9 +21,9 @@ public partial class SettingsPage : ContentPage
             return;
         }
 
-        SettingsContainer.WidthRequest = Math.Min(720.0, Math.Max(260.0, width - 8.0));
+        SettingsContainer.WidthRequest = Math.Min(760.0, Math.Max(260.0, width - 8.0));
         SettingsContainer.Padding = height < 500
             ? new Thickness(14, 10)
-            : new Thickness(18, 16);
+            : new Thickness(20, 18);
     }
 }

@@ -25,14 +25,14 @@
     <Style TargetType="Button">
         <Setter Property="TextColor" Value="{StaticResource TextPrimary}" />
         <Setter Property="BackgroundColor" Value="{StaticResource Surface2}" />
-        <Setter Property="BorderColor" Value="{StaticResource NeonPurpleDeep}" />
+        <Setter Property="BorderColor" Value="{StaticResource SubtleBorder}" />
         <Setter Property="BorderWidth" Value="1" />
         <Setter Property="FontFamily" Value="OpenSansSemibold"/>
         <Setter Property="FontSize" Value="13"/>
         <Setter Property="LineBreakMode" Value="WordWrap"/>
-        <Setter Property="CornerRadius" Value="10"/>
-        <Setter Property="Padding" Value="10,8"/>
-        <Setter Property="MinimumHeightRequest" Value="42"/>
+        <Setter Property="CornerRadius" Value="14"/>
+        <Setter Property="Padding" Value="14,10"/>
+        <Setter Property="MinimumHeightRequest" Value="44"/>
         <Setter Property="MinimumWidthRequest" Value="40"/>
         <Setter Property="VisualStateManager.VisualStateGroups">
             <VisualStateGroupList>
@@ -64,11 +64,11 @@
         <Setter Property="FontFamily" Value="OpenSansSemibold"/>
         <Setter Property="FontSize" Value="13"/>
         <Setter Property="LineBreakMode" Value="WordWrap"/>
-        <Setter Property="CornerRadius" Value="10"/>
-        <Setter Property="Padding" Value="12,8"/>
-        <Setter Property="MinimumHeightRequest" Value="42"/>
+        <Setter Property="CornerRadius" Value="14"/>
+        <Setter Property="Padding" Value="16,10"/>
+        <Setter Property="MinimumHeightRequest" Value="44"/>
         <Setter Property="Shadow">
-            <Shadow Brush="{StaticResource NeonPurple}" Offset="0,2" Radius="8" Opacity="0.4" />
+            <Shadow Brush="{StaticResource NeonPurple}" Offset="0,2" Radius="10" Opacity="0.22" />
         </Setter>
         <Setter Property="VisualStateManager.VisualStateGroups">
             <VisualStateGroupList>
@@ -95,13 +95,13 @@
     <Style TargetType="Button" x:Key="HudButton">
         <Setter Property="TextColor" Value="{StaticResource TextPrimary}" />
         <Setter Property="BackgroundColor" Value="{StaticResource Surface2}" />
-        <Setter Property="BorderColor" Value="{StaticResource NeonPurpleDeep}" />
+        <Setter Property="BorderColor" Value="{StaticResource SubtleBorder}" />
         <Setter Property="BorderWidth" Value="1" />
         <Setter Property="FontFamily" Value="OpenSansSemibold"/>
         <Setter Property="FontSize" Value="12"/>
-        <Setter Property="CornerRadius" Value="8"/>
-        <Setter Property="Padding" Value="11,6"/>
-        <Setter Property="MinimumHeightRequest" Value="36"/>
+        <Setter Property="CornerRadius" Value="12"/>
+        <Setter Property="Padding" Value="12,8"/>
+        <Setter Property="MinimumHeightRequest" Value="40"/>
         <Setter Property="VisualStateManager.VisualStateGroups">
             <VisualStateGroupList>
                 <VisualStateGroup x:Name="CommonStates">
@@ -115,6 +115,15 @@
                 </VisualStateGroup>
             </VisualStateGroupList>
         </Setter>
+    </Style>
+
+    <Style TargetType="Border" x:Key="ReaderIconChip">
+        <Setter Property="BackgroundColor" Value="{StaticResource Surface2}" />
+        <Setter Property="Stroke" Value="{StaticResource SubtleBorder}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 12" />
+        <Setter Property="Padding" Value="12,8" />
+        <Setter Property="MinimumHeightRequest" Value="40" />
     </Style>
 
     <Style TargetType="CheckBox">
@@ -140,6 +149,19 @@
                 </VisualStateGroup>
             </VisualStateGroupList>
         </Setter>
+    </Style>
+
+    <Style TargetType="Label" x:Key="EyebrowLabel">
+        <Setter Property="TextColor" Value="{StaticResource NeonPurpleBright}" />
+        <Setter Property="FontFamily" Value="OpenSansSemibold" />
+        <Setter Property="FontSize" Value="11" />
+        <Setter Property="CharacterSpacing" Value="2" />
+    </Style>
+
+    <Style TargetType="Label" x:Key="SectionTitleLabel">
+        <Setter Property="TextColor" Value="{StaticResource TextPrimary}" />
+        <Setter Property="FontFamily" Value="OpenSansSemibold" />
+        <Setter Property="FontSize" Value="22" />
     </Style>
 
     <Style TargetType="Picker">

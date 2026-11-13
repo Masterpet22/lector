@@ -24,10 +24,10 @@
                 VerticalOptions="Start"
                 Margin="10,10,10,0"
                 BackgroundColor="{StaticResource HudOverlay}"
-                Stroke="{StaticResource NeonPurpleDeep}"
+                Stroke="{StaticResource SubtleBorder}"
                 StrokeThickness="1"
-                StrokeShape="RoundRectangle 14"
-                Padding="12,10"
+                StrokeShape="RoundRectangle 20"
+                Padding="14,12"
                 IsVisible="{Binding IsHudVisible}">
             <Grid x:Name="TopHudGrid"
                   ColumnSpacing="8"
@@ -46,7 +46,7 @@
                        TextColor="{StaticResource TextPrimary}"
                        FontFamily="OpenSansSemibold"
                        FontAttributes="Bold"
-                       FontSize="14"
+                       FontSize="15"
                        MaxLines="1"
                        LineBreakMode="TailTruncation"
                        VerticalTextAlignment="Center"
@@ -61,33 +61,48 @@
                 <ScrollView x:Name="TopButtonsScroll"
                             Grid.Row="1"
                             Grid.ColumnSpan="3"
-                            Orientation="Vertical"
+                            Orientation="Horizontal"
                             VerticalScrollBarVisibility="Never"
                             HorizontalScrollBarVisibility="Never">
-                    <FlexLayout Wrap="Wrap"
-                                JustifyContent="Center"
-                                AlignItems="Center">
-                        <Button Text="{Binding LayoutModeLabel}"
-                                Style="{StaticResource HudButton}"
-                                Margin="3"
-                                Command="{Binding CycleLayoutModeCommand}" />
+                    <HorizontalStackLayout Spacing="8">
+                        <Border Style="{StaticResource ReaderIconChip}"
+                                SemanticProperties.Description="{Binding LayoutModeLabel}">
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding CycleLayoutModeCommand}" />
+                            </Border.GestureRecognizers>
+                            <HorizontalStackLayout Spacing="8">
+                                <Image Source="{Binding LayoutModeIcon}"
+                                       WidthRequest="20" HeightRequest="20"
+                                       Aspect="AspectFit" VerticalOptions="Center" />
+                                <Label Text="{Binding LayoutModeLabel}"
+                                       FontFamily="OpenSansSemibold" FontSize="12"
+                                       LineBreakMode="NoWrap" VerticalOptions="Center" />
+                            </HorizontalStackLayout>
+                        </Border>
                         <Button Text="{Binding FitModeLabel}"
                                 Style="{StaticResource HudButton}"
-                                Margin="3"
                                 Command="{Binding CyclePageFitModeCommand}" />
                         <Button Text="{Binding FullScreenButtonLabel}"
                                 Style="{StaticResource HudButton}"
-                                Margin="3"
                                 Command="{Binding ToggleFullScreenCommand}" />
-                        <Button Text="{Binding DirectionModeLabel}"
-                                Style="{StaticResource HudButton}"
-                                Margin="3"
-                                Command="{Binding ToggleReadingDirectionCommand}" />
+                        <Border Style="{StaticResource ReaderIconChip}"
+                                SemanticProperties.Description="{Binding DirectionModeLabel}">
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding ToggleReadingDirectionCommand}" />
+                            </Border.GestureRecognizers>
+                            <HorizontalStackLayout Spacing="8">
+                                <Image Source="{Binding ReadingDirectionIcon}"
+                                       WidthRequest="20" HeightRequest="20"
+                                       Aspect="AspectFit" VerticalOptions="Center" />
+                                <Label Text="{Binding DirectionModeLabel}"
+                                       FontFamily="OpenSansSemibold" FontSize="12"
+                                       LineBreakMode="NoWrap" VerticalOptions="Center" />
+                            </HorizontalStackLayout>
+                        </Border>
                         <Button Text="{Binding FilterModeLabel}"
                                 Style="{StaticResource HudButton}"
-                                Margin="3"
                                 Command="{Binding CycleVisualFilterCommand}" />
-                    </FlexLayout>
+                    </HorizontalStackLayout>
                 </ScrollView>
             </Grid>
         </Border>
@@ -97,10 +112,10 @@
                 VerticalOptions="End"
                 Margin="10,0,10,10"
                 BackgroundColor="{StaticResource HudOverlay}"
-                Stroke="{StaticResource NeonPurpleDeep}"
+                Stroke="{StaticResource SubtleBorder}"
                 StrokeThickness="1"
-                StrokeShape="RoundRectangle 14"
-                Padding="14,8,14,10"
+                StrokeShape="RoundRectangle 20"
+                Padding="16,10,16,12"
                 IsVisible="{Binding IsHudVisible}">
             <VerticalStackLayout x:Name="BottomHudStack" Spacing="4">
                 <Slider x:Name="PageSlider"

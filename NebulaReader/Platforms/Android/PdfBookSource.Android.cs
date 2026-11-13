@@ -124,14 +124,28 @@ public sealed partial class PdfBookSource
         ObjectDisposedException.ThrowIf(_disposed || _renderer == null, this);
 
         using var page = _renderer.OpenPage(pageIndex);
-        var (width, height) = CalculateTargetSize(page.Width, page.Height, density, maxWidthPx, maxDimensionPx);
+        try
+        {
+            var (width, height) = CalculateTargetSize(page.Width, page.Height, density, maxWidthPx, maxDimensionPx);
+            var bitmap = Bitmap.CreateBitmap(width, height, Bitmap.Config.Argb8888!)
+                ?? throw new InvalidOperationException("No se pudo asignar el bitmap para renderizar la página PDF.");
 
-        var bitmap = Bitmap.CreateBitmap(width, height, Bitmap.Config.Argb8888!)
-            ?? throw new InvalidOperationException("No se pudo asignar el bitmap para renderizar la página PDF.");
-
-        bitmap.EraseColor(AndroidColor.White);
-        page.Render(bitmap, null, null, PdfRenderMode.ForDisplay);
-        return bitmap;
+            try
+            {
+                bitmap.EraseColor(AndroidColor.White);
+                page.Render(bitmap, null, null, PdfRenderMode.ForDisplay);
+                return bitmap;
+            }
+            catch
+            {
+                bitmap.Dispose();
+                throw;
+            }
+        }
+        finally
+        {
+            page.Close();
+        }
     }
 
     private static unsafe SKBitmap CopyAndroidBitmapToSkBitmap(Bitmap bitmap)
@@ -202,7 +216,14 @@ public sealed partial class PdfBookSource
                 {
                     if (ct.IsCancellationRequested) return null;
                     using var page = _renderer.OpenPage(index);
-                    ratios[index] = page.Width > 0 ? (float)page.Height / page.Width : 1.414f;
+                    try
+                    {
+                        ratios[index] = page.Width > 0 ? (float)page.Height / page.Width : 1.414f;
+                    }
+                    finally
+                    {
+                        page.Close();
+                    }
                 }
             }
         }

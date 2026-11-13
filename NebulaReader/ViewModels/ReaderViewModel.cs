@@ -70,6 +70,7 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     public partial bool IsRotationLocked { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ReadingDirectionIcon))]
     public partial bool IsRightToLeftManga { get; set; }
 
     [ObservableProperty]
@@ -82,6 +83,7 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     public partial bool IsDoublePageActive { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(LayoutModeIcon))]
     public partial ReaderLayoutMode LayoutMode { get; set; }
 
     [ObservableProperty]
@@ -100,6 +102,13 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     public bool CanScrubPages => TotalPages > 1;
     public string RotationLockLabel => IsRotationLocked ? "Rot. Fija" : "Rot. Libre";
     public string DirectionModeLabel => IsRightToLeftManga ? "Manga (D→I)" : "Cómic (I→D)";
+    public string ReadingDirectionIcon => IsRightToLeftManga ? "reading_manga.png" : "reading_comic.png";
+    public string LayoutModeIcon => LayoutMode switch
+    {
+        ReaderLayoutMode.SinglePage => "reading_single.png",
+        ReaderLayoutMode.ContinuousVertical => "reading_continuous.png",
+        _ => "reading_spread.png"
+    };
     public string LayoutModeLabel => LayoutMode switch
     {
         ReaderLayoutMode.SinglePage => "Vista: 1 Pág.",

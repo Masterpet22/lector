@@ -53,11 +53,11 @@ public partial class LibraryPage : ContentPage
         var isCompactHeight = height < 520;
 
         // 1. Espaciado adaptable para evitar recortes en móviles horizontales de altura reducida
-        LibraryRootGrid.Padding = isCompactHeight ? new Thickness(10, 6) : new Thickness(14, 12);
-        LibraryRootGrid.RowSpacing = isCompactHeight ? 6 : 12;
-        LibraryToolbarBorder.Padding = isCompactHeight ? new Thickness(10, 8) : new Thickness(12, 11);
-        LibraryBreadcrumbBorder.Padding = isCompactHeight ? new Thickness(8, 5) : new Thickness(10, 7);
-        LibraryFooterBorder.Padding = isCompactHeight ? new Thickness(10, 4) : new Thickness(12, 7);
+        LibraryRootGrid.Padding = isCompactHeight ? new Thickness(10, 6) : new Thickness(18, 16);
+        LibraryRootGrid.RowSpacing = isCompactHeight ? 8 : 16;
+        LibraryToolbarBorder.Padding = isCompactHeight ? new Thickness(12, 9) : new Thickness(18, 16);
+        LibraryBreadcrumbBorder.Padding = isCompactHeight ? new Thickness(10, 6) : new Thickness(12, 9);
+        LibraryFooterBorder.Padding = isCompactHeight ? new Thickness(10, 5) : new Thickness(14, 9);
 
         UpdateToolbarLayout(width, isCompactHeight);
 
@@ -83,7 +83,7 @@ public partial class LibraryPage : ContentPage
             LibraryGridLayout.Span = targetSpan;
         }
 
-        var hSpacing = isCompactHeight ? 8.0 : 12.0;
+        var hSpacing = isCompactHeight ? 8.0 : 14.0;
         LibraryGridLayout.HorizontalItemSpacing = hSpacing;
         LibraryGridLayout.VerticalItemSpacing = hSpacing;
 

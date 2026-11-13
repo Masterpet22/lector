@@ -10,15 +10,28 @@
              BackgroundColor="{StaticResource BgCanvas}"
              Title="{Binding Title}">
 
-    <Grid x:Name="LibraryRootGrid" RowDefinitions="Auto,Auto,*,Auto" Padding="14,12" RowSpacing="12">
-        <!-- Barra superior moderna -->
+    <Grid x:Name="LibraryRootGrid" RowDefinitions="Auto,Auto,Auto,*,Auto" Padding="18,16" RowSpacing="16">
         <Border x:Name="LibraryToolbarBorder"
                 Grid.Row="0"
                 BackgroundColor="{StaticResource Surface1}"
                 Stroke="{StaticResource SubtleBorder}"
                 StrokeThickness="1"
-                StrokeShape="RoundRectangle 14"
-                Padding="12,11">
+                StrokeShape="RoundRectangle 22"
+                Padding="18,16">
+            <VerticalStackLayout Spacing="16">
+                <Grid ColumnDefinitions="48,*" ColumnSpacing="12">
+                    <Image Grid.Column="0" Source="nebula_brand.png"
+                           WidthRequest="48" HeightRequest="48"
+                           Aspect="AspectFit" VerticalOptions="Center"
+                           SemanticProperties.Description="Nebula Reader" />
+                    <VerticalStackLayout Grid.Column="1" Spacing="3">
+                        <Label Text="NEBULA READER" Style="{StaticResource EyebrowLabel}" />
+                        <Label Text="Tu biblioteca" Style="{StaticResource SectionTitleLabel}" />
+                        <Label Text="Tus historias, listas para continuar."
+                               TextColor="{StaticResource TextSecondary}"
+                               FontSize="12" />
+                    </VerticalStackLayout>
+                </Grid>
             <Grid x:Name="LibraryToolbarGrid"
                   ColumnDefinitions="*,*"
                   RowDefinitions="Auto,Auto,Auto"
@@ -27,13 +40,13 @@
                 <Button x:Name="OpenFileButton"
                         Grid.Row="0"
                         Grid.Column="0"
-                        Text="Abrir Archivo"
+                        Text="Abrir archivo"
                         Style="{StaticResource PrimaryNeonButton}"
                         Command="{Binding OpenFileCommand}" />
                 <Button x:Name="ScanFolderButton"
                         Grid.Row="0"
                         Grid.Column="1"
-                        Text="Escanear Carpeta"
+                        Text="Escanear carpeta"
                         Command="{Binding ImportFolderCommand}" />
                 <Button x:Name="SettingsButton"
                         Grid.Row="1"
@@ -55,17 +68,18 @@
                                    HorizontalOptions="Center"
                                    VerticalOptions="Center" />
             </Grid>
+            </VerticalStackLayout>
         </Border>
 
         <!-- Barra de navegación dentro de una serie/saga -->
         <Border x:Name="LibraryBreadcrumbBorder"
                 Grid.Row="1"
                 IsVisible="{Binding IsInsideGroup}"
-                BackgroundColor="{StaticResource Surface2}"
-                Stroke="{StaticResource NeonPurple}"
-                StrokeThickness="1.2"
-                StrokeShape="RoundRectangle 12"
-                Padding="10,7">
+                BackgroundColor="{StaticResource Surface1}"
+                Stroke="{StaticResource SubtleBorder}"
+                StrokeThickness="1"
+                StrokeShape="RoundRectangle 16"
+                Padding="12,9">
             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
                 <Button Grid.Column="0"
                         Text="← Biblioteca"
@@ -82,8 +96,14 @@
             </Grid>
         </Border>
 
-        <!-- Cuadrícula de biblioteca -->
-        <CollectionView Grid.Row="2"
+        <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="2,0">
+            <Label Grid.Column="0" Text="COLECCIÓN" Style="{StaticResource EyebrowLabel}" VerticalOptions="Center" />
+            <Label Grid.Column="1" Text="CBZ · CBR · PDF"
+                   TextColor="{StaticResource TextMuted}"
+                   FontSize="11" VerticalOptions="Center" />
+        </Grid>
+
+        <CollectionView Grid.Row="3"
                         ItemsSource="{Binding DisplayItems}"
                         SelectionMode="None">
             <CollectionView.ItemsLayout>
@@ -100,10 +120,10 @@
                             HorizontalOptions="Center"
                             MaximumWidthRequest="440"
                             BackgroundColor="{StaticResource Surface1}"
-                            Stroke="{StaticResource NeonPurpleDeep}"
-                            StrokeThickness="1.2"
-                            StrokeShape="RoundRectangle 16"
-                            Padding="24,20"
+                            Stroke="{StaticResource SubtleBorder}"
+                            StrokeThickness="1"
+                            StrokeShape="RoundRectangle 22"
+                            Padding="28,24"
                             Margin="12">
                         <VerticalStackLayout Spacing="8">
                             <Label Text="NEBULA READER"
@@ -127,15 +147,15 @@
 
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:LibraryDisplayItem">
-                    <Border Padding="8"
+                    <Border Padding="9"
                             BackgroundColor="{StaticResource Surface1}"
                             Stroke="{StaticResource SubtleBorder}"
                             StrokeThickness="1"
-                            StrokeShape="RoundRectangle 14">
+                            StrokeShape="RoundRectangle 20">
                         <Border.Triggers>
                             <DataTrigger TargetType="Border" Binding="{Binding IsGroup}" Value="True">
-                                <Setter Property="Stroke" Value="{StaticResource NeonPurple}" />
-                                <Setter Property="StrokeThickness" Value="1.5" />
+                                <Setter Property="Stroke" Value="{StaticResource NeonPurpleDeep}" />
+                                <Setter Property="StrokeThickness" Value="1" />
                             </DataTrigger>
                         </Border.Triggers>
                         <Border.GestureRecognizers>
@@ -145,12 +165,12 @@
                                 CommandParameter="{Binding .}" />
                         </Border.GestureRecognizers>
 
-                        <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="5">
+                        <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="6">
                             <Border Grid.Row="0"
                                     HeightRequest="{Binding CoverHeight}"
                                     BackgroundColor="{StaticResource BgCanvas}"
                                     StrokeThickness="0"
-                                    StrokeShape="RoundRectangle 10">
+                                    StrokeShape="RoundRectangle 14">
                                 <Grid>
                                     <Label Text="{Binding BadgeText}"
                                            HorizontalOptions="Center"
@@ -199,7 +219,7 @@
                                             Padding="7,3"
                                             StrokeThickness="1"
                                             Stroke="{StaticResource SubtleBorder}"
-                                            StrokeShape="RoundRectangle 7"
+                                            StrokeShape="RoundRectangle 10"
                                             BackgroundColor="#D90E0B1A">
                                         <Border.Triggers>
                                             <DataTrigger TargetType="Border" Binding="{Binding IsGroup}" Value="True">
@@ -221,23 +241,23 @@
                                    TextColor="{StaticResource TextPrimary}"
                                    FontFamily="OpenSansSemibold"
                                    FontAttributes="Bold"
-                                   FontSize="14"
-                                   Margin="2,2,2,0"
+                                   FontSize="15"
+                                   Margin="3,5,3,0"
                                    LineBreakMode="TailTruncation"
                                    MaxLines="2" />
 
                             <Label Grid.Row="2"
                                    Text="{Binding SubtitleText}"
                                    TextColor="{StaticResource TextSecondary}"
-                                   FontSize="11"
-                                   Margin="2,0"
+                                   FontSize="12"
+                                   Margin="3,0"
                                    LineBreakMode="TailTruncation" />
 
                             <Label Grid.Row="3"
                                    IsVisible="{Binding HasTags}"
                                    Text="{Binding TagsText}"
                                    FontSize="11"
-                                   Margin="2,0"
+                                   Margin="3,0"
                                    TextColor="{StaticResource NeonPurpleBright}"
                                    LineBreakMode="TailTruncation" />
                         </Grid>
@@ -248,12 +268,12 @@
 
         <!-- Pie de estado -->
         <Border x:Name="LibraryFooterBorder"
-                Grid.Row="3"
+                Grid.Row="4"
                 BackgroundColor="{StaticResource Surface1}"
                 Stroke="{StaticResource SubtleBorder}"
                 StrokeThickness="1"
-                StrokeShape="RoundRectangle 10"
-                Padding="12,7">
+                StrokeShape="RoundRectangle 14"
+                Padding="14,9">
             <Label Text="{Binding StatusMessage}"
                    TextColor="{StaticResource TextSecondary}"
                    FontSize="12"

@@ -9,24 +9,32 @@
 
     <ScrollView>
         <VerticalStackLayout x:Name="SettingsContainer"
-                             Padding="16"
-                             Spacing="16"
+                             Padding="20"
+                             Spacing="18"
                              HorizontalOptions="Center">
+
+            <VerticalStackLayout Spacing="4" Margin="2,4,2,8">
+                <Label Text="PREFERENCIAS" Style="{StaticResource EyebrowLabel}" />
+                <Label Text="Hazlo tuyo" Style="{StaticResource SectionTitleLabel}" FontSize="28" />
+                <Label Text="Personaliza la lectura para cada historia."
+                       TextColor="{StaticResource TextSecondary}"
+                       FontSize="13" />
+            </VerticalStackLayout>
 
             <!-- Sección: Apariencia y lectura -->
             <Border BackgroundColor="{StaticResource Surface1}"
                     Stroke="{StaticResource SubtleBorder}"
                     StrokeThickness="1"
-                    StrokeShape="RoundRectangle 14"
-                    Padding="16">
-                <VerticalStackLayout Spacing="12">
+                    StrokeShape="RoundRectangle 20"
+                    Padding="20">
+                <VerticalStackLayout Spacing="16">
                     <Label Text="APARIENCIA Y LECTURA"
                            TextColor="{StaticResource NeonPurpleBright}"
                            FontFamily="OpenSansSemibold"
                            FontSize="12"
                            CharacterSpacing="1.4" />
 
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" MinimumHeightRequest="48">
                         <Label Text="Modo lectura nocturna (inversión suave)"
                                TextColor="{StaticResource TextPrimary}"
                                LineBreakMode="WordWrap"
@@ -36,7 +44,7 @@
 
                     <BoxView HeightRequest="1" BackgroundColor="{StaticResource SubtleBorder}" />
 
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" MinimumHeightRequest="48">
                         <Label Text="Filtro visual sepia"
                                TextColor="{StaticResource TextPrimary}"
                                LineBreakMode="WordWrap"
@@ -46,12 +54,15 @@
 
                     <BoxView HeightRequest="1" BackgroundColor="{StaticResource SubtleBorder}" />
 
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                        <Label Text="Lectura derecha a izquierda (Manga)"
+                    <Grid ColumnDefinitions="28,*,Auto" ColumnSpacing="12" MinimumHeightRequest="48">
+                        <Image Grid.Column="0" Source="{Binding ReadingDirectionIcon}"
+                               WidthRequest="24" HeightRequest="24"
+                               Aspect="AspectFit" VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="Lectura derecha a izquierda (Manga)"
                                TextColor="{StaticResource TextPrimary}"
                                LineBreakMode="WordWrap"
                                VerticalOptions="Center" />
-                        <Switch Grid.Column="1" IsToggled="{Binding RightToLeftMangaMode}" />
+                        <Switch Grid.Column="2" IsToggled="{Binding RightToLeftMangaMode}" />
                     </Grid>
                 </VerticalStackLayout>
             </Border>
@@ -60,9 +71,9 @@
             <Border BackgroundColor="{StaticResource Surface1}"
                     Stroke="{StaticResource SubtleBorder}"
                     StrokeThickness="1"
-                    StrokeShape="RoundRectangle 14"
-                    Padding="16">
-                <VerticalStackLayout Spacing="14">
+                    StrokeShape="RoundRectangle 20"
+                    Padding="20">
+                <VerticalStackLayout Spacing="18">
                     <Label Text="DISPOSICIÓN Y AJUSTE"
                            TextColor="{StaticResource NeonPurpleBright}"
                            FontFamily="OpenSansSemibold"
@@ -74,12 +85,18 @@
                                TextColor="{StaticResource TextSecondary}"
                                FontSize="13" />
                         <Border BackgroundColor="{StaticResource Surface2}"
-                                Stroke="{StaticResource NeonPurpleDeep}"
+                                Stroke="{StaticResource SubtleBorder}"
                                 StrokeThickness="1"
-                                StrokeShape="RoundRectangle 10"
-                                Padding="10,2">
-                            <Picker ItemsSource="{Binding LayoutModeOptions}"
-                                    SelectedIndex="{Binding SelectedLayoutModeIndex}" />
+                                StrokeShape="RoundRectangle 14"
+                                Padding="12,3">
+                            <Grid ColumnDefinitions="28,*" ColumnSpacing="10">
+                                <Image Source="{Binding LayoutModeIcon}"
+                                       WidthRequest="24" HeightRequest="24"
+                                       Aspect="AspectFit" VerticalOptions="Center" />
+                                <Picker Grid.Column="1"
+                                        ItemsSource="{Binding LayoutModeOptions}"
+                                        SelectedIndex="{Binding SelectedLayoutModeIndex}" />
+                            </Grid>
                         </Border>
                     </VerticalStackLayout>
 
@@ -88,10 +105,10 @@
                                TextColor="{StaticResource TextSecondary}"
                                FontSize="13" />
                         <Border BackgroundColor="{StaticResource Surface2}"
-                                Stroke="{StaticResource NeonPurpleDeep}"
+                                Stroke="{StaticResource SubtleBorder}"
                                 StrokeThickness="1"
-                                StrokeShape="RoundRectangle 10"
-                                Padding="10,2">
+                                StrokeShape="RoundRectangle 14"
+                                Padding="12,3">
                             <Picker ItemsSource="{Binding PageFitModeOptions}"
                                     SelectedIndex="{Binding SelectedPageFitModeIndex}" />
                         </Border>
@@ -103,16 +120,16 @@
             <Border BackgroundColor="{StaticResource Surface1}"
                     Stroke="{StaticResource SubtleBorder}"
                     StrokeThickness="1"
-                    StrokeShape="RoundRectangle 14"
-                    Padding="16">
-                <VerticalStackLayout Spacing="10">
+                    StrokeShape="RoundRectangle 20"
+                    Padding="20">
+                <VerticalStackLayout Spacing="16">
                     <Label Text="VENTANA"
                            TextColor="{StaticResource NeonPurpleBright}"
                            FontFamily="OpenSansSemibold"
                            FontSize="12"
                            CharacterSpacing="1.4" />
 
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12" MinimumHeightRequest="48">
                         <Label Text="Pantalla completa"
                                TextColor="{StaticResource TextPrimary}"
                                LineBreakMode="WordWrap"
