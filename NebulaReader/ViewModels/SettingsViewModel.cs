@@ -16,7 +16,7 @@ public partial class SettingsViewModel : BaseViewModel
     public IReadOnlyList<string> LayoutModeOptions { get; } =
     [
         "Una sola página",
-        "Doble página (pantallas amplias)",
+        "Doble página (2 páginas)",
         "Lectura continua (de arriba a abajo)"
     ];
 

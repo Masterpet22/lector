@@ -101,7 +101,7 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     {
         ReaderLayoutMode.SinglePage => "Vista: 1 Pág.",
         ReaderLayoutMode.ContinuousVertical => "Vista: Continua ↓",
-        _ => IsDoublePageActive ? "Vista: Doble" : "Vista: Doble (Auto)"
+        _ => "Vista: Doble"
     };
     public string FitModeLabel => PageFitMode switch
     {
@@ -974,9 +974,7 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
 
     private void RecalculateDoublePageState()
     {
-        var active = LayoutMode == ReaderLayoutMode.DoublePage
-            && _viewportWidth > 800
-            && _viewportWidth > _viewportHeight;
+        var active = LayoutMode == ReaderLayoutMode.DoublePage;
 
         if (IsDoublePageActive != active)
         {

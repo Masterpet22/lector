@@ -179,6 +179,7 @@ public partial class ReaderPage : ContentPage
     protected override void OnSizeAllocated(double width, double height)
     {
         base.OnSizeAllocated(width, height);
+        _activeContentBounds = SKRect.Empty;
         ViewModel?.UpdateViewportSize(width, height);
         UpdateAdaptiveHudLayout(width, height);
         ClampPan();
@@ -309,13 +310,12 @@ public partial class ReaderPage : ContentPage
 
         if (vm.IsDoublePageActive && vm.CurrentPageIndex + 1 < vm.TotalPages)
         {
-            var halfWidth = (canvasWidth - PageGapPx) / 2f;
+            var gap = GetSpreadGapPx(canvasWidth);
+            var halfWidth = (canvasWidth - gap) / 2f;
             var leftAspect = vm.GetExpectedAspectRatio(vm.IsRightToLeftManga ? vm.CurrentPageIndex + 1 : vm.CurrentPageIndex);
             var rightAspect = vm.GetExpectedAspectRatio(vm.IsRightToLeftManga ? vm.CurrentPageIndex : vm.CurrentPageIndex + 1);
-            var leftRect = CalculateFittedRect(1000f, 1000f * leftAspect, 0, 0, halfWidth, canvasHeight, vm.PageFitMode);
-            var rightRect = CalculateFittedRect(1000f, 1000f * rightAspect, halfWidth + PageGapPx, 0, halfWidth, canvasHeight, vm.PageFitMode);
-            var leftAligned = new SKRect(halfWidth - leftRect.Width, leftRect.Top, halfWidth, leftRect.Bottom);
-            var rightAligned = new SKRect(halfWidth + PageGapPx, rightRect.Top, halfWidth + PageGapPx + rightRect.Width, rightRect.Bottom);
+            var leftAligned = CalculateSpreadHalfRect(1000f, 1000f * leftAspect, 0f, halfWidth, canvasHeight, vm.PageFitMode, alignRightToSpine: true);
+            var rightAligned = CalculateSpreadHalfRect(1000f, 1000f * rightAspect, halfWidth + gap, halfWidth, canvasHeight, vm.PageFitMode, alignRightToSpine: false);
             _activeContentBounds = SKRect.Union(leftAligned, rightAligned);
             return;
         }
@@ -380,40 +380,57 @@ public partial class ReaderPage : ContentPage
         vm.RequestPageLoadIfNeeded(leftIndex);
         vm.RequestPageLoadIfNeeded(rightIndex);
 
-        var halfWidth = (canvasWidth - PageGapPx) / 2f;
-        SKRect? leftBounds = null;
-        SKRect? rightBounds = null;
+        var gap = GetSpreadGapPx(canvasWidth);
+        var halfWidth = (canvasWidth - gap) / 2f;
+        var rightX = halfWidth + gap;
 
-        vm.TryDrawCachedPage(leftIndex, preferredFitWidthPx: null, (image, leftBitmap) =>
-        {
-            var dest = CalculateFittedRect(leftBitmap.Width, leftBitmap.Height, 0, 0, halfWidth, canvasHeight, vm.PageFitMode);
-            var aligned = new SKRect(halfWidth - dest.Width, dest.Top, halfWidth, dest.Bottom);
-            leftBounds = aligned;
-            DrawSurfaceBitmapOrImage(canvas, image, leftBitmap, aligned, paint);
-        });
+        var leftBounds = DrawSpreadHalf(canvas, vm, leftIndex, 0f, halfWidth, canvasHeight, alignRightToSpine: true, paint);
+        var rightBounds = DrawSpreadHalf(canvas, vm, rightIndex, rightX, halfWidth, canvasHeight, alignRightToSpine: false, paint);
 
-        vm.TryDrawCachedPage(rightIndex, preferredFitWidthPx: null, (image, rightBitmap) =>
-        {
-            var rightX = halfWidth + PageGapPx;
-            var dest = CalculateFittedRect(rightBitmap.Width, rightBitmap.Height, rightX, 0, halfWidth, canvasHeight, vm.PageFitMode);
-            var aligned = new SKRect(rightX, dest.Top, rightX + dest.Width, dest.Bottom);
-            rightBounds = aligned;
-            DrawSurfaceBitmapOrImage(canvas, image, rightBitmap, aligned, paint);
-        });
-
-        if (leftBounds.HasValue && rightBounds.HasValue)
-        {
-            _activeContentBounds = SKRect.Union(leftBounds.Value, rightBounds.Value);
-        }
-        else if (leftBounds.HasValue)
-        {
-            _activeContentBounds = leftBounds.Value;
-        }
-        else if (rightBounds.HasValue)
-        {
-            _activeContentBounds = rightBounds.Value;
-        }
+        _activeContentBounds = SKRect.Union(leftBounds, rightBounds);
     }
+
+    private SKRect DrawSpreadHalf(
+        SKCanvas canvas,
+        ReaderViewModel vm,
+        int pageIndex,
+        float slotX,
+        float slotWidth,
+        float canvasHeight,
+        bool alignRightToSpine,
+        SKPaint? paint)
+    {
+        SKRect result = SKRect.Empty;
+
+        if (!vm.TryDrawCachedPage(pageIndex, preferredFitWidthPx: null, (image, bitmap) =>
+        {
+            result = CalculateSpreadHalfRect(bitmap.Width, bitmap.Height, slotX, slotWidth, canvasHeight, vm.PageFitMode, alignRightToSpine);
+            DrawSurfaceBitmapOrImage(canvas, image, bitmap, result, paint);
+        }))
+        {
+            result = CalculateSpreadHalfRect(1000f, 1000f * vm.GetExpectedAspectRatio(pageIndex), slotX, slotWidth, canvasHeight, vm.PageFitMode, alignRightToSpine);
+            DrawPlaceholderCard(canvas, pageIndex, result.Left, result.Top, result.Width, result.Height);
+        }
+
+        return result;
+    }
+
+    private static SKRect CalculateSpreadHalfRect(
+        float sourceWidth,
+        float sourceHeight,
+        float slotX,
+        float slotWidth,
+        float canvasHeight,
+        PageFitMode fitMode,
+        bool alignRightToSpine)
+    {
+        var dest = CalculateFittedRect(sourceWidth, sourceHeight, slotX, 0, slotWidth, canvasHeight, fitMode);
+        var left = alignRightToSpine ? (slotX + slotWidth) - dest.Width : slotX;
+        return new SKRect(left, dest.Top, left + dest.Width, dest.Bottom);
+    }
+
+    private static float GetSpreadGapPx(float canvasWidth) =>
+        MathF.Min(PageGapPx, MathF.Max(4f, canvasWidth * 0.015f));
 
     private static float GetContinuousMaxPageWidth(float canvasWidth, float canvasHeight)
     {
