@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using NebulaReader.Models;
 using NebulaReader.ViewModels;
 using SkiaSharp;
@@ -73,9 +74,11 @@ public partial class ReaderPage : ContentPage
     private double _lastPanTotalX;
     private double _lastPanTotalY;
     private double _swipeAccumulatedX;
-    private float _lastVerticalDeltaPx;
-    private DateTime _lastPanTimestampUtc;
-    private float _flingVelocityPxPerFrame;
+    private readonly (long TimestampTicks, float TotalYPx)[] _panSamples = new (long, float)[16];
+    private int _panSampleCount;
+    private int _panSampleWriteIndex;
+    private float _flingVelocityPxPerSec;
+    private long _lastFlingTickTimestamp;
     private IDispatcherTimer? _flingTimer;
     private bool _isActivelyInteracting;
     private bool _sliderDragActive;
@@ -488,15 +491,20 @@ public partial class ReaderPage : ContentPage
         _verticalScrollOffset = 0f;
     }
 
-    private void StartFlingInertia(float initialDeltaPx)
+    private void StartFlingInertia(float velocityPxPerSec)
     {
         StopFlingInertia();
-        _flingVelocityPxPerFrame = Math.Clamp(initialDeltaPx, -140f, 140f);
-        if (Math.Abs(_flingVelocityPxPerFrame) < 2.5f) return;
+        _flingVelocityPxPerSec = Math.Clamp(velocityPxPerSec, -28000f, 28000f);
+        if (Math.Abs(_flingVelocityPxPerSec) < 180f)
+        {
+            _flingVelocityPxPerSec = 0f;
+            return;
+        }
 
         _isActivelyInteracting = true;
+        _lastFlingTickTimestamp = Stopwatch.GetTimestamp();
         _flingTimer ??= Dispatcher.CreateTimer();
-        _flingTimer.Interval = TimeSpan.FromMilliseconds(16);
+        _flingTimer.Interval = TimeSpan.FromMilliseconds(12);
         _flingTimer.Tick -= OnFlingTick;
         _flingTimer.Tick += OnFlingTick;
         _flingTimer.Start();
@@ -504,14 +512,20 @@ public partial class ReaderPage : ContentPage
 
     private void OnFlingTick(object? sender, EventArgs e)
     {
-        if (Math.Abs(_flingVelocityPxPerFrame) < 0.75f || ViewModel == null || !ViewModel.IsContinuousVertical)
+        if (Math.Abs(_flingVelocityPxPerSec) < 45f || ViewModel == null || !ViewModel.IsContinuousVertical)
         {
             StopFlingInertia();
             return;
         }
 
-        ApplyPanDelta(0f, _flingVelocityPxPerFrame);
-        _flingVelocityPxPerFrame *= 0.90f;
+        var now = Stopwatch.GetTimestamp();
+        var dt = (float)((now - _lastFlingTickTimestamp) / (double)Stopwatch.Frequency);
+        dt = Math.Clamp(dt, 0.001f, 0.05f);
+        _lastFlingTickTimestamp = now;
+
+        var stepPx = _flingVelocityPxPerSec * dt;
+        ApplyPanDelta(0f, stepPx);
+        _flingVelocityPxPerSec *= MathF.Exp(-2.6f * dt);
     }
 
     private void StopFlingInertia()
@@ -520,12 +534,53 @@ public partial class ReaderPage : ContentPage
         {
             _flingTimer.Stop();
         }
-        _flingVelocityPxPerFrame = 0f;
+        _flingVelocityPxPerSec = 0f;
         if (_isActivelyInteracting)
         {
             _isActivelyInteracting = false;
             ReaderCanvas.InvalidateSurface();
         }
+    }
+
+    private void RecordPanSample(long timestampTicks, float totalYPx)
+    {
+        _panSamples[_panSampleWriteIndex] = (timestampTicks, totalYPx);
+        _panSampleWriteIndex = (_panSampleWriteIndex + 1) % _panSamples.Length;
+        if (_panSampleCount < _panSamples.Length)
+        {
+            _panSampleCount++;
+        }
+    }
+
+    private float ComputeVerticalVelocityPxPerSecond(long nowTicks)
+    {
+        if (_panSampleCount < 2) return 0f;
+
+        var latestIdx = (_panSampleWriteIndex - 1 + _panSamples.Length) % _panSamples.Length;
+        var latest = _panSamples[latestIdx];
+
+        // Si el dedo se detuvo más de 100 ms antes de levantarse, no hay inercia residual
+        var ageMs = (nowTicks - latest.TimestampTicks) * 1000.0 / Stopwatch.Frequency;
+        if (ageMs > 100.0) return 0f;
+
+        var windowTicks = (long)(0.105 * Stopwatch.Frequency);
+        var oldestInWindow = latest;
+
+        for (var i = 1; i < _panSampleCount; i++)
+        {
+            var idx = (_panSampleWriteIndex - 1 - i + _panSamples.Length) % _panSamples.Length;
+            var sample = _panSamples[idx];
+            if (latest.TimestampTicks - sample.TimestampTicks > windowTicks)
+            {
+                break;
+            }
+            oldestInWindow = sample;
+        }
+
+        var dtSec = (latest.TimestampTicks - oldestInWindow.TimestampTicks) / (double)Stopwatch.Frequency;
+        if (dtSec < 0.008) return 0f;
+
+        return (float)((latest.TotalYPx - oldestInWindow.TotalYPx) / dtSec);
     }
 
     private void ClampPan()
@@ -606,8 +661,9 @@ public partial class ReaderPage : ContentPage
                 _lastPanTotalX = 0;
                 _lastPanTotalY = 0;
                 _swipeAccumulatedX = 0;
-                _lastVerticalDeltaPx = 0f;
-                _lastPanTimestampUtc = DateTime.UtcNow;
+                _panSampleCount = 0;
+                _panSampleWriteIndex = 0;
+                RecordPanSample(Stopwatch.GetTimestamp(), 0f);
                 _isActivelyInteracting = _zoom > 1.02f || vm.IsContinuousVertical;
                 break;
 
@@ -620,21 +676,8 @@ public partial class ReaderPage : ContentPage
                 if (_zoom > 1.02f || vm.IsContinuousVertical)
                 {
                     _isActivelyInteracting = true;
-                    var deltaYPx = (float)(dy * scale);
-                    var now = DateTime.UtcNow;
-                    var elapsedMs = (float)(now - _lastPanTimestampUtc).TotalMilliseconds;
-                    if (elapsedMs is > 1f and < 120f)
-                    {
-                        var perFrame = deltaYPx * (16f / elapsedMs);
-                        _lastVerticalDeltaPx = (_lastVerticalDeltaPx * 0.35f) + (perFrame * 0.65f);
-                    }
-                    else
-                    {
-                        _lastVerticalDeltaPx = deltaYPx;
-                    }
-                    _lastPanTimestampUtc = now;
-
-                    ApplyPanDelta((float)(dx * scale), deltaYPx);
+                    RecordPanSample(Stopwatch.GetTimestamp(), (float)(e.TotalY * scale));
+                    ApplyPanDelta((float)(dx * scale), (float)(dy * scale));
                 }
                 else
                 {
@@ -646,10 +689,13 @@ public partial class ReaderPage : ContentPage
             case GestureStatus.Canceled:
                 if (vm.IsContinuousVertical)
                 {
-                    var msSinceLastMove = (DateTime.UtcNow - _lastPanTimestampUtc).TotalMilliseconds;
-                    if (e.StatusType == GestureStatus.Completed && msSinceLastMove < 120 && Math.Abs(_lastVerticalDeltaPx) >= 3.0f)
+                    var velocityPxPerSec = e.StatusType == GestureStatus.Completed
+                        ? ComputeVerticalVelocityPxPerSecond(Stopwatch.GetTimestamp())
+                        : 0f;
+
+                    if (Math.Abs(velocityPxPerSec) >= 180f)
                     {
-                        StartFlingInertia(_lastVerticalDeltaPx);
+                        StartFlingInertia(velocityPxPerSec);
                     }
                     else
                     {
@@ -678,13 +724,55 @@ public partial class ReaderPage : ContentPage
         }
     }
 
+    private bool TryScrollContinuousEdgeTap(double tapYDips, float canvasHeight)
+    {
+        if (ReaderCanvas.Height <= 0 || canvasHeight <= 0) return false;
+
+        var normalizedY = tapYDips / ReaderCanvas.Height;
+        var scrollStepPx = Math.Max(220f, canvasHeight * 0.70f);
+        if (normalizedY < 0.22)
+        {
+            ApplyPanDelta(0f, scrollStepPx);
+            return true;
+        }
+
+        if (normalizedY > 0.78)
+        {
+            ApplyPanDelta(0f, -scrollStepPx);
+            return true;
+        }
+
+        return false;
+    }
+
     private void OnDoubleTapped(object? sender, TappedEventArgs e)
     {
+        var vm = ViewModel;
         var canvasWidth = ReaderCanvas.CanvasSize.Width;
         var canvasHeight = ReaderCanvas.CanvasSize.Height;
-        if (canvasWidth <= 0 || canvasHeight <= 0) return;
+        if (vm == null || canvasWidth <= 0 || canvasHeight <= 0 || ReaderCanvas.Width <= 0) return;
 
         var pos = e.GetPosition(ReaderCanvas);
+        if (pos.HasValue)
+        {
+            var normalizedX = pos.Value.X / ReaderCanvas.Width;
+            // Los extremos izquierdo y derecho están reservados para navegación rápida, nunca para zoom
+            if (normalizedX < 0.25 || normalizedX > 0.75)
+            {
+                if (!vm.IsContinuousVertical)
+                {
+                    ResetZoomAndVerticalPosition();
+                    var cmd = normalizedX < 0.25 ? vm.GoPreviousVisualCommand : vm.GoNextVisualCommand;
+                    _ = cmd.ExecuteAsync(null);
+                }
+                else
+                {
+                    TryScrollContinuousEdgeTap(pos.Value.Y, canvasHeight);
+                }
+                return;
+            }
+        }
+
         var scale = DipToPixelScale();
         var focalX = pos.HasValue ? (float)(pos.Value.X * scale) : canvasWidth / 2f;
         var focalY = pos.HasValue ? (float)(pos.Value.Y * scale) : canvasHeight / 2f;
@@ -707,19 +795,9 @@ public partial class ReaderPage : ContentPage
             return;
         }
 
-        if (vm.IsContinuousVertical && ReaderCanvas.Height > 0)
+        if (vm.IsContinuousVertical)
         {
-            var normalizedY = pos.Value.Y / ReaderCanvas.Height;
-            var scrollStepPx = Math.Max(220f, ReaderCanvas.CanvasSize.Height * 0.70f);
-            if (normalizedY < 0.22)
-            {
-                ApplyPanDelta(0f, scrollStepPx);
-            }
-            else if (normalizedY > 0.78)
-            {
-                ApplyPanDelta(0f, -scrollStepPx);
-            }
-            else
+            if (!TryScrollContinuousEdgeTap(pos.Value.Y, ReaderCanvas.CanvasSize.Height))
             {
                 vm.ToggleHudCommand.Execute(null);
             }
