@@ -1,3 +1,4 @@
 <Solution>
+  <Project Path="NebulaReader.Tests/NebulaReader.Tests.csproj" />
   <Project Path="NebulaReader/NebulaReader.csproj" />
 </Solution>

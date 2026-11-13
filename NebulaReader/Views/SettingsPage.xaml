@@ -8,8 +8,13 @@
 
     <VerticalStackLayout Padding="20" Spacing="16">
         <Grid ColumnDefinitions="*,Auto">
-            <Label Text="Modo lectura nocturna" VerticalOptions="Center" />
+            <Label Text="Modo lectura nocturna (inversión suave)" VerticalOptions="Center" />
             <Switch Grid.Column="1" IsToggled="{Binding NightReadingModeEnabled}" />
+        </Grid>
+
+        <Grid ColumnDefinitions="*,Auto">
+            <Label Text="Filtro visual sepia" VerticalOptions="Center" />
+            <Switch Grid.Column="1" IsToggled="{Binding SepiaFilterEnabled}" />
         </Grid>
 
         <Grid ColumnDefinitions="*,Auto">

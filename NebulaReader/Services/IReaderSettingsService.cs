@@ -1,3 +1,5 @@
+using NebulaReader.Models;
+
 namespace NebulaReader.Services;
 
 /// <summary>
@@ -8,8 +10,8 @@ public interface IReaderSettingsService
     event EventHandler? SettingsChanged;
 
     bool NightReadingModeEnabled { get; set; }
+    ReaderVisualFilter VisualFilter { get; set; }
     bool RightToLeftMangaMode { get; set; }
     bool ContinuousVerticalScroll { get; set; }
     bool DoublePageSpreadEnabled { get; set; }
 }
-

@@ -69,12 +69,21 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     [ObservableProperty]
     public partial bool IsNightMode { get; set; }
 
+    [ObservableProperty]
+    public partial ReaderVisualFilter VisualFilter { get; set; }
+
     public bool CanScrubPages => TotalPages > 1;
     public string RotationLockLabel => IsRotationLocked ? "Rotación: Fija" : "Rotación: Libre";
     public string DirectionModeLabel => IsRightToLeftManga ? "Manga (D→I)" : "Cómic (I→D)";
     public string LayoutModeLabel => IsContinuousVertical
         ? "Modo: Vertical"
         : (IsDoublePageActive ? "Modo: Doble Pág." : "Modo: Paginado");
+    public string FilterModeLabel => VisualFilter switch
+    {
+        ReaderVisualFilter.NightInvert => "Filtro: Nocturno",
+        ReaderVisualFilter.Sepia => "Filtro: Sepia",
+        _ => "Filtro: Normal"
+    };
 
     public ReaderViewModel(
         ILibraryService libraryService,
@@ -222,6 +231,17 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     private void ToggleVerticalScroll()
     {
         _settingsService.ContinuousVerticalScroll = !_settingsService.ContinuousVerticalScroll;
+    }
+
+    [RelayCommand]
+    private void CycleVisualFilter()
+    {
+        _settingsService.VisualFilter = VisualFilter switch
+        {
+            ReaderVisualFilter.None => ReaderVisualFilter.NightInvert,
+            ReaderVisualFilter.NightInvert => ReaderVisualFilter.Sepia,
+            _ => ReaderVisualFilter.None
+        };
     }
 
     [RelayCommand]
@@ -433,12 +453,14 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     private void SyncFromSettings()
     {
         IsNightMode = _settingsService.NightReadingModeEnabled;
+        VisualFilter = _settingsService.VisualFilter;
         IsRightToLeftManga = _settingsService.RightToLeftMangaMode;
         IsContinuousVertical = _settingsService.ContinuousVerticalScroll;
         IsDoublePageEnabled = _settingsService.DoublePageSpreadEnabled;
 
         RecalculateDoublePageState();
         OnPropertyChanged(nameof(DirectionModeLabel));
+        OnPropertyChanged(nameof(FilterModeLabel));
     }
 
     private void RecalculateDoublePageState()

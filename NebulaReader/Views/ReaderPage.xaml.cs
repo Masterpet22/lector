@@ -1,3 +1,4 @@
+using NebulaReader.Models;
 using NebulaReader.ViewModels;
 using SkiaSharp;
 using SkiaSharp.Views.Maui;
@@ -16,6 +17,20 @@ public partial class ReaderPage : ContentPage
     private const float DoubleTapZoom = 2.25f;
     private const float PageGapPx = 16.0f;
     private static readonly SKSamplingOptions PageSampling = new(SKFilterMode.Linear, SKMipmapMode.Linear);
+    private static readonly float[] SoftNightInvertMatrix =
+    [
+        -0.80f,  0.00f,  0.00f, 0.00f, 0.88f,
+         0.00f, -0.80f,  0.00f, 0.00f, 0.88f,
+         0.00f,  0.00f, -0.78f, 0.00f, 0.90f,
+         0.00f,  0.00f,  0.00f, 1.00f, 0.00f
+    ];
+    private static readonly float[] SepiaMatrix =
+    [
+        0.393f, 0.769f, 0.189f, 0.00f, -0.04f,
+        0.349f, 0.686f, 0.168f, 0.00f, -0.05f,
+        0.272f, 0.534f, 0.131f, 0.00f, -0.08f,
+        0.000f, 0.000f, 0.000f, 1.00f,  0.00f
+    ];
 
     private float _zoom = 1.0f;
     private float _panX;
@@ -110,41 +125,59 @@ public partial class ReaderPage : ContentPage
         canvas.Save();
         canvas.SetMatrix(transform);
 
+        using var filterPaint = CreatePageFilterPaint(vm.VisualFilter);
+
         if (vm.IsContinuousVertical)
         {
-            DrawContinuousVertical(canvas, vm, width, height);
+            DrawContinuousVertical(canvas, vm, width, height, filterPaint);
         }
         else if (vm.IsDoublePageActive)
         {
-            DrawDoublePageSpread(canvas, vm, width, height);
+            DrawDoublePageSpread(canvas, vm, width, height, filterPaint);
         }
         else
         {
-            DrawSinglePage(canvas, vm, vm.CurrentPageIndex, width, height);
+            DrawSinglePage(canvas, vm, vm.CurrentPageIndex, width, height, filterPaint);
         }
 
         canvas.Restore();
     }
 
-    private void DrawSinglePage(SKCanvas canvas, ReaderViewModel vm, int pageIndex, float canvasWidth, float canvasHeight)
+    private static SKPaint? CreatePageFilterPaint(ReaderVisualFilter filter)
+    {
+        return filter switch
+        {
+            ReaderVisualFilter.NightInvert => new SKPaint
+            {
+                ColorFilter = SKColorFilter.CreateColorMatrix(SoftNightInvertMatrix)
+            },
+            ReaderVisualFilter.Sepia => new SKPaint
+            {
+                ColorFilter = SKColorFilter.CreateColorMatrix(SepiaMatrix)
+            },
+            _ => null
+        };
+    }
+
+    private void DrawSinglePage(SKCanvas canvas, ReaderViewModel vm, int pageIndex, float canvasWidth, float canvasHeight, SKPaint? paint)
     {
         vm.RequestPageLoadIfNeeded(pageIndex);
 
         vm.TryDrawCachedPage(pageIndex, bitmap =>
         {
             var dest = CalculateAspectFitRect(bitmap.Width, bitmap.Height, 0, 0, canvasWidth, canvasHeight);
-            canvas.DrawBitmap(bitmap, dest, PageSampling);
+            canvas.DrawBitmap(bitmap, dest, PageSampling, paint);
         });
     }
 
-    private void DrawDoublePageSpread(SKCanvas canvas, ReaderViewModel vm, float canvasWidth, float canvasHeight)
+    private void DrawDoublePageSpread(SKCanvas canvas, ReaderViewModel vm, float canvasWidth, float canvasHeight, SKPaint? paint)
     {
         var currentIndex = vm.CurrentPageIndex;
         var nextIndex = currentIndex + 1 < vm.TotalPages ? currentIndex + 1 : -1;
 
         if (nextIndex < 0)
         {
-            DrawSinglePage(canvas, vm, currentIndex, canvasWidth, canvasHeight);
+            DrawSinglePage(canvas, vm, currentIndex, canvasWidth, canvasHeight, paint);
             return;
         }
 
@@ -161,7 +194,7 @@ public partial class ReaderPage : ContentPage
             var dest = CalculateAspectFitRect(leftBitmap.Width, leftBitmap.Height, 0, 0, halfWidth, canvasHeight);
             // Alinear la página izquierda hacia el lomo central
             var aligned = new SKRect(halfWidth - dest.Width, dest.Top, halfWidth, dest.Bottom);
-            canvas.DrawBitmap(leftBitmap, aligned, PageSampling);
+            canvas.DrawBitmap(leftBitmap, aligned, PageSampling, paint);
         });
 
         vm.TryDrawCachedPage(rightIndex, rightBitmap =>
@@ -170,11 +203,11 @@ public partial class ReaderPage : ContentPage
             var dest = CalculateAspectFitRect(rightBitmap.Width, rightBitmap.Height, rightX, 0, halfWidth, canvasHeight);
             // Alinear la página derecha hacia el lomo central
             var aligned = new SKRect(rightX, dest.Top, rightX + dest.Width, dest.Bottom);
-            canvas.DrawBitmap(rightBitmap, aligned, PageSampling);
+            canvas.DrawBitmap(rightBitmap, aligned, PageSampling, paint);
         });
     }
 
-    private void DrawContinuousVertical(SKCanvas canvas, ReaderViewModel vm, float canvasWidth, float canvasHeight)
+    private void DrawContinuousVertical(SKCanvas canvas, ReaderViewModel vm, float canvasWidth, float canvasHeight, SKPaint? paint)
     {
         var current = vm.CurrentPageIndex;
         var maxPageWidth = Math.Min(canvasWidth, canvasHeight * 1.15f);
@@ -189,7 +222,7 @@ public partial class ReaderPage : ContentPage
             var y = -_verticalScrollOffset;
             if (y + currentHeight >= 0 && y <= canvasHeight)
             {
-                canvas.DrawBitmap(bitmap, new SKRect(x, y, x + maxPageWidth, y + currentHeight), PageSampling);
+                canvas.DrawBitmap(bitmap, new SKRect(x, y, x + maxPageWidth, y + currentHeight), PageSampling, paint);
             }
         });
         _lastCurrentPageFittedHeight = currentHeight;
@@ -206,7 +239,7 @@ public partial class ReaderPage : ContentPage
                 var y = -_verticalScrollOffset - PageGapPx - prevHeight;
                 if (y + prevHeight >= 0 && y <= canvasHeight)
                 {
-                    canvas.DrawBitmap(prevBitmap, new SKRect(x, y, x + maxPageWidth, y + prevHeight), PageSampling);
+                    canvas.DrawBitmap(prevBitmap, new SKRect(x, y, x + maxPageWidth, y + prevHeight), PageSampling, paint);
                 }
             });
             _lastPrevPageFittedHeight = prevHeight;
@@ -227,7 +260,7 @@ public partial class ReaderPage : ContentPage
                 var y = -_verticalScrollOffset + currentHeight + PageGapPx;
                 if (y + nextHeight >= 0 && y <= canvasHeight)
                 {
-                    canvas.DrawBitmap(nextBitmap, new SKRect(x, y, x + maxPageWidth, y + nextHeight), PageSampling);
+                    canvas.DrawBitmap(nextBitmap, new SKRect(x, y, x + maxPageWidth, y + nextHeight), PageSampling, paint);
                 }
             });
         }
@@ -506,7 +539,10 @@ public partial class ReaderPage : ContentPage
         {
             _sliderDragActive = false;
         }
+        DetachPlatformInput();
+        _platformInputAttached = false;
     }
 
     private partial void AttachPlatformInput(SKCanvasView canvasView);
+    private partial void DetachPlatformInput();
 }

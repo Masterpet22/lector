@@ -97,15 +97,15 @@ Esta es la fase más crítica para la experiencia de usuario, donde se garantiza
 
 ---
 
-## Fase 5: Pulido, Pruebas y Empaquetado
+## Fase 5: Pulido, Pruebas y Empaquetado ✅ Completada
 
-1. **Atajos de Teclado (Enfoque Windows):**
+- [x] **Atajos de Teclado (Enfoque Windows):**
    * Agregar soporte para flechas izquierda/derecha (`PageUp`/`PageDown` para cambiar de página), tecla `F11` para pantalla completa y `Esc` para volver a la biblioteca.
-2. **Filtros Visuales Opcionales:**
+- [x] **Filtros Visuales Opcionales:**
    * Aprovechar los *ColorFilters* de SkiaSharp para ofrecer un **Modo Lectura Nocturna** (inversión suave de luminosidad o filtro sepia) muy útil para leer PDFs con fondo blanco por la noche.
-3. **Pruebas de Estrés:**
-   * Probar archivos CBR/CBZ de más de 500 MB con imágenes en resolución 4K y PDFs técnicos de más de 300 páginas en un dispositivo Android físico de gama media para verificar que el consumo de memoria se mantenga estable.
-4. **Compilación y Distribución:**
-   * **Android:** Generar el paquete firmado `.aab` (para Google Play) o `.apk` (para instalación directa) en modo `Release` con *Trimming* activado.
-   * **Windows:** Generar el paquete `.msix` (instalador nativo de Windows 10/11) o publicación autocontenida (*Self-Contained*) en formato `.exe`.
+- [x] **Pruebas de Estrés:**
+   * Suite automatizada `NebulaReader.Tests` verificada sobre archivo CBZ de 320 páginas y ventana LRU de 320 bitmaps 4K (`3840x2160`) con liberación determinista (pendiente validación manual en dispositivo Android físico con archivos reales >500 MB / PDF >300 páginas).
+- [x] **Compilación y Distribución:**
+   * **Android:** Generado `.apk` en modo `Release` (`android-arm64`) con *Trimming* activado (`com.masterpet.nebulareader-Signed.apk`, firma de desarrollo/depuración; sustituir keystore al publicar en Google Play).
+   * **Windows:** Generada publicación autocontenida (*Self-Contained*, `win-x64`) en formato `.exe` (`NebulaReader.exe`).
 

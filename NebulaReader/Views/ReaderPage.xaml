@@ -74,6 +74,10 @@
                         FontSize="12"
                         Padding="10,5"
                         Command="{Binding ToggleVerticalScrollCommand}" />
+                <Button Text="{Binding FilterModeLabel}"
+                        FontSize="12"
+                        Padding="10,5"
+                        Command="{Binding CycleVisualFilterCommand}" />
             </HorizontalStackLayout>
         </Grid>
 
