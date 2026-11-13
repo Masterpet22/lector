@@ -57,6 +57,22 @@ public sealed class CoverThumbnailService : ICoverThumbnailService
     {
         ct.ThrowIfCancellationRequested();
 
+        if (sourceStream.CanSeek)
+        {
+            sourceStream.Position = 0;
+            using var codec = SKCodec.Create(sourceStream);
+            if (codec != null
+                && codec.EncodedFormat == SKEncodedImageFormat.Jpeg
+                && codec.Info.Width > 0
+                && codec.Info.Width <= TargetCoverWidthPx)
+            {
+                sourceStream.Position = 0;
+                return SaveStreamAtomic(sourceStream, destinationPath, ct);
+            }
+
+            sourceStream.Position = 0;
+        }
+
         using var original = SKBitmap.Decode(sourceStream);
         if (original == null || original.Width <= 0 || original.Height <= 0)
         {
@@ -90,19 +106,26 @@ public sealed class CoverThumbnailService : ICoverThumbnailService
                 return false;
             }
 
-            var tempPath = $"{destinationPath}.tmp";
-            using (var output = File.Create(tempPath))
-            {
-                data.SaveTo(output);
-            }
-
-            File.Move(tempPath, destinationPath, overwrite: true);
-            return true;
+            using var encodedStream = data.AsStream();
+            return SaveStreamAtomic(encodedStream, destinationPath, ct);
         }
         finally
         {
             resized?.Dispose();
         }
+    }
+
+    private static bool SaveStreamAtomic(Stream input, string destinationPath, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var tempPath = $"{destinationPath}.tmp";
+        using (var output = File.Create(tempPath))
+        {
+            input.CopyTo(output);
+        }
+
+        File.Move(tempPath, destinationPath, overwrite: true);
+        return true;
     }
 }
 

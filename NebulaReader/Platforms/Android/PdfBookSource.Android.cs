@@ -70,15 +70,23 @@ public sealed partial class PdfBookSource
         {
             ct.ThrowIfCancellationRequested();
 
-            lock (_renderLock)
+            Interlocked.Increment(ref _activeRenderWaiters);
+            try
             {
-                using var bitmap = RenderAndroidBitmap(pageIndex, density, maxWidthPx, DefaultMaxRenderDimensionPx);
-                var memoryStream = new MemoryStream();
-                var format = maxWidthPx.HasValue ? Bitmap.CompressFormat.Jpeg! : Bitmap.CompressFormat.Png!;
-                var quality = maxWidthPx.HasValue ? 85 : 100;
-                bitmap.Compress(format, quality, memoryStream);
-                memoryStream.Position = 0;
-                return memoryStream;
+                lock (_renderLock)
+                {
+                    using var bitmap = RenderAndroidBitmap(pageIndex, density, maxWidthPx, DefaultMaxRenderDimensionPx);
+                    var memoryStream = new MemoryStream();
+                    var format = maxWidthPx.HasValue ? Bitmap.CompressFormat.Jpeg! : Bitmap.CompressFormat.Png!;
+                    var quality = maxWidthPx.HasValue ? 85 : 100;
+                    bitmap.Compress(format, quality, memoryStream);
+                    memoryStream.Position = 0;
+                    return memoryStream;
+                }
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _activeRenderWaiters);
             }
         }, ct);
     }
@@ -89,10 +97,24 @@ public sealed partial class PdfBookSource
         {
             ct.ThrowIfCancellationRequested();
 
-            lock (_renderLock)
+            Interlocked.Increment(ref _activeRenderWaiters);
+            try
             {
-                using var bitmap = RenderAndroidBitmap(pageIndex, density, maxWidthPx: null, maxDimensionPx);
-                return CopyAndroidBitmapToSkBitmap(bitmap);
+                Bitmap bitmap;
+                lock (_renderLock)
+                {
+                    bitmap = RenderAndroidBitmap(pageIndex, density, maxWidthPx: null, maxDimensionPx);
+                }
+
+                // La copia de píxeles a SKBitmap se ejecuta fuera de _renderLock para no bloquear otros hilos.
+                using (bitmap)
+                {
+                    return CopyAndroidBitmapToSkBitmap(bitmap);
+                }
+            }
+            finally
+            {
+                Interlocked.Decrement(ref _activeRenderWaiters);
             }
         }, ct);
     }
@@ -161,33 +183,35 @@ public sealed partial class PdfBookSource
         return skBitmap;
     }
 
-    private partial Task<float[]?> GetPageAspectRatiosPlatformAsync(CancellationToken ct)
+    private async partial Task<float[]?> GetPageAspectRatiosPlatformAsync(CancellationToken ct)
     {
-        return Task.Run<float[]?>(() =>
+        var ratios = new float[PageCount];
+        var index = 0;
+
+        while (index < ratios.Length)
         {
-            var ratios = new float[PageCount];
-            var index = 0;
+            if (ct.IsCancellationRequested || _disposed) return null;
 
-            while (index < ratios.Length)
+            while (Volatile.Read(ref _activeRenderWaiters) > 0)
             {
-                if (ct.IsCancellationRequested || _disposed) return null;
-
-                lock (_renderLock)
-                {
-                    if (_disposed || _renderer == null) return null;
-
-                    var batchEnd = Math.Min(ratios.Length, index + 25);
-                    for (; index < batchEnd; index++)
-                    {
-                        if (ct.IsCancellationRequested) return null;
-                        using var page = _renderer.OpenPage(index);
-                        ratios[index] = page.Width > 0 ? (float)page.Height / page.Width : 1.414f;
-                    }
-                }
+                await Task.Delay(12, ct).ConfigureAwait(false);
             }
 
-            return ratios;
-        }, ct);
+            lock (_renderLock)
+            {
+                if (_disposed || _renderer == null) return null;
+
+                var batchEnd = Math.Min(ratios.Length, index + AspectRatioBatchSize);
+                for (; index < batchEnd; index++)
+                {
+                    if (ct.IsCancellationRequested) return null;
+                    using var page = _renderer.OpenPage(index);
+                    ratios[index] = page.Width > 0 ? (float)page.Height / page.Width : 1.414f;
+                }
+            }
+        }
+
+        return ratios;
     }
 
     private partial void DisposePlatform()

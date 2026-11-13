@@ -531,10 +531,6 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
             SetPageIndexCore(targetIndex);
 
             StartPreloadWorker(book, source, preloadCt);
-            if (source is ISkiaBookSource skiaSource)
-            {
-                _ = LoadPdfAspectRatiosAsync(skiaSource, preloadCt);
-            }
             RaisePageContentReady();
         }
         catch (OperationCanceledException)
@@ -570,12 +566,26 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     {
         _ = Task.Run(async () =>
         {
+            var pdfAspectScanStarted = source is not ISkiaBookSource;
+
             while (!ct.IsCancellationRequested)
             {
                 var nextBitmapPage = FindNextPageToPreload(book.Id);
                 if (nextBitmapPage >= 0)
                 {
                     await EnsurePageDecodedAsync(book.Id, source, nextBitmapPage, ct).ConfigureAwait(false);
+                }
+
+                // Lanza el escaneo de proporciones PDF después de tener listas la(s) página(s) iniciales visibles
+                // para evitar que compita por el lock nativo del PDF durante la apertura.
+                if (!pdfAspectScanStarted && source is ISkiaBookSource skiaSource && AreInitialVisiblePagesCached(book.Id))
+                {
+                    pdfAspectScanStarted = true;
+                    _ = LoadPdfAspectRatiosAsync(skiaSource, ct);
+                }
+
+                if (nextBitmapPage >= 0)
+                {
                     continue;
                 }
 
@@ -599,6 +609,24 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
                 }
             }
         }, ct);
+    }
+
+    private bool AreInitialVisiblePagesCached(string bookId)
+    {
+        if (TotalPages <= 0) return true;
+
+        var center = Math.Clamp(CurrentPageIndex, 0, TotalPages - 1);
+        if (!_pageCacheService.ContainsPage(bookId, center))
+        {
+            return false;
+        }
+
+        if (IsDoublePageActive && center + 1 < TotalPages && !_pageCacheService.ContainsPage(bookId, center + 1))
+        {
+            return false;
+        }
+
+        return true;
     }
 
     private async Task LoadPdfAspectRatiosAsync(ISkiaBookSource skiaSource, CancellationToken ct)
@@ -755,18 +783,18 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
             RecordAspectRatio(pageIndex, bitmap.Width, bitmap.Height);
             var (minKeep, maxKeep) = GetKeepWindowRange(CurrentPageIndex);
             _pageCacheService.StoreBitmapInRange(bookId, pageIndex, bitmap, minKeep, maxKeep);
+            RaisePageContentReady();
 
             var preferredWidth = _preferredFitWidthPx;
-            if (preferredWidth > 64 && bitmap.Width > preferredWidth * 1.15f)
+            if (preferredWidth > 64 && bitmap.Width > preferredWidth * 1.35f)
             {
                 var fitted = CreateFittedBitmapSafe(bitmap, preferredWidth);
                 if (fitted != null)
                 {
                     _pageCacheService.SetFittedBitmap(bookId, pageIndex, fitted, preferredWidth);
+                    RaisePageContentReady();
                 }
             }
-
-            RaisePageContentReady();
         }
         catch (OperationCanceledException)
         {
