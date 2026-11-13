@@ -30,6 +30,17 @@ public partial class LibraryPage : ContentPage
         UpdateAdaptiveGridSpan(width);
     }
 
+    protected override bool OnBackButtonPressed()
+    {
+        if (BindingContext is LibraryViewModel vm && vm.IsInsideGroup)
+        {
+            vm.ExitGroupCommand.Execute(null);
+            return true;
+        }
+
+        return base.OnBackButtonPressed();
+    }
+
     private void UpdateAdaptiveGridSpan(double width)
     {
         if (width <= 0 || LibraryGridLayout == null)

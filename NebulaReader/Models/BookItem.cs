@@ -28,6 +28,14 @@ public partial class BookItem : ObservableObject
     [ObservableProperty]
     public partial string? CoverThumbnailPath { get; set; }
 
+    [ObservableProperty]
+    public partial string? SeriesName { get; set; }
+
+    [ObservableProperty]
+    public partial string? Tags { get; set; }
+
+    public bool MetadataExtracted { get; set; }
+
     public DateTime AddedAtUtc { get; set; } = DateTime.UtcNow;
 
     [ObservableProperty]

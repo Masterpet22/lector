@@ -18,6 +18,15 @@ public partial class LibraryViewModel : BaseViewModel
     public partial ObservableCollection<BookItem> Books { get; set; } = new();
 
     [ObservableProperty]
+    public partial ObservableCollection<LibraryDisplayItem> DisplayItems { get; set; } = new();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsInsideGroup))]
+    public partial string? ActiveGroupTitle { get; set; }
+
+    public bool IsInsideGroup => !string.IsNullOrWhiteSpace(ActiveGroupTitle);
+
+    [ObservableProperty]
     public partial string StatusMessage { get; set; } = "Biblioteca lista. Abre un archivo o escanea una carpeta.";
 
     public LibraryViewModel(ILibraryService libraryService, IFilePickerService filePickerService)
@@ -33,13 +42,22 @@ public partial class LibraryViewModel : BaseViewModel
         MainThread.BeginInvokeOnMainThread(() =>
         {
             var existing = Books.FirstOrDefault(b => b.Id == updated.Id);
-            if (existing != null && !ReferenceEquals(existing, updated))
+            if (existing != null)
             {
-                existing.CoverThumbnailPath = updated.CoverThumbnailPath;
-                existing.TotalPages = updated.TotalPages;
-                existing.CurrentPage = updated.CurrentPage;
-                existing.Status = updated.Status;
-                existing.LastReadAtUtc = updated.LastReadAtUtc;
+                if (!ReferenceEquals(existing, updated))
+                {
+                    existing.CoverThumbnailPath = updated.CoverThumbnailPath;
+                    existing.TotalPages = updated.TotalPages;
+                    existing.CurrentPage = updated.CurrentPage;
+                    existing.Status = updated.Status;
+                    existing.LastReadAtUtc = updated.LastReadAtUtc;
+                    existing.SeriesName = updated.SeriesName;
+                    existing.Tags = updated.Tags;
+                    existing.MetadataExtracted = updated.MetadataExtracted;
+                }
+
+                RebuildDisplayItems();
+                UpdateStatusSummary();
             }
         });
     }
@@ -57,7 +75,9 @@ public partial class LibraryViewModel : BaseViewModel
             {
                 Books.Add(item);
             }
-            StatusMessage = $"{Books.Count} documento(s) en biblioteca.";
+
+            RebuildDisplayItems();
+            UpdateStatusSummary();
         }
         finally
         {
@@ -81,6 +101,7 @@ public partial class LibraryViewModel : BaseViewModel
 
             var book = await _libraryService.ImportFileAsync(filePath);
             UpsertBookInCollection(book);
+            RebuildDisplayItems();
 
             StatusMessage = $"Importado: {book.Title}";
             await Shell.Current.GoToAsync("ReaderPage", new Dictionary<string, object>
@@ -119,6 +140,7 @@ public partial class LibraryViewModel : BaseViewModel
                 UpsertBookInCollection(book);
             }
 
+            RebuildDisplayItems();
             StatusMessage = imported.Count > 0
                 ? $"Se indexaron {imported.Count} documento(s). Total en biblioteca: {Books.Count}."
                 : "No se encontraron archivos CBZ, CBR o PDF en la carpeta seleccionada.";
@@ -131,6 +153,35 @@ public partial class LibraryViewModel : BaseViewModel
         {
             IsBusy = false;
         }
+    }
+
+    [RelayCommand]
+    private async Task OpenItemAsync(LibraryDisplayItem? item)
+    {
+        if (item == null) return;
+
+        if (item.IsGroup)
+        {
+            ActiveGroupTitle = item.Title;
+            RebuildDisplayItems();
+            UpdateStatusSummary();
+            return;
+        }
+
+        if (item.Book != null)
+        {
+            await OpenBookAsync(item.Book);
+        }
+    }
+
+    [RelayCommand]
+    private void ExitGroup()
+    {
+        if (!IsInsideGroup) return;
+
+        ActiveGroupTitle = null;
+        RebuildDisplayItems();
+        UpdateStatusSummary();
     }
 
     [RelayCommand]
@@ -147,6 +198,63 @@ public partial class LibraryViewModel : BaseViewModel
     private Task OpenSettingsAsync()
     {
         return Shell.Current.GoToAsync("SettingsPage");
+    }
+
+    private void RebuildDisplayItems()
+    {
+        var buckets = BookMetadataExtractor.BuildLibraryGroups(
+            Books,
+            b => b.Title,
+            b => b.SeriesName,
+            b => b.Tags);
+
+        var nextItems = new List<LibraryDisplayItem>();
+
+        if (IsInsideGroup)
+        {
+            var matchedGroup = buckets.FirstOrDefault(bucket =>
+                bucket.IsGroup &&
+                string.Equals(bucket.DisplayName, ActiveGroupTitle, StringComparison.OrdinalIgnoreCase));
+
+            if (matchedGroup != null)
+            {
+                foreach (var book in matchedGroup.Items)
+                {
+                    var bookTags = string.IsNullOrWhiteSpace(book.Tags)
+                        ? Array.Empty<string>()
+                        : book.Tags.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                    nextItems.Add(LibraryDisplayItem.FromSingleBook(book, bookTags));
+                }
+
+                DisplayItems = new ObservableCollection<LibraryDisplayItem>(nextItems);
+                return;
+            }
+
+            ActiveGroupTitle = null;
+        }
+
+        foreach (var bucket in buckets)
+        {
+            nextItems.Add(bucket.IsGroup
+                ? LibraryDisplayItem.FromSeriesGroup(bucket.DisplayName, bucket.Items, bucket.CommonTags)
+                : LibraryDisplayItem.FromSingleBook(bucket.Items[0], bucket.CommonTags));
+        }
+
+        DisplayItems = new ObservableCollection<LibraryDisplayItem>(nextItems);
+    }
+
+    private void UpdateStatusSummary()
+    {
+        if (IsInsideGroup)
+        {
+            StatusMessage = $"{ActiveGroupTitle}: {DisplayItems.Count} documento(s).";
+            return;
+        }
+
+        var groupCount = DisplayItems.Count(d => d.IsGroup);
+        StatusMessage = groupCount > 0
+            ? $"{Books.Count} documento(s) en biblioteca ({groupCount} serie(s) agrupadas)."
+            : $"{Books.Count} documento(s) en biblioteca.";
     }
 
     private void UpsertBookInCollection(BookItem book)

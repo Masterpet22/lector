@@ -84,6 +84,45 @@ public partial class BookSourceFactory : IBookSourceFactory
         }
     }
 
+    public async Task<BookMetadata> ExtractMetadataAsync(string filePathOrUri, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(filePathOrUri);
+        ct.ThrowIfCancellationRequested();
+
+        var (stream, title, extensionHint, _) = await OpenSourceStreamAsync(filePathOrUri, ct).ConfigureAwait(false);
+        try
+        {
+            var header = new byte[HeaderInspectLength];
+            var bytesRead = await ReadHeaderBytesAsync(stream, header, ct).ConfigureAwait(false);
+            var format = DetectFormat(header.AsSpan(0, bytesRead), extensionHint);
+
+            if (format == BookFormat.Unknown)
+            {
+                await stream.DisposeAsync().ConfigureAwait(false);
+                return new BookMetadata(null, Array.Empty<string>(), null);
+            }
+
+            if (format == BookFormat.Pdf)
+            {
+                await using (stream.ConfigureAwait(false))
+                {
+                    return BookMetadataExtractor.ExtractFromStream(stream, format, title);
+                }
+            }
+
+            var seekableStream = await EnsureSeekableAsync(stream, ct).ConfigureAwait(false);
+            await using (seekableStream.ConfigureAwait(false))
+            {
+                return BookMetadataExtractor.ExtractFromStream(seekableStream, format, title);
+            }
+        }
+        catch
+        {
+            await stream.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
+    }
+
     public BookFormat DetectFormat(ReadOnlySpan<byte> headerBytes, string? fileNameOrExtension = null)
     {
         // 1. Inspección por magic bytes (prevalece frente a extensiones mal renombradas)

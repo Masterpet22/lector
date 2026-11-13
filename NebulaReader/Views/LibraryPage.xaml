@@ -4,10 +4,12 @@
              xmlns:vm="clr-namespace:NebulaReader.ViewModels"
              xmlns:models="clr-namespace:NebulaReader.Models"
              x:Class="NebulaReader.Views.LibraryPage"
+             x:Name="LibraryRootPage"
              x:DataType="vm:LibraryViewModel"
              Title="{Binding Title}">
 
-    <Grid RowDefinitions="Auto,*,Auto" Padding="16" RowSpacing="12">
+    <Grid RowDefinitions="Auto,Auto,*,Auto" Padding="16" RowSpacing="12">
+        <!-- Barra superior -->
         <FlexLayout Grid.Row="0"
                     Wrap="Wrap"
                     AlignItems="Center"
@@ -27,8 +29,33 @@
                                VerticalOptions="Center" />
         </FlexLayout>
 
-        <CollectionView Grid.Row="1"
-                        ItemsSource="{Binding Books}"
+        <!-- Barra de navegación dentro de una serie/saga -->
+        <Border Grid.Row="1"
+                IsVisible="{Binding IsInsideGroup}"
+                BackgroundColor="{AppThemeBinding Light=#EEF2FF, Dark=#1A2033}"
+                Stroke="{AppThemeBinding Light=#C7D2FE, Dark=#2E3754}"
+                StrokeThickness="1"
+                StrokeShape="RoundRectangle 10"
+                Padding="10,6">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                <Button Grid.Column="0"
+                        Text="← Biblioteca"
+                        Command="{Binding ExitGroupCommand}"
+                        Padding="12,6"
+                        FontSize="13"
+                        FontAttributes="Bold" />
+                <Label Grid.Column="1"
+                       Text="{Binding ActiveGroupTitle}"
+                       VerticalOptions="Center"
+                       FontSize="15"
+                       FontAttributes="Bold"
+                       LineBreakMode="TailTruncation" />
+            </Grid>
+        </Border>
+
+        <!-- Cuadrícula de biblioteca (grupos de saga con mosaico 2x2 y documentos individuales) -->
+        <CollectionView Grid.Row="2"
+                        ItemsSource="{Binding DisplayItems}"
                         SelectionMode="None">
             <CollectionView.ItemsLayout>
                 <GridItemsLayout x:Name="LibraryGridLayout"
@@ -51,29 +78,76 @@
             </CollectionView.EmptyView>
 
             <CollectionView.ItemTemplate>
-                <DataTemplate x:DataType="models:BookItem">
+                <DataTemplate x:DataType="models:LibraryDisplayItem">
                     <Border Padding="8"
                             StrokeThickness="1"
                             StrokeShape="RoundRectangle 10">
                         <Border.GestureRecognizers>
-                            <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type vm:LibraryViewModel}}, Path=OpenBookCommand}"
-                                                  CommandParameter="{Binding .}" />
+                            <TapGestureRecognizer
+                                x:DataType="{x:Null}"
+                                Command="{Binding Source={x:Reference LibraryRootPage}, Path=BindingContext.OpenItemCommand}"
+                                CommandParameter="{Binding .}" />
                         </Border.GestureRecognizers>
 
-                        <Grid RowDefinitions="200,Auto,Auto" RowSpacing="6">
+                        <Grid RowDefinitions="200,Auto,Auto,Auto" RowSpacing="5">
                             <Grid Grid.Row="0">
                                 <Border BackgroundColor="{AppThemeBinding Light=#E8EAF6, Dark=#1F2430}"
                                         StrokeThickness="0"
                                         StrokeShape="RoundRectangle 6">
-                                    <Label Text="{Binding Format}"
+                                    <Label Text="{Binding BadgeText}"
                                            HorizontalOptions="Center"
                                            VerticalOptions="Center"
                                            FontAttributes="Bold"
-                                           Opacity="0.45" />
+                                           Opacity="0.4" />
                                 </Border>
 
-                                <Image Source="{Binding CoverThumbnailPath}"
+                                <!-- Portada individual -->
+                                <Image IsVisible="{Binding IsSingleBook}"
+                                       Source="{Binding Cover1}"
                                        Aspect="AspectFill" />
+
+                                <!-- Mosaico 2x2 de las primeras 4 portadas del grupo -->
+                                <Grid IsVisible="{Binding IsGroup}"
+                                      RowDefinitions="*,*"
+                                      ColumnDefinitions="*,*"
+                                      RowSpacing="2"
+                                      ColumnSpacing="2"
+                                      BackgroundColor="{AppThemeBinding Light=#CBD5E1, Dark=#111522}">
+                                    <Border Grid.Row="0" Grid.Column="0"
+                                            BackgroundColor="{AppThemeBinding Light=#E2E8F0, Dark=#23293D}"
+                                            StrokeThickness="0">
+                                        <Image IsVisible="{Binding HasCover1}" Source="{Binding Cover1}" Aspect="AspectFill" />
+                                    </Border>
+                                    <Border Grid.Row="0" Grid.Column="1"
+                                            BackgroundColor="{AppThemeBinding Light=#E2E8F0, Dark=#23293D}"
+                                            StrokeThickness="0">
+                                        <Image IsVisible="{Binding HasCover2}" Source="{Binding Cover2}" Aspect="AspectFill" />
+                                    </Border>
+                                    <Border Grid.Row="1" Grid.Column="0"
+                                            BackgroundColor="{AppThemeBinding Light=#E2E8F0, Dark=#23293D}"
+                                            StrokeThickness="0">
+                                        <Image IsVisible="{Binding HasCover3}" Source="{Binding Cover3}" Aspect="AspectFill" />
+                                    </Border>
+                                    <Border Grid.Row="1" Grid.Column="1"
+                                            BackgroundColor="{AppThemeBinding Light=#E2E8F0, Dark=#23293D}"
+                                            StrokeThickness="0">
+                                        <Image IsVisible="{Binding HasCover4}" Source="{Binding Cover4}" Aspect="AspectFill" />
+                                    </Border>
+                                </Grid>
+
+                                <!-- Insignia superior derecha (formato o cantidad en saga) -->
+                                <Border HorizontalOptions="End"
+                                        VerticalOptions="Start"
+                                        Margin="5"
+                                        Padding="6,2"
+                                        StrokeThickness="0"
+                                        StrokeShape="RoundRectangle 6"
+                                        BackgroundColor="#CC111528">
+                                    <Label Text="{Binding BadgeText}"
+                                           TextColor="White"
+                                           FontSize="10"
+                                           FontAttributes="Bold" />
+                                </Border>
                             </Grid>
 
                             <Label Grid.Row="1"
@@ -83,29 +157,25 @@
                                    LineBreakMode="TailTruncation"
                                    MaxLines="2" />
 
-                            <Grid Grid.Row="2" ColumnDefinitions="*,Auto">
-                                <Label Grid.Column="0"
-                                       Text="{Binding Format}"
-                                       FontSize="11"
-                                       Opacity="0.7" />
-                                <Label Grid.Column="1"
-                                       FontSize="11"
-                                       Opacity="0.7">
-                                    <Label.Text>
-                                        <MultiBinding StringFormat="Pág. {0}/{1}">
-                                            <Binding Path="CurrentPage" />
-                                            <Binding Path="TotalPages" />
-                                        </MultiBinding>
-                                    </Label.Text>
-                                </Label>
-                            </Grid>
+                            <Label Grid.Row="2"
+                                   Text="{Binding SubtitleText}"
+                                   FontSize="11"
+                                   Opacity="0.75"
+                                   LineBreakMode="TailTruncation" />
+
+                            <Label Grid.Row="3"
+                                   IsVisible="{Binding HasTags}"
+                                   Text="{Binding TagsText}"
+                                   FontSize="11"
+                                   TextColor="#8B5CF6"
+                                   LineBreakMode="TailTruncation" />
                         </Grid>
                     </Border>
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>
 
-        <Label Grid.Row="2"
+        <Label Grid.Row="3"
                Text="{Binding StatusMessage}"
                FontSize="12"
                Opacity="0.8" />

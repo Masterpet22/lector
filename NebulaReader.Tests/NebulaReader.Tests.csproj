@@ -22,6 +22,7 @@
     <Compile Include="..\NebulaReader\Models\BookFormat.cs" Link="Core\BookFormat.cs" />
     <Compile Include="..\NebulaReader\Services\IBookSource.cs" Link="Core\IBookSource.cs" />
     <Compile Include="..\NebulaReader\Services\NaturalSortComparer.cs" Link="Core\NaturalSortComparer.cs" />
+    <Compile Include="..\NebulaReader\Services\BookMetadataExtractor.cs" Link="Core\BookMetadataExtractor.cs" />
     <Compile Include="..\NebulaReader\Services\CbzBookSource.cs" Link="Core\CbzBookSource.cs" />
     <Compile Include="..\NebulaReader\Services\CbrBookSource.cs" Link="Core\CbrBookSource.cs" />
     <Compile Include="..\NebulaReader\Services\IPageCacheService.cs" Link="Core\IPageCacheService.cs" />

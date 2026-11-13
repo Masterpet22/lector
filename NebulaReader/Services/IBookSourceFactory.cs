@@ -10,5 +10,6 @@ public interface IBookSourceFactory
     Task<IBookSource> CreateAsync(string filePathOrUri, CancellationToken ct = default);
     Task<BookFormat> DetectFormatAsync(string filePathOrUri, CancellationToken ct = default);
     BookFormat DetectFormat(ReadOnlySpan<byte> headerBytes, string? fileNameOrExtension = null);
+    Task<BookMetadata> ExtractMetadataAsync(string filePathOrUri, CancellationToken ct = default);
 }
 

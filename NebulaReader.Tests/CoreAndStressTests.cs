@@ -1,4 +1,6 @@
 using System.IO.Compression;
+using System.Text;
+using NebulaReader.Models;
 using NebulaReader.Services;
 using SkiaSharp;
 using Xunit;
@@ -127,6 +129,101 @@ public class CoreAndStressTests
             Assert.Equal(64, decoded.Width);
         }
     }
+
+    [Fact]
+    public void BookMetadataExtractor_ExtractsComicInfoFromCbzArchive()
+    {
+        using var zipStream = new MemoryStream();
+        const string comicInfo = """
+            <?xml version="1.0" encoding="utf-8"?>
+            <ComicInfo>
+              <Title>Despertar</Title>
+              <Series>Solo Leveling</Series>
+              <Number>01</Number>
+              <Tags>Action, Hunter, Monarchs</Tags>
+              <Genre>Fantasy</Genre>
+            </ComicInfo>
+            """;
+
+        using (var archive = new ZipArchive(zipStream, ZipArchiveMode.Create, leaveOpen: true))
+        {
+            AddEntry(archive, "ComicInfo.xml", Encoding.UTF8.GetBytes(comicInfo));
+        }
+
+        zipStream.Position = 0;
+        var metadata = BookMetadataExtractor.ExtractFromStream(zipStream, BookFormat.Cbz, "SL_01");
+
+        Assert.Equal("Solo Leveling", metadata.SeriesName);
+        Assert.Contains("Hunter", metadata.Tags);
+        Assert.Contains("Fantasy", metadata.Tags);
+        Assert.Equal("Despertar", metadata.EmbeddedTitle);
+    }
+
+    [Fact]
+    public void BookMetadataExtractor_ExtractsPdfXmpAndInfoMetadata()
+    {
+        const string syntheticPdf = """
+            %PDF-1.7
+            1 0 obj
+            << /Title (El Imperio Final) /Subject (Nacidos de la Bruma) /Keywords (serie: Mistborn, Cosmere, Fantasia) >>
+            endobj
+            <x:xmpmeta xmlns:x="adobe:ns:meta/">
+              <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/">
+                <rdf:Description>
+                  <dc:subject><rdf:Bag><rdf:li>Brandon Sanderson</rdf:li></rdf:Bag></dc:subject>
+                </rdf:Description>
+              </rdf:RDF>
+            </x:xmpmeta>
+            %%EOF
+            """;
+
+        using var pdfStream = new MemoryStream(Encoding.UTF8.GetBytes(syntheticPdf));
+        var metadata = BookMetadataExtractor.ExtractFromStream(pdfStream, BookFormat.Pdf, "archivo");
+
+        Assert.Equal("Mistborn", metadata.SeriesName);
+        Assert.Equal("El Imperio Final", metadata.EmbeddedTitle);
+        Assert.Contains("Cosmere", metadata.Tags);
+        Assert.Contains("Brandon Sanderson", metadata.Tags);
+    }
+
+    [Fact]
+    public void BookMetadataExtractor_BuildLibraryGroups_GroupsBySeriesTagsAndTitleInNaturalOrder()
+    {
+        var docs = new[]
+        {
+            new TestDoc("One Piece Vol 10", "One Piece", "Manga, Shonen"),
+            new TestDoc("One Piece Vol 2", "One Piece", "Manga, Shonen"),
+            new TestDoc("Batman #10 (2024)", null, "Comic"),
+            new TestDoc("Batman #01 (2024)", null, "Comic"),
+            new TestDoc("Batman #02 (2024)", null, "Comic"),
+            new TestDoc("El Camino de los Reyes", null, "Cosmere, Manga"),
+            new TestDoc("Palabras Radiantes", null, "Cosmere, Manga"),
+            new TestDoc("Akira", "Akira", "Manga"),
+            new TestDoc("Watchmen", null, "Comic")
+        };
+
+        var groups = BookMetadataExtractor.BuildLibraryGroups(
+            docs,
+            d => d.Title,
+            d => d.Series,
+            d => d.Tags);
+
+        // Orden alfabético esperado en raíz: Akira, Batman (grupo), Cosmere (grupo), One Piece (grupo), Watchmen
+        Assert.Equal(5, groups.Count);
+        Assert.Equal(["Akira", "Batman", "Cosmere", "One Piece", "Watchmen"], groups.Select(g => g.DisplayName).ToArray());
+
+        Assert.False(groups[0].IsGroup); // Akira solo tiene 1 documento -> tarjeta suelta
+        Assert.True(groups[1].IsGroup);  // Batman agrupado por título normalizado (#01, #02, #10)
+        Assert.Equal(["Batman #01 (2024)", "Batman #02 (2024)", "Batman #10 (2024)"], groups[1].Items.Select(i => i.Title).ToArray());
+
+        Assert.True(groups[2].IsGroup);  // Cosmere agrupado por etiqueta específica (ignorando "Manga" genérica)
+        Assert.True(groups[3].IsGroup);  // One Piece agrupado por metadato explícito
+        Assert.Equal(["One Piece Vol 2", "One Piece Vol 10"], groups[3].Items.Select(i => i.Title).ToArray());
+
+        Assert.False(groups[4].IsGroup); // Watchmen suelto
+    }
+
+    private sealed record TestDoc(string Title, string? Series, string? Tags);
 
     private static void AddEntry(ZipArchive archive, string name, byte[] content)
     {

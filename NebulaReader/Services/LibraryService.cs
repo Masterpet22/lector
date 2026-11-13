@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using NebulaReader.Models;
 
 namespace NebulaReader.Services;
@@ -12,6 +13,7 @@ public class LibraryService : ILibraryService
     private readonly IFilePickerService _filePickerService;
     private readonly ICoverThumbnailService _coverThumbnailService;
     private readonly SemaphoreSlim _coverThrottle = new(2, 2);
+    private readonly ConcurrentDictionary<string, byte> _queuedBookIds = new(StringComparer.Ordinal);
     private readonly WeakEventManager _bookUpdatedWeakEvent = new();
 
     public event EventHandler<BookItem>? BookUpdated
@@ -32,9 +34,17 @@ public class LibraryService : ILibraryService
         _coverThumbnailService = coverThumbnailService;
     }
 
-    public Task<IReadOnlyList<BookItem>> GetBooksAsync(CancellationToken ct = default)
+    public async Task<IReadOnlyList<BookItem>> GetBooksAsync(CancellationToken ct = default)
     {
-        return _database.GetBooksAsync(ct);
+        var books = await _database.GetBooksAsync(ct).ConfigureAwait(false);
+        foreach (var book in books)
+        {
+            if (NeedsBackgroundEnrichment(book))
+            {
+                QueueBackgroundCoverGeneration(book);
+            }
+        }
+        return books;
     }
 
     public async Task<BookItem> ImportFileAsync(string filePath, CancellationToken ct = default)
@@ -45,7 +55,7 @@ public class LibraryService : ILibraryService
         var existing = await _database.GetBookByPathAsync(filePath, ct).ConfigureAwait(false);
         if (existing != null)
         {
-            if (string.IsNullOrWhiteSpace(existing.CoverThumbnailPath) || !File.Exists(existing.CoverThumbnailPath))
+            if (NeedsBackgroundEnrichment(existing))
             {
                 QueueBackgroundCoverGeneration(existing);
             }
@@ -98,28 +108,72 @@ public class LibraryService : ILibraryService
         return _database.UpdateProgressAsync(progress, ct);
     }
 
+    private static bool NeedsBackgroundEnrichment(BookItem book)
+    {
+        var missingCover = string.IsNullOrWhiteSpace(book.CoverThumbnailPath)
+            || !File.Exists(book.CoverThumbnailPath)
+            || book.TotalPages <= 0;
+        return missingCover || !book.MetadataExtracted;
+    }
+
     private void QueueBackgroundCoverGeneration(BookItem book)
     {
+        if (!_queuedBookIds.TryAdd(book.Id, 0))
+        {
+            return;
+        }
+
         _ = Task.Run(async () =>
         {
             await _coverThrottle.WaitAsync().ConfigureAwait(false);
             try
             {
-                var (thumbnailPath, pageCount) = await _coverThumbnailService
-                    .GenerateCoverAsync(book.Id, book.FilePath)
-                    .ConfigureAwait(false);
-
                 var changed = false;
-                if (!string.IsNullOrWhiteSpace(thumbnailPath) &&
-                    !string.Equals(book.CoverThumbnailPath, thumbnailPath, StringComparison.Ordinal))
+
+                if (string.IsNullOrWhiteSpace(book.CoverThumbnailPath)
+                    || !File.Exists(book.CoverThumbnailPath)
+                    || book.TotalPages <= 0)
                 {
-                    book.CoverThumbnailPath = thumbnailPath;
-                    changed = true;
+                    var (thumbnailPath, pageCount) = await _coverThumbnailService
+                        .GenerateCoverAsync(book.Id, book.FilePath)
+                        .ConfigureAwait(false);
+
+                    if (!string.IsNullOrWhiteSpace(thumbnailPath) &&
+                        !string.Equals(book.CoverThumbnailPath, thumbnailPath, StringComparison.Ordinal))
+                    {
+                        book.CoverThumbnailPath = thumbnailPath;
+                        changed = true;
+                    }
+
+                    if (pageCount > 0 && book.TotalPages != pageCount)
+                    {
+                        book.TotalPages = pageCount;
+                        changed = true;
+                    }
                 }
 
-                if (pageCount > 0 && book.TotalPages != pageCount)
+                if (!book.MetadataExtracted)
                 {
-                    book.TotalPages = pageCount;
+                    var metadata = await _bookSourceFactory
+                        .ExtractMetadataAsync(book.FilePath)
+                        .ConfigureAwait(false);
+
+                    if (!string.IsNullOrWhiteSpace(metadata.SeriesName) &&
+                        !string.Equals(book.SeriesName, metadata.SeriesName, StringComparison.Ordinal))
+                    {
+                        book.SeriesName = metadata.SeriesName;
+                        changed = true;
+                    }
+
+                    var formattedTags = metadata.FormattedTags;
+                    if (!string.IsNullOrWhiteSpace(formattedTags) &&
+                        !string.Equals(book.Tags, formattedTags, StringComparison.Ordinal))
+                    {
+                        book.Tags = formattedTags;
+                        changed = true;
+                    }
+
+                    book.MetadataExtracted = true;
                     changed = true;
                 }
 
@@ -135,6 +189,7 @@ public class LibraryService : ILibraryService
             }
             finally
             {
+                _queuedBookIds.TryRemove(book.Id, out _);
                 _coverThrottle.Release();
             }
         });
