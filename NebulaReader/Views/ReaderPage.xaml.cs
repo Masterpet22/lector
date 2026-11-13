@@ -47,6 +47,12 @@ public partial class ReaderPage : ContentPage
         Color = new SKColor(0x1B, 0x1E, 0x28),
         Style = SKPaintStyle.Fill
     };
+    private static readonly SKPaint PlaceholderBorderPaint = new()
+    {
+        Color = new SKColor(0x2E, 0x34, 0x46),
+        Style = SKPaintStyle.Stroke,
+        StrokeWidth = 2f
+    };
     private static readonly SKPaint PlaceholderTextPaint = new()
     {
         Color = new SKColor(0xA0, 0xA8, 0xB8),
@@ -234,84 +240,94 @@ public partial class ReaderPage : ContentPage
         });
     }
 
+    private static float GetContinuousMaxPageWidth(float canvasWidth, float canvasHeight)
+    {
+        if (canvasWidth <= 0 || canvasHeight <= 0) return Math.Max(1f, canvasWidth);
+        return Math.Min(canvasWidth, canvasHeight * 1.15f);
+    }
+
+    private static float GetContinuousPageHeight(ReaderViewModel vm, int pageIndex, float maxPageWidth)
+    {
+        return maxPageWidth * vm.GetExpectedAspectRatio(pageIndex);
+    }
+
     private void DrawContinuousVertical(SKCanvas canvas, ReaderViewModel vm, float canvasWidth, float canvasHeight, SKPaint? paint)
     {
         var current = vm.CurrentPageIndex;
-        var maxPageWidth = Math.Min(canvasWidth, canvasHeight * 1.15f);
-        var defaultPageHeight = maxPageWidth * 1.414f;
+        var maxPageWidth = GetContinuousMaxPageWidth(canvasWidth, canvasHeight);
         var x = (canvasWidth - maxPageWidth) / 2f;
 
-        float currentHeight = defaultPageHeight;
-        vm.RequestPageLoadIfNeeded(current);
-        var drewCurrent = vm.TryDrawCachedPage(current, bitmap =>
+        // Dibuja todos los espacios de página visibles hacia abajo [actual, actual + 1, actual + 2, ...]
+        var topY = -_verticalScrollOffset;
+        for (var pageIdx = current; pageIdx < vm.TotalPages && topY <= canvasHeight; pageIdx++)
         {
-            currentHeight = maxPageWidth * (bitmap.Height / (float)Math.Max(1, bitmap.Width));
-            var y = -_verticalScrollOffset;
-            if (y + currentHeight >= 0 && y <= canvasHeight)
+            var slotHeight = GetContinuousPageHeight(vm, pageIdx, maxPageWidth);
+            if (pageIdx == current)
             {
-                canvas.DrawBitmap(bitmap, new SKRect(x, y, x + maxPageWidth, y + currentHeight), CurrentSampling, paint);
+                _lastCurrentPageFittedHeight = slotHeight;
             }
-        });
-        if (!drewCurrent)
-        {
-            var y = -_verticalScrollOffset;
-            if (y + currentHeight >= 0 && y <= canvasHeight)
-            {
-                DrawPlaceholderCard(canvas, current, x, y, maxPageWidth, currentHeight);
-            }
-        }
-        _lastCurrentPageFittedHeight = currentHeight;
 
-        // Página anterior [actual - 1]
-        if (current - 1 >= 0)
-        {
-            float prevHeight = defaultPageHeight;
-            vm.RequestPageLoadIfNeeded(current - 1);
-            var drewPrev = vm.TryDrawCachedPage(current - 1, prevBitmap =>
+            if (topY + slotHeight >= 0)
             {
-                prevHeight = maxPageWidth * (prevBitmap.Height / (float)Math.Max(1, prevBitmap.Width));
-                var y = -_verticalScrollOffset - PageGapPx - prevHeight;
-                if (y + prevHeight >= 0 && y <= canvasHeight)
+                vm.RequestPageLoadIfNeeded(pageIdx);
+                var currentY = topY;
+                var currentSlotHeight = slotHeight;
+
+                var drew = vm.TryDrawCachedPage(pageIdx, bitmap =>
                 {
-                    canvas.DrawBitmap(prevBitmap, new SKRect(x, y, x + maxPageWidth, y + prevHeight), CurrentSampling, paint);
-                }
-            });
-            if (!drewPrev)
-            {
-                var y = -_verticalScrollOffset - PageGapPx - prevHeight;
-                if (y + prevHeight >= 0 && y <= canvasHeight)
+                    currentSlotHeight = maxPageWidth * (bitmap.Height / (float)Math.Max(1, bitmap.Width));
+                    if (pageIdx == current)
+                    {
+                        _lastCurrentPageFittedHeight = currentSlotHeight;
+                    }
+                    canvas.DrawBitmap(bitmap, new SKRect(x, currentY, x + maxPageWidth, currentY + currentSlotHeight), CurrentSampling, paint);
+                });
+
+                if (!drew)
                 {
-                    DrawPlaceholderCard(canvas, current - 1, x, y, maxPageWidth, prevHeight);
+                    DrawPlaceholderCard(canvas, pageIdx, x, currentY, maxPageWidth, currentSlotHeight);
                 }
+
+                slotHeight = currentSlotHeight;
             }
-            _lastPrevPageFittedHeight = prevHeight;
-        }
-        else
-        {
-            _lastPrevPageFittedHeight = 0;
+
+            topY += slotHeight + PageGapPx;
         }
 
-        // Página siguiente [actual + 1]
-        if (current + 1 < vm.TotalPages)
+        // Dibuja los espacios visibles hacia arriba [actual - 1, actual - 2, ...]
+        _lastPrevPageFittedHeight = 0;
+        var bottomY = -_verticalScrollOffset - PageGapPx;
+        for (var prevIdx = current - 1; prevIdx >= 0 && bottomY >= 0; prevIdx--)
         {
-            vm.RequestPageLoadIfNeeded(current + 1);
-            var drewNext = vm.TryDrawCachedPage(current + 1, nextBitmap =>
+            var prevHeight = GetContinuousPageHeight(vm, prevIdx, maxPageWidth);
+            vm.RequestPageLoadIfNeeded(prevIdx);
+
+            float drawnHeight = prevHeight;
+            var drawn = vm.TryDrawCachedPage(prevIdx, prevBitmap =>
             {
-                var nextHeight = maxPageWidth * (nextBitmap.Height / (float)Math.Max(1, nextBitmap.Width));
-                var y = -_verticalScrollOffset + currentHeight + PageGapPx;
-                if (y + nextHeight >= 0 && y <= canvasHeight)
+                drawnHeight = maxPageWidth * (prevBitmap.Height / (float)Math.Max(1, prevBitmap.Width));
+                var prevTopY = bottomY - drawnHeight;
+                if (bottomY >= 0 && prevTopY <= canvasHeight)
                 {
-                    canvas.DrawBitmap(nextBitmap, new SKRect(x, y, x + maxPageWidth, y + nextHeight), CurrentSampling, paint);
+                    canvas.DrawBitmap(prevBitmap, new SKRect(x, prevTopY, x + maxPageWidth, bottomY), CurrentSampling, paint);
                 }
             });
-            if (!drewNext)
+
+            if (!drawn)
             {
-                var y = -_verticalScrollOffset + currentHeight + PageGapPx;
-                if (y + defaultPageHeight >= 0 && y <= canvasHeight)
+                var prevTopY = bottomY - drawnHeight;
+                if (bottomY >= 0 && prevTopY <= canvasHeight)
                 {
-                    DrawPlaceholderCard(canvas, current + 1, x, y, maxPageWidth, defaultPageHeight);
+                    DrawPlaceholderCard(canvas, prevIdx, x, prevTopY, maxPageWidth, drawnHeight);
                 }
             }
+
+            if (prevIdx == current - 1)
+            {
+                _lastPrevPageFittedHeight = drawnHeight;
+            }
+
+            bottomY -= drawnHeight + PageGapPx;
         }
     }
 
@@ -319,8 +335,9 @@ public partial class ReaderPage : ContentPage
     {
         var rect = new SKRect(x, y, x + width, y + height);
         canvas.DrawRect(rect, PlaceholderFillPaint);
+        canvas.DrawRect(rect, PlaceholderBorderPaint);
         canvas.DrawText(
-            $"Cargando página {pageIndex + 1}...",
+            $"Página {pageIndex + 1} · Cargando...",
             x + (width / 2f),
             y + (height / 2f),
             SKTextAlign.Center,
@@ -419,33 +436,44 @@ public partial class ReaderPage : ContentPage
         var vm = ViewModel;
         if (vm == null || vm.TotalPages <= 0) return;
 
+        var canvasWidth = ReaderCanvas.CanvasSize.Width;
+        var canvasHeight = ReaderCanvas.CanvasSize.Height;
+        var maxPageWidth = GetContinuousMaxPageWidth(canvasWidth, canvasHeight);
+
         _verticalScrollOffset += deltaScrollPx;
 
-        var currentSpan = (_lastCurrentPageFittedHeight > 0 ? _lastCurrentPageFittedHeight : ReaderCanvas.CanvasSize.Height) + PageGapPx;
-        if (_verticalScrollOffset >= currentSpan && vm.CurrentPageIndex + 1 < vm.TotalPages)
+        var targetIndex = vm.CurrentPageIndex;
+        var currentSpan = GetContinuousPageHeight(vm, targetIndex, maxPageWidth) + PageGapPx;
+
+        while (_verticalScrollOffset >= currentSpan && targetIndex + 1 < vm.TotalPages)
         {
             _verticalScrollOffset -= currentSpan;
-            _ = vm.GoToPageAsync(vm.CurrentPageIndex + 1);
-            return;
+            targetIndex++;
+            currentSpan = GetContinuousPageHeight(vm, targetIndex, maxPageWidth) + PageGapPx;
         }
 
-        if (_verticalScrollOffset < 0)
+        while (_verticalScrollOffset < 0 && targetIndex > 0)
         {
-            if (vm.CurrentPageIndex > 0)
-            {
-                var prevSpan = (_lastPrevPageFittedHeight > 0 ? _lastPrevPageFittedHeight : ReaderCanvas.CanvasSize.Height) + PageGapPx;
-                _verticalScrollOffset += prevSpan;
-                _ = vm.GoToPageAsync(vm.CurrentPageIndex - 1);
-                return;
-            }
+            targetIndex--;
+            var prevSpan = GetContinuousPageHeight(vm, targetIndex, maxPageWidth) + PageGapPx;
+            _verticalScrollOffset += prevSpan;
+            currentSpan = prevSpan;
+        }
 
+        if (targetIndex == 0 && _verticalScrollOffset < 0)
+        {
             _verticalScrollOffset = 0;
         }
 
-        if (vm.CurrentPageIndex == vm.TotalPages - 1)
+        if (targetIndex == vm.TotalPages - 1)
         {
-            var maxScroll = Math.Max(0f, currentSpan - ReaderCanvas.CanvasSize.Height);
+            var maxScroll = Math.Max(0f, currentSpan - canvasHeight);
             _verticalScrollOffset = Math.Min(_verticalScrollOffset, maxScroll);
+        }
+
+        if (targetIndex != vm.CurrentPageIndex)
+        {
+            _ = vm.GoToPageAsync(targetIndex);
         }
 
         ReaderCanvas.InvalidateSurface();

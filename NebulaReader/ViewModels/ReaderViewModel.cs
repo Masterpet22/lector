@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NebulaReader.Models;
@@ -7,12 +8,14 @@ using SkiaSharp;
 namespace NebulaReader.ViewModels;
 
 /// <summary>
-/// ViewModel del visor de lectura (CBR, CBZ y PDF) con caché LRU de 3 páginas y soporte de modos de lectura.
+/// ViewModel del visor de lectura (CBR, CBZ y PDF) con caché deslizante amplia, precarga prioritaria
+/// de páginas y reserva anticipada de espacios para lectura fluida.
 /// </summary>
 public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
 {
     private const int PhoneMaxDecodeDimensionPx = 2400;
     private const int DesktopMaxDecodeDimensionPx = 3600;
+    private const int SpaceProbeLookaheadCount = 12;
     private static readonly TimeSpan ProgressPersistDebounce = TimeSpan.FromMilliseconds(750);
 
     private readonly ILibraryService _libraryService;
@@ -23,10 +26,13 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
 
     private IBookSource? _bookSource;
     private CancellationTokenSource? _loadCts;
-    private CancellationTokenSource? _windowPreloadCts;
+    private CancellationTokenSource? _preloadLoopCts;
     private CancellationTokenSource? _persistDebounceCts;
+    private readonly SemaphoreSlim _preloadSignal = new(0);
+    private readonly ConcurrentDictionary<int, float> _pageAspectRatios = new();
     private readonly object _pageLoadSync = new();
     private readonly HashSet<int> _inFlightPages = new();
+    private float _defaultPageAspectRatio = 1.414f;
     private int _lastNavigationDirection = 1;
     private double _viewportWidth;
     private double _viewportHeight;
@@ -130,6 +136,13 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
         RecalculateDoublePageState();
     }
 
+    public float GetExpectedAspectRatio(int pageIndex)
+    {
+        return _pageAspectRatios.TryGetValue(pageIndex, out var ratio)
+            ? ratio
+            : _defaultPageAspectRatio;
+    }
+
     public bool TryDrawCachedPage(int pageIndex, Action<SKBitmap> drawAction)
     {
         if (CurrentBook == null || (uint)pageIndex >= (uint)TotalPages)
@@ -143,14 +156,13 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     public void RequestPageLoadIfNeeded(int pageIndex)
     {
         var book = CurrentBook;
-        var source = _bookSource;
-        if (book == null || source == null || (uint)pageIndex >= (uint)TotalPages)
+        if (book == null || _bookSource == null || (uint)pageIndex >= (uint)TotalPages)
         {
             return;
         }
 
-        var radius = GetCacheWindowRadius();
-        if (Math.Abs(pageIndex - CurrentPageIndex) > radius)
+        var (minKeep, maxKeep) = GetKeepWindowRange(CurrentPageIndex);
+        if (pageIndex < minKeep || pageIndex > maxKeep)
         {
             return;
         }
@@ -160,10 +172,31 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
             return;
         }
 
-        _ = EnsurePageDecodedAsync(book.Id, source, pageIndex, radius, CancellationToken.None);
+        SignalPreloadWorker();
     }
 
-    private int GetCacheWindowRadius() => IsDoublePageActive ? 2 : 1;
+    private (int Behind, int Ahead) GetWindowBounds()
+    {
+        var isPhone = IsPhoneDevice();
+        if (IsContinuousVertical)
+        {
+            return isPhone ? (2, 5) : (3, 7);
+        }
+
+        if (IsDoublePageActive)
+        {
+            return isPhone ? (2, 4) : (2, 5);
+        }
+
+        return isPhone ? (1, 3) : (2, 4);
+    }
+
+    private (int MinKeep, int MaxKeep) GetKeepWindowRange(int center)
+    {
+        var (behind, ahead) = GetWindowBounds();
+        var maxIdx = Math.Max(0, TotalPages - 1);
+        return (Math.Max(0, center - behind), Math.Min(maxIdx, center + ahead));
+    }
 
     public async Task GoToPageAsync(int pageIndex)
     {
@@ -177,9 +210,11 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
 
         _lastNavigationDirection = clamped >= CurrentPageIndex ? 1 : -1;
         SetPageIndexCore(clamped);
-        _pageCacheService.EvictOutsideWindow(CurrentBook.Id, CurrentPageIndex, GetCacheWindowRadius());
+
+        var (minKeep, maxKeep) = GetKeepWindowRange(CurrentPageIndex);
+        _pageCacheService.EvictOutsideRange(CurrentBook.Id, minKeep, maxKeep);
         RaisePageContentReady();
-        PreloadSlidingWindow();
+        SignalPreloadWorker();
         ScheduleDebouncedProgressPersist();
         await Task.CompletedTask;
     }
@@ -261,13 +296,16 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
         _persistDebounceCts = null;
         await PersistProgressAsync();
 
-        _windowPreloadCts?.Cancel();
-        _windowPreloadCts?.Dispose();
-        _windowPreloadCts = null;
+        _preloadLoopCts?.Cancel();
+        _preloadLoopCts?.Dispose();
+        _preloadLoopCts = null;
 
         _loadCts?.Cancel();
         _loadCts?.Dispose();
         _loadCts = null;
+
+        _pageAspectRatios.Clear();
+        _defaultPageAspectRatio = 1.414f;
 
         _bookSource?.Dispose();
         _bookSource = null;
@@ -300,6 +338,14 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
         _loadCts = new CancellationTokenSource();
         var ct = _loadCts.Token;
 
+        _preloadLoopCts?.Cancel();
+        _preloadLoopCts?.Dispose();
+        _preloadLoopCts = new CancellationTokenSource();
+        var preloadCt = _preloadLoopCts.Token;
+
+        _pageAspectRatios.Clear();
+        _defaultPageAspectRatio = 1.414f;
+
         IsBusy = true;
         try
         {
@@ -329,7 +375,11 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
                 : 0;
             SetPageIndexCore(targetIndex);
 
-            PreloadSlidingWindow();
+            StartPreloadWorker(book, source, preloadCt);
+            if (source is ISkiaBookSource skiaSource)
+            {
+                _ = LoadPdfAspectRatiosAsync(skiaSource, preloadCt);
+            }
             RaisePageContentReady();
         }
         catch (OperationCanceledException)
@@ -346,65 +396,169 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
         }
     }
 
-    private void PreloadSlidingWindow()
+    private void SignalPreloadWorker()
     {
-        var book = CurrentBook;
-        var source = _bookSource;
-        if (book == null || source == null || TotalPages <= 0)
+        try
         {
-            return;
-        }
-
-        _windowPreloadCts?.Cancel();
-        _windowPreloadCts?.Dispose();
-        _windowPreloadCts = new CancellationTokenSource();
-        var ct = _windowPreloadCts.Token;
-
-        // Ventana deslizante direccional: prioriza la página visible y luego el sentido de avance
-        var center = CurrentPageIndex;
-        var radius = GetCacheWindowRadius();
-        var targets = new List<int>(4) { center };
-
-        if (IsDoublePageActive)
-        {
-            if (center + 1 < TotalPages) targets.Add(center + 1);
-            if (_lastNavigationDirection >= 0)
+            if (_preloadSignal.CurrentCount == 0)
             {
-                if (center + 2 < TotalPages) targets.Add(center + 2);
-                if (center - 1 >= 0) targets.Add(center - 1);
-            }
-            else
-            {
-                if (center - 2 >= 0) targets.Add(center - 2);
-                if (center - 1 >= 0) targets.Add(center - 1);
+                _preloadSignal.Release();
             }
         }
-        else if (_lastNavigationDirection >= 0)
+        catch (SemaphoreFullException)
         {
-            if (center + 1 < TotalPages) targets.Add(center + 1);
-            if (center - 1 >= 0) targets.Add(center - 1);
+            // Señal ya pendiente para procesar el siguiente lote
         }
-        else
-        {
-            if (center - 1 >= 0) targets.Add(center - 1);
-            if (center + 1 < TotalPages) targets.Add(center + 1);
-        }
+    }
 
+    private void StartPreloadWorker(BookItem book, IBookSource source, CancellationToken ct)
+    {
         _ = Task.Run(async () =>
         {
-            foreach (var pageIdx in targets)
+            while (!ct.IsCancellationRequested)
             {
-                if (ct.IsCancellationRequested) return;
-                await EnsurePageDecodedAsync(book.Id, source, pageIdx, radius, ct).ConfigureAwait(false);
+                var nextBitmapPage = FindNextPageToPreload(book.Id);
+                if (nextBitmapPage >= 0)
+                {
+                    await EnsurePageDecodedAsync(book.Id, source, nextBitmapPage, ct).ConfigureAwait(false);
+                    continue;
+                }
+
+                if (source is not ISkiaBookSource)
+                {
+                    var probePage = FindNextSpaceToProbe();
+                    if (probePage >= 0)
+                    {
+                        await ProbePageAspectRatioAsync(source, probePage, ct).ConfigureAwait(false);
+                        continue;
+                    }
+                }
+
+                try
+                {
+                    await _preloadSignal.WaitAsync(ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    return;
+                }
             }
         }, ct);
+    }
+
+    private async Task LoadPdfAspectRatiosAsync(ISkiaBookSource skiaSource, CancellationToken ct)
+    {
+        try
+        {
+            var ratios = await skiaSource.GetPageAspectRatiosAsync(ct).ConfigureAwait(false);
+            if (ratios == null || ratios.Length == 0 || ct.IsCancellationRequested)
+            {
+                return;
+            }
+
+            double sum = 0;
+            var count = 0;
+            for (var i = 0; i < ratios.Length; i++)
+            {
+                var clamped = Math.Clamp(ratios[i], 0.25f, 4.5f);
+                _pageAspectRatios[i] = clamped;
+                if (count < 24)
+                {
+                    sum += clamped;
+                    count++;
+                }
+            }
+
+            if (count > 0)
+            {
+                _defaultPageAspectRatio = (float)(sum / count);
+            }
+
+            RaisePageContentReady();
+        }
+        catch (OperationCanceledException)
+        {
+            // Cancelado al cerrar o cambiar libro
+        }
+        catch
+        {
+            // Si el PDF no entrega métricas rápidas, se usarán los bitmaps al decodificarse
+        }
+    }
+
+    private int FindNextPageToPreload(string bookId)
+    {
+        var total = TotalPages;
+        if (total <= 0) return -1;
+
+        var center = Math.Clamp(CurrentPageIndex, 0, total - 1);
+        var (minKeep, maxKeep) = GetKeepWindowRange(center);
+        var dir = _lastNavigationDirection >= 0 ? 1 : -1;
+
+        if (IsCandidateNeeded(bookId, center)) return center;
+
+        if (IsDoublePageActive && center + 1 <= maxKeep && IsCandidateNeeded(bookId, center + 1))
+        {
+            return center + 1;
+        }
+
+        var maxStep = Math.Max(center - minKeep, maxKeep - center);
+        for (var step = 1; step <= maxStep; step++)
+        {
+            var forward = center + (step * dir);
+            if (forward >= minKeep && forward <= maxKeep && IsCandidateNeeded(bookId, forward))
+            {
+                return forward;
+            }
+
+            var backward = center - (step * dir);
+            if (backward >= minKeep && backward <= maxKeep && IsCandidateNeeded(bookId, backward))
+            {
+                return backward;
+            }
+        }
+
+        return -1;
+    }
+
+    private int FindNextSpaceToProbe()
+    {
+        var total = TotalPages;
+        if (total <= 0) return -1;
+
+        var center = Math.Clamp(CurrentPageIndex, 0, total - 1);
+        var (_, maxKeep) = GetKeepWindowRange(center);
+        var start = Math.Min(total - 1, maxKeep + 1);
+        var end = Math.Min(total - 1, maxKeep + SpaceProbeLookaheadCount);
+
+        for (var i = start; i <= end; i++)
+        {
+            if (!_pageAspectRatios.ContainsKey(i))
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
+
+    private bool IsCandidateNeeded(string bookId, int pageIndex)
+    {
+        if (_pageCacheService.ContainsPage(bookId, pageIndex))
+        {
+            return false;
+        }
+
+        lock (_pageLoadSync)
+        {
+            return !_inFlightPages.Contains(pageIndex);
+        }
     }
 
     private async Task EnsurePageDecodedAsync(
         string bookId,
         IBookSource source,
         int pageIndex,
-        int cacheRadius,
         CancellationToken ct)
     {
         if (ct.IsCancellationRequested || (uint)pageIndex >= (uint)TotalPages)
@@ -443,12 +597,14 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
 
             if (bitmap == null) return;
 
-            _pageCacheService.StoreBitmap(bookId, pageIndex, bitmap, CurrentPageIndex, radius: cacheRadius);
+            RecordAspectRatio(pageIndex, bitmap.Width, bitmap.Height);
+            var (minKeep, maxKeep) = GetKeepWindowRange(CurrentPageIndex);
+            _pageCacheService.StoreBitmapInRange(bookId, pageIndex, bitmap, minKeep, maxKeep);
             RaisePageContentReady();
         }
         catch (OperationCanceledException)
         {
-            // Ignorar cancelación de precarga cuando el usuario avanza rápido
+            // Ignorar cancelación al cerrar o cambiar libro
         }
         catch
         {
@@ -463,18 +619,80 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
         }
     }
 
-    private static int GetPlatformMaxDecodeDimensionPx()
+    private async Task ProbePageAspectRatioAsync(IBookSource source, int pageIndex, CancellationToken ct)
     {
+        if (ct.IsCancellationRequested || (uint)pageIndex >= (uint)TotalPages || _pageAspectRatios.ContainsKey(pageIndex))
+        {
+            return;
+        }
+
         try
         {
-            return DeviceInfo.Current.Idiom == DeviceIdiom.Phone
-                ? PhoneMaxDecodeDimensionPx
-                : DesktopMaxDecodeDimensionPx;
+            await using var stream = await source.GetPageStreamAsync(pageIndex, ct).ConfigureAwait(false);
+            if (ct.IsCancellationRequested) return;
+            if (stream.CanSeek) stream.Position = 0;
+
+            using var codec = SKCodec.Create(stream);
+            if (codec != null)
+            {
+                var info = codec.Info;
+                if (info.Width > 0 && info.Height > 0)
+                {
+                    RecordAspectRatio(pageIndex, info.Width, info.Height);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Ignorar al cerrar o cambiar libro
         }
         catch
         {
-            return PhoneMaxDecodeDimensionPx;
+            // Ignorar fallo puntual en lectura de cabecera
         }
+    }
+
+    private void RecordAspectRatio(int pageIndex, int width, int height)
+    {
+        if (width <= 0 || height <= 0) return;
+
+        var ratio = Math.Clamp(height / (float)width, 0.25f, 4.5f);
+        _pageAspectRatios[pageIndex] = ratio;
+
+        if (_pageAspectRatios.Count <= 16)
+        {
+            double sum = 0;
+            var count = 0;
+            foreach (var entry in _pageAspectRatios)
+            {
+                sum += entry.Value;
+                count++;
+            }
+
+            if (count > 0)
+            {
+                _defaultPageAspectRatio = (float)(sum / count);
+            }
+        }
+    }
+
+    private static bool IsPhoneDevice()
+    {
+        try
+        {
+            return DeviceInfo.Current.Idiom == DeviceIdiom.Phone;
+        }
+        catch
+        {
+            return true;
+        }
+    }
+
+    private static int GetPlatformMaxDecodeDimensionPx()
+    {
+        return IsPhoneDevice()
+            ? PhoneMaxDecodeDimensionPx
+            : DesktopMaxDecodeDimensionPx;
     }
 
     private static SKBitmap? DecodeAndScaleSafe(Stream stream, int maxDecodeDimensionPx)
@@ -598,6 +816,7 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
         }
 
         OnPropertyChanged(nameof(LayoutModeLabel));
+        SignalPreloadWorker();
         RaisePageContentReady();
     }
 

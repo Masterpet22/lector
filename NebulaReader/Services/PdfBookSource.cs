@@ -67,6 +67,18 @@ public sealed partial class PdfBookSource : ISkiaBookSource
         return await RenderPageBitmapPlatformAsync(pageIndex, density, Math.Max(256, maxDimensionPx), ct).ConfigureAwait(false);
     }
 
+    public Task<float[]?> GetPageAspectRatiosAsync(CancellationToken ct = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        if (PageCount <= 0)
+        {
+            return Task.FromResult<float[]?>(Array.Empty<float>());
+        }
+
+        ct.ThrowIfCancellationRequested();
+        return GetPageAspectRatiosPlatformAsync(ct);
+    }
+
     public async Task<Stream> GetCoverThumbnailAsync()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -149,6 +161,7 @@ public sealed partial class PdfBookSource : ISkiaBookSource
     private partial Task InitializeFromStreamAsync(Stream stream, CancellationToken ct);
     private partial Task<Stream> RenderPagePlatformAsync(int pageIndex, double density, int? maxWidthPx, CancellationToken ct);
     private partial Task<SKBitmap?> RenderPageBitmapPlatformAsync(int pageIndex, double density, int maxDimensionPx, CancellationToken ct);
+    private partial Task<float[]?> GetPageAspectRatiosPlatformAsync(CancellationToken ct);
     private partial void DisposePlatform();
 }
 

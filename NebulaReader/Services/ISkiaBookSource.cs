@@ -9,5 +9,6 @@ namespace NebulaReader.Services;
 public interface ISkiaBookSource : IBookSource
 {
     Task<SKBitmap?> GetPageBitmapAsync(int pageIndex, int maxDimensionPx, CancellationToken ct = default);
+    Task<float[]?> GetPageAspectRatiosAsync(CancellationToken ct = default);
 }
 

@@ -161,6 +161,35 @@ public sealed partial class PdfBookSource
         return skBitmap;
     }
 
+    private partial Task<float[]?> GetPageAspectRatiosPlatformAsync(CancellationToken ct)
+    {
+        return Task.Run<float[]?>(() =>
+        {
+            var ratios = new float[PageCount];
+            var index = 0;
+
+            while (index < ratios.Length)
+            {
+                if (ct.IsCancellationRequested || _disposed) return null;
+
+                lock (_renderLock)
+                {
+                    if (_disposed || _renderer == null) return null;
+
+                    var batchEnd = Math.Min(ratios.Length, index + 25);
+                    for (; index < batchEnd; index++)
+                    {
+                        if (ct.IsCancellationRequested) return null;
+                        using var page = _renderer.OpenPage(index);
+                        ratios[index] = page.Width > 0 ? (float)page.Height / page.Width : 1.414f;
+                    }
+                }
+            }
+
+            return ratios;
+        }, ct);
+    }
+
     private partial void DisposePlatform()
     {
         lock (_renderLock)

@@ -38,6 +38,11 @@ public sealed class PageCacheService : IPageCacheService, IDisposable
 
     public void StoreBitmap(string bookId, int pageIndex, SKBitmap bitmap, int centerPageIndex, int radius = 1)
     {
+        StoreBitmapInRange(bookId, pageIndex, bitmap, centerPageIndex - radius, centerPageIndex + radius);
+    }
+
+    public void StoreBitmapInRange(string bookId, int pageIndex, SKBitmap bitmap, int minKeepPageIndex, int maxKeepPageIndex)
+    {
         ArgumentNullException.ThrowIfNull(bitmap);
 
         lock (_syncRoot)
@@ -49,15 +54,20 @@ public sealed class PageCacheService : IPageCacheService, IDisposable
             }
 
             _entries[key] = bitmap;
-            EvictOutsideWindowCore(bookId, centerPageIndex, radius);
+            EvictOutsideWindowCore(bookId, minKeepPageIndex, maxKeepPageIndex);
         }
     }
 
     public void EvictOutsideWindow(string bookId, int centerPageIndex, int radius = 1)
     {
+        EvictOutsideRange(bookId, centerPageIndex - radius, centerPageIndex + radius);
+    }
+
+    public void EvictOutsideRange(string bookId, int minKeepPageIndex, int maxKeepPageIndex)
+    {
         lock (_syncRoot)
         {
-            EvictOutsideWindowCore(bookId, centerPageIndex, radius);
+            EvictOutsideWindowCore(bookId, minKeepPageIndex, maxKeepPageIndex);
         }
     }
 
@@ -88,10 +98,10 @@ public sealed class PageCacheService : IPageCacheService, IDisposable
         }
     }
 
-    private void EvictOutsideWindowCore(string bookId, int centerPageIndex, int radius)
+    private void EvictOutsideWindowCore(string bookId, int minKeepPageIndex, int maxKeepPageIndex)
     {
         var keysToRemove = _entries.Keys
-            .Where(k => k.BookId == bookId && Math.Abs(k.PageIndex - centerPageIndex) > radius)
+            .Where(k => k.BookId == bookId && (k.PageIndex < minKeepPageIndex || k.PageIndex > maxKeepPageIndex))
             .ToList();
 
         foreach (var key in keysToRemove)

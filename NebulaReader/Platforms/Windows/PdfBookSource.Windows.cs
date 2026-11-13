@@ -113,6 +113,37 @@ public sealed partial class PdfBookSource
         }
     }
 
+    private async partial Task<float[]?> GetPageAspectRatiosPlatformAsync(CancellationToken ct)
+    {
+        var ratios = new float[PageCount];
+        var index = 0;
+
+        while (index < ratios.Length)
+        {
+            if (ct.IsCancellationRequested || _disposed) return null;
+
+            await _renderGate.WaitAsync(ct).ConfigureAwait(false);
+            try
+            {
+                if (_disposed || _pdfDocument == null) return null;
+
+                var batchEnd = Math.Min(ratios.Length, index + 25);
+                for (; index < batchEnd; index++)
+                {
+                    if (ct.IsCancellationRequested) return null;
+                    using var page = _pdfDocument.GetPage((uint)index);
+                    ratios[index] = page.Size.Width > 0 ? (float)(page.Size.Height / page.Size.Width) : 1.414f;
+                }
+            }
+            finally
+            {
+                _renderGate.Release();
+            }
+        }
+
+        return ratios;
+    }
+
     private partial void DisposePlatform()
     {
         _pdfDocument = null;
