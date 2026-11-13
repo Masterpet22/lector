@@ -2,21 +2,115 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:NebulaReader.ViewModels"
+             xmlns:skia="clr-namespace:SkiaSharp.Views.Maui.Controls;assembly=SkiaSharp.Views.Maui.Controls"
              x:Class="NebulaReader.Views.ReaderPage"
              x:DataType="vm:ReaderViewModel"
+             Shell.NavBarIsVisible="False"
              Title="{Binding Title}">
 
-    <Grid RowDefinitions="*,Auto" Padding="16" RowSpacing="12">
-        <VerticalStackLayout Grid.Row="0" VerticalOptions="Center" HorizontalOptions="Center" Spacing="10">
-            <Label Text="{Binding CurrentBook.Title}" FontSize="20" FontAttributes="Bold" HorizontalTextAlignment="Center" />
-            <Label Text="{Binding PageIndicator}" HorizontalTextAlignment="Center" Opacity="0.8" />
-        </VerticalStackLayout>
+    <Grid BackgroundColor="#101218">
+        <!-- Lienzo SkiaSharp a pantalla completa -->
+        <skia:SKCanvasView x:Name="ReaderCanvas"
+                           PaintSurface="OnPaintSurface"
+                           HandlerChanged="OnCanvasHandlerChanged">
+            <skia:SKCanvasView.GestureRecognizers>
+                <PinchGestureRecognizer PinchUpdated="OnPinchUpdated" />
+                <PanGestureRecognizer PanUpdated="OnPanUpdated" />
+                <TapGestureRecognizer NumberOfTapsRequired="2" Tapped="OnDoubleTapped" />
+                <TapGestureRecognizer NumberOfTapsRequired="1" Tapped="OnSingleTapped" />
+            </skia:SKCanvasView.GestureRecognizers>
+        </skia:SKCanvasView>
 
-        <HorizontalStackLayout Grid.Row="1" HorizontalOptions="Center" Spacing="12">
-            <Button Text="Anterior" Command="{Binding PreviousPageCommand}" />
-            <Button Text="Volver" Command="{Binding CloseReaderCommand}" />
-            <Button Text="Siguiente" Command="{Binding NextPageCommand}" />
-        </HorizontalStackLayout>
+        <ActivityIndicator IsRunning="{Binding IsBusy}"
+                           IsVisible="{Binding IsBusy}"
+                           Color="White"
+                           HorizontalOptions="Center"
+                           VerticalOptions="Center"
+                           InputTransparent="True" />
+
+        <!-- Barra superior translúcida (HUD) -->
+        <Grid x:Name="TopHudBar"
+              VerticalOptions="Start"
+              BackgroundColor="#CC12141A"
+              Padding="12,10"
+              ColumnSpacing="8"
+              RowSpacing="6"
+              RowDefinitions="Auto,Auto"
+              ColumnDefinitions="Auto,*,Auto"
+              IsVisible="{Binding IsHudVisible}">
+            <Button Grid.Row="0"
+                    Grid.Column="0"
+                    Text="Volver"
+                    FontSize="12"
+                    Padding="10,6"
+                    Command="{Binding CloseReaderCommand}" />
+
+            <Label Grid.Row="0"
+                   Grid.Column="1"
+                   Text="{Binding Title}"
+                   TextColor="White"
+                   FontAttributes="Bold"
+                   FontSize="15"
+                   LineBreakMode="TailTruncation"
+                   VerticalTextAlignment="Center"
+                   HorizontalTextAlignment="Center" />
+
+            <Button Grid.Row="0"
+                    Grid.Column="2"
+                    Text="{Binding RotationLockLabel}"
+                    FontSize="12"
+                    Padding="10,6"
+                    Command="{Binding ToggleRotationLockCommand}" />
+
+            <HorizontalStackLayout Grid.Row="1"
+                                   Grid.ColumnSpan="3"
+                                   HorizontalOptions="Center"
+                                   Spacing="8">
+                <Button Text="{Binding DirectionModeLabel}"
+                        FontSize="12"
+                        Padding="10,5"
+                        Command="{Binding ToggleReadingDirectionCommand}" />
+                <Button Text="{Binding LayoutModeLabel}"
+                        FontSize="12"
+                        Padding="10,5"
+                        Command="{Binding ToggleVerticalScrollCommand}" />
+            </HorizontalStackLayout>
+        </Grid>
+
+        <!-- Barra inferior translúcida (HUD) -->
+        <VerticalStackLayout x:Name="BottomHudBar"
+                             VerticalOptions="End"
+                             BackgroundColor="#CC12141A"
+                             Padding="16,10,16,14"
+                             Spacing="6"
+                             IsVisible="{Binding IsHudVisible}">
+            <Slider x:Name="PageSlider"
+                    Minimum="1"
+                    Maximum="{Binding SliderMaximum}"
+                    Value="{Binding CurrentPageNumber, Mode=OneWay}"
+                    IsEnabled="{Binding CanScrubPages}"
+                    ValueChanged="OnPageSliderValueChanged"
+                    DragCompleted="OnPageSliderDragCompleted" />
+
+            <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+                <Button Grid.Column="0"
+                        Text="Anterior"
+                        FontSize="13"
+                        Command="{Binding GoPreviousVisualCommand}" />
+
+                <Label Grid.Column="1"
+                       Text="{Binding PageIndicator}"
+                       TextColor="White"
+                       FontAttributes="Bold"
+                       FontSize="13"
+                       HorizontalTextAlignment="Center"
+                       VerticalTextAlignment="Center" />
+
+                <Button Grid.Column="2"
+                        Text="Siguiente"
+                        FontSize="13"
+                        Command="{Binding GoNextVisualCommand}" />
+            </Grid>
+        </VerticalStackLayout>
     </Grid>
 </ContentPage>
-

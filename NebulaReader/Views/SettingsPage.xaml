@@ -22,6 +22,11 @@
             <Switch Grid.Column="1" IsToggled="{Binding ContinuousVerticalScroll}" />
         </Grid>
 
+        <Grid ColumnDefinitions="*,Auto">
+            <Label Text="Doble página en pantallas amplias (&gt; 800 dp)" VerticalOptions="Center" />
+            <Switch Grid.Column="1" IsToggled="{Binding DoublePageSpreadEnabled}" />
+        </Grid>
+
         <Button Text="Volver" Command="{Binding GoBackCommand}" />
     </VerticalStackLayout>
 </ContentPage>

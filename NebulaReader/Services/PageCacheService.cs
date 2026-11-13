@@ -1,29 +1,55 @@
+using SkiaSharp;
+
 namespace NebulaReader.Services;
 
 /// <summary>
-/// Implementación Singleton de caché LRU acotada para prevenir OutOfMemoryException.
+/// Implementación Singleton de caché LRU acotada a una ventana de 3 páginas [actual - 1, actual, actual + 1].
+/// Invoca Dispose() de forma determinista sobre los bitmaps expulsados para evitar OutOfMemoryException.
 /// </summary>
-public class PageCacheService : IPageCacheService
+public sealed class PageCacheService : IPageCacheService, IDisposable
 {
-    private readonly Dictionary<(string BookId, int PageIndex), byte[]> _entries = new();
+    private readonly Dictionary<(string BookId, int PageIndex), SKBitmap> _entries = new();
     private readonly object _syncRoot = new();
 
     public int MaxCachedPages => 3;
 
-    public bool TryGetPageBytes(string bookId, int pageIndex, out byte[]? data)
+    public bool TryDrawBitmap(string bookId, int pageIndex, Action<SKBitmap> drawAction)
     {
+        ArgumentNullException.ThrowIfNull(drawAction);
+
         lock (_syncRoot)
         {
-            return _entries.TryGetValue((bookId, pageIndex), out data);
+            if (_entries.TryGetValue((bookId, pageIndex), out var bitmap))
+            {
+                drawAction(bitmap);
+                return true;
+            }
+            return false;
         }
     }
 
-    public void StorePageBytes(string bookId, int pageIndex, byte[] data)
+    public bool ContainsPage(string bookId, int pageIndex)
     {
-        ArgumentNullException.ThrowIfNull(data);
         lock (_syncRoot)
         {
-            _entries[(bookId, pageIndex)] = data;
+            return _entries.ContainsKey((bookId, pageIndex));
+        }
+    }
+
+    public void StoreBitmap(string bookId, int pageIndex, SKBitmap bitmap, int centerPageIndex, int radius = 1)
+    {
+        ArgumentNullException.ThrowIfNull(bitmap);
+
+        lock (_syncRoot)
+        {
+            var key = (bookId, pageIndex);
+            if (_entries.TryGetValue(key, out var previous) && !ReferenceEquals(previous, bitmap))
+            {
+                previous.Dispose();
+            }
+
+            _entries[key] = bitmap;
+            EvictOutsideWindowCore(bookId, centerPageIndex, radius);
         }
     }
 
@@ -31,14 +57,7 @@ public class PageCacheService : IPageCacheService
     {
         lock (_syncRoot)
         {
-            var keysToRemove = _entries.Keys
-                .Where(k => k.BookId == bookId && Math.Abs(k.PageIndex - centerPageIndex) > radius)
-                .ToList();
-
-            foreach (var key in keysToRemove)
-            {
-                _entries.Remove(key);
-            }
+            EvictOutsideWindowCore(bookId, centerPageIndex, radius);
         }
     }
 
@@ -49,9 +68,38 @@ public class PageCacheService : IPageCacheService
             var keysToRemove = _entries.Keys.Where(k => k.BookId == bookId).ToList();
             foreach (var key in keysToRemove)
             {
-                _entries.Remove(key);
+                if (_entries.Remove(key, out var bitmap))
+                {
+                    bitmap.Dispose();
+                }
+            }
+        }
+    }
+
+    public void Dispose()
+    {
+        lock (_syncRoot)
+        {
+            foreach (var bitmap in _entries.Values)
+            {
+                bitmap.Dispose();
+            }
+            _entries.Clear();
+        }
+    }
+
+    private void EvictOutsideWindowCore(string bookId, int centerPageIndex, int radius)
+    {
+        var keysToRemove = _entries.Keys
+            .Where(k => k.BookId == bookId && Math.Abs(k.PageIndex - centerPageIndex) > radius)
+            .ToList();
+
+        foreach (var key in keysToRemove)
+        {
+            if (_entries.Remove(key, out var bitmap))
+            {
+                bitmap.Dispose();
             }
         }
     }
 }
-

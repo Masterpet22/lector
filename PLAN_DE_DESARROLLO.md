@@ -76,23 +76,23 @@ En Windows el acceso a carpetas es directo, pero en Android es obligatorio respe
 
 ---
 
-## Fase 4: Visor de Lectura y Gestión de Memoria (`ReaderPage`)
+## Fase 4: Visor de Lectura y Gestión de Memoria (`ReaderPage`) ✅ Completada
 
 Esta es la fase más crítica para la experiencia de usuario, donde se garantiza fluidez al pasar páginas y hacer zoom.
 
-1. **Caché de Páginas en Memoria (LRU Cache):**
+- [x] **Caché de Páginas en Memoria (LRU Cache):**
    * Mantener en RAM únicamente una ventana deslizante de **3 páginas**: `[página actual - 1, página actual, página actual + 1]`.
    * Al avanzar a la siguiente página, precargar en segundo plano la página `actual + 2` y liberar (`Dispose()`) el bitmap de `actual - 2` para prevenir errores `OutOfMemoryException` en Android.
-2. **Lienzo de Renderizado con SkiaSharp (`SKCanvasView`):**
+- [x] **Lienzo de Renderizado con SkiaSharp (`SKCanvasView`):**
    * Dibujar la imagen centrada y ajustada a pantalla.
    * Implementar una matriz de transformación (`SKMatrix`) para soportar:
      * **Android:** Gestos táctiles (`PinchGestureRecognizer` para zoom, `PanGestureRecognizer` para moverse por la imagen ampliada y doble toque para zoom rápido).
      * **Windows:** Rueda del ratón (`PointerWheelChanged` con `Ctrl` para zoom y sin `Ctrl` para desplazamiento vertical) y clic y arrastre para mover la página.
-3. **Modos de Lectura:**
+- [x] **Modos de Lectura:**
    * **Paginado Horizontal:** Izquierda a derecha (cómic occidental) y derecha a izquierda (manga).
    * **Desplazamiento Vertical Continuo:** Ideal para documentos PDF y formato *Webtoon*.
    * **Doble Página (Escritorio/Tablet):** Mostrar dos páginas lado a lado cuando el ancho de ventana supere los 800 dp en modo horizontal.
-4. **Controles Superpuestos (*HUD*):**
+- [x] **Controles Superpuestos (*HUD*):**
    * Barra superior e inferior translúcidas que se ocultan al tocar el centro de la pantalla, incluyendo barra deslizante (*Slider*) de progreso de páginas, indicador `Página X / Y` y botón de bloqueo de rotación.
 
 ---

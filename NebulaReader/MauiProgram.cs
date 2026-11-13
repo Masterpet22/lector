@@ -2,6 +2,7 @@ using Microsoft.Extensions.Logging;
 using NebulaReader.Services;
 using NebulaReader.ViewModels;
 using NebulaReader.Views;
+using SkiaSharp.Views.Maui.Controls.Hosting;
 
 namespace NebulaReader;
 
@@ -15,6 +16,7 @@ public static class MauiProgram
         var builder = MauiApp.CreateBuilder();
         builder
             .UseMauiApp<App>()
+            .UseSkiaSharp()
             .ConfigureFonts(fonts =>
             {
                 fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
@@ -28,6 +30,8 @@ public static class MauiProgram
         builder.Services.AddSingleton<ILibraryService, LibraryService>();
         builder.Services.AddSingleton<IFilePickerService, FilePickerService>();
         builder.Services.AddSingleton<IPageCacheService, PageCacheService>();
+        builder.Services.AddSingleton<IReaderSettingsService, ReaderSettingsService>();
+        builder.Services.AddSingleton<IOrientationService, OrientationService>();
 
         // ViewModels (Transient)
         builder.Services.AddTransient<LibraryViewModel>();
