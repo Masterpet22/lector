@@ -18,29 +18,43 @@
                 Stroke="{StaticResource SubtleBorder}"
                 StrokeThickness="1"
                 StrokeShape="RoundRectangle 14"
-                Padding="12,10,12,4">
-            <FlexLayout Wrap="Wrap"
-                        AlignItems="Center"
-                        JustifyContent="Start">
-                <Button Text="Abrir Archivo"
+                Padding="12,11">
+            <Grid x:Name="LibraryToolbarGrid"
+                  ColumnDefinitions="*,*"
+                  RowDefinitions="Auto,Auto,Auto"
+                  ColumnSpacing="8"
+                  RowSpacing="8">
+                <Button x:Name="OpenFileButton"
+                        Grid.Row="0"
+                        Grid.Column="0"
+                        Text="Abrir Archivo"
                         Style="{StaticResource PrimaryNeonButton}"
-                        Margin="0,0,10,6"
                         Command="{Binding OpenFileCommand}" />
-                <Button Text="Escanear Carpeta"
-                        Margin="0,0,10,6"
+                <Button x:Name="ScanFolderButton"
+                        Grid.Row="0"
+                        Grid.Column="1"
+                        Text="Escanear Carpeta"
                         Command="{Binding ImportFolderCommand}" />
-                <Button Text="Configuración"
-                        Margin="0,0,10,6"
+                <Button x:Name="SettingsButton"
+                        Grid.Row="1"
+                        Grid.Column="0"
+                        Text="Configuración"
                         Command="{Binding OpenSettingsCommand}" />
-                <Button Text="{Binding FullScreenButtonLabel}"
-                        Margin="0,0,10,6"
+                <Button x:Name="FullScreenButton"
+                        Grid.Row="1"
+                        Grid.Column="1"
+                        Text="{Binding FullScreenButtonLabel}"
                         Command="{Binding ToggleFullScreenCommand}" />
-                <ActivityIndicator IsRunning="{Binding IsBusy}"
+                <ActivityIndicator x:Name="ToolbarBusyIndicator"
+                                   Grid.Row="2"
+                                   Grid.Column="0"
+                                   Grid.ColumnSpan="2"
+                                   IsRunning="{Binding IsBusy}"
                                    IsVisible="{Binding IsBusy}"
                                    Color="{StaticResource NeonPurpleBright}"
-                                   Margin="6,0,0,6"
+                                   HorizontalOptions="Center"
                                    VerticalOptions="Center" />
-            </FlexLayout>
+            </Grid>
         </Border>
 
         <!-- Barra de navegación dentro de una serie/saga -->

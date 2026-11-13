@@ -7,6 +7,8 @@ namespace NebulaReader.Views;
 /// </summary>
 public partial class LibraryPage : ContentPage
 {
+    private bool? _isToolbarWideMode;
+
     public LibraryPage(LibraryViewModel viewModel)
     {
         InitializeComponent();
@@ -53,9 +55,11 @@ public partial class LibraryPage : ContentPage
         // 1. Espaciado adaptable para evitar recortes en móviles horizontales de altura reducida
         LibraryRootGrid.Padding = isCompactHeight ? new Thickness(10, 6) : new Thickness(14, 12);
         LibraryRootGrid.RowSpacing = isCompactHeight ? 6 : 12;
-        LibraryToolbarBorder.Padding = isCompactHeight ? new Thickness(8, 6, 8, 2) : new Thickness(12, 10, 12, 4);
+        LibraryToolbarBorder.Padding = isCompactHeight ? new Thickness(10, 8) : new Thickness(12, 11);
         LibraryBreadcrumbBorder.Padding = isCompactHeight ? new Thickness(8, 5) : new Thickness(10, 7);
         LibraryFooterBorder.Padding = isCompactHeight ? new Thickness(10, 4) : new Thickness(12, 7);
+
+        UpdateToolbarLayout(width, isCompactHeight);
 
         // 2. Columnas adaptables para pantallas móviles (320dp..920dp), tabletas y monitores (HD/FHD/2K/4K)
         int targetSpan;
@@ -97,5 +101,72 @@ public partial class LibraryPage : ContentPage
         {
             vm.UpdateCardCoverHeight(Math.Round(desiredCoverHeight));
         }
+    }
+
+    private void UpdateToolbarLayout(double width, bool isCompactHeight)
+    {
+        if (LibraryToolbarGrid == null)
+        {
+            return;
+        }
+
+        LibraryToolbarGrid.RowSpacing = isCompactHeight ? 6 : 8;
+        LibraryToolbarGrid.ColumnSpacing = isCompactHeight ? 6 : 8;
+
+        var isWide = width >= 660;
+        if (_isToolbarWideMode == isWide)
+        {
+            return;
+        }
+
+        _isToolbarWideMode = isWide;
+
+        LibraryToolbarGrid.ColumnDefinitions.Clear();
+        LibraryToolbarGrid.RowDefinitions.Clear();
+
+        if (isWide)
+        {
+            LibraryToolbarGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+            LibraryToolbarGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+            LibraryToolbarGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+            LibraryToolbarGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
+            LibraryToolbarGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+            LibraryToolbarGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+
+            SetToolbarItemPlacement(OpenFileButton, 0, 0, LayoutOptions.Start);
+            SetToolbarItemPlacement(ScanFolderButton, 0, 1, LayoutOptions.Start);
+            SetToolbarItemPlacement(SettingsButton, 0, 2, LayoutOptions.Start);
+            SetToolbarItemPlacement(FullScreenButton, 0, 3, LayoutOptions.Start);
+
+            Grid.SetRow(ToolbarBusyIndicator, 0);
+            Grid.SetColumn(ToolbarBusyIndicator, 4);
+            Grid.SetColumnSpan(ToolbarBusyIndicator, 1);
+            ToolbarBusyIndicator.HorizontalOptions = LayoutOptions.Start;
+        }
+        else
+        {
+            LibraryToolbarGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+            LibraryToolbarGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
+            LibraryToolbarGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            LibraryToolbarGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+            LibraryToolbarGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
+
+            SetToolbarItemPlacement(OpenFileButton, 0, 0, LayoutOptions.Fill);
+            SetToolbarItemPlacement(ScanFolderButton, 0, 1, LayoutOptions.Fill);
+            SetToolbarItemPlacement(SettingsButton, 1, 0, LayoutOptions.Fill);
+            SetToolbarItemPlacement(FullScreenButton, 1, 1, LayoutOptions.Fill);
+
+            Grid.SetRow(ToolbarBusyIndicator, 2);
+            Grid.SetColumn(ToolbarBusyIndicator, 0);
+            Grid.SetColumnSpan(ToolbarBusyIndicator, 2);
+            ToolbarBusyIndicator.HorizontalOptions = LayoutOptions.Center;
+        }
+    }
+
+    private static void SetToolbarItemPlacement(View view, int row, int column, LayoutOptions horizontalOptions)
+    {
+        Grid.SetRow(view, row);
+        Grid.SetColumn(view, column);
+        view.HorizontalOptions = horizontalOptions;
     }
 }

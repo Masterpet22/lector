@@ -29,9 +29,10 @@
         <Setter Property="BorderWidth" Value="1" />
         <Setter Property="FontFamily" Value="OpenSansSemibold"/>
         <Setter Property="FontSize" Value="13"/>
+        <Setter Property="LineBreakMode" Value="WordWrap"/>
         <Setter Property="CornerRadius" Value="10"/>
-        <Setter Property="Padding" Value="14,9"/>
-        <Setter Property="MinimumHeightRequest" Value="40"/>
+        <Setter Property="Padding" Value="10,8"/>
+        <Setter Property="MinimumHeightRequest" Value="42"/>
         <Setter Property="MinimumWidthRequest" Value="40"/>
         <Setter Property="VisualStateManager.VisualStateGroups">
             <VisualStateGroupList>
@@ -62,11 +63,12 @@
         <Setter Property="BorderWidth" Value="1" />
         <Setter Property="FontFamily" Value="OpenSansSemibold"/>
         <Setter Property="FontSize" Value="13"/>
+        <Setter Property="LineBreakMode" Value="WordWrap"/>
         <Setter Property="CornerRadius" Value="10"/>
-        <Setter Property="Padding" Value="16,9"/>
-        <Setter Property="MinimumHeightRequest" Value="40"/>
+        <Setter Property="Padding" Value="12,8"/>
+        <Setter Property="MinimumHeightRequest" Value="42"/>
         <Setter Property="Shadow">
-            <Shadow Brush="{StaticResource NeonPurple}" Offset="0,2" Radius="12" Opacity="0.45" />
+            <Shadow Brush="{StaticResource NeonPurple}" Offset="0,2" Radius="8" Opacity="0.4" />
         </Setter>
         <Setter Property="VisualStateManager.VisualStateGroups">
             <VisualStateGroupList>

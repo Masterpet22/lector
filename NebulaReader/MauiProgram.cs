@@ -23,6 +23,19 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
             });
 
+#if ANDROID
+        // Elimina los márgenes internos (insetTop/insetBottom) de MaterialButton para evitar
+        // que los botones se vean recortados verticalmente o comprimidos en resoluciones móviles.
+        Microsoft.Maui.Handlers.ButtonHandler.Mapper.AppendToMapping("ZeroVerticalInset", (handler, view) =>
+        {
+            if (handler.PlatformView is Google.Android.Material.Button.MaterialButton materialButton)
+            {
+                materialButton.InsetTop = 0;
+                materialButton.InsetBottom = 0;
+            }
+        });
+#endif
+
         // Servicios compartidos (Singleton)
         builder.Services.AddSingleton<IBookSourceFactory, BookSourceFactory>();
         builder.Services.AddSingleton<ILibraryDatabase, LibraryDatabase>();
