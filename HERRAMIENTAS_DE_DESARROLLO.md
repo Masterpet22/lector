@@ -1,4 +1,4 @@
-# Herramientas para trabajar en la rama `android`
+# Herramientas de desarrollo
 
 La rama contiene **NebulaReader**, una aplicación .NET MAUI dirigida a Android
 (`net10.0-android`). No es un proyecto Android/Gradle independiente: se compila
@@ -6,7 +6,7 @@ desde `NebulaReader.slnx` y `NebulaReader/NebulaReader.csproj`.
 
 ## Requisitos comunes
 
-- **Git**: clonar el repositorio, cambiar a la rama `android` y gestionar cambios.
+- **Git**: clonar el repositorio, cambiar a la rama `main` y gestionar cambios.
 - **.NET SDK 10**: compilar la aplicación y ejecutar las pruebas.
 - **Cargas de trabajo .NET para Android y MAUI**: proporcionan los componentes
   de compilación Android usados por .NET MAUI.

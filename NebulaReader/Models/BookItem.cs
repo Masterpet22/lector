@@ -17,6 +17,9 @@ public partial class BookItem : ObservableObject
     [Indexed(Name = "IX_Books_FilePath", Unique = true)]
     public string FilePath { get; set; } = string.Empty;
 
+    /// <summary>Ubicación anterior mostrada al asociar un libro restaurado de otro dispositivo.</summary>
+    public string? OriginalFilePath { get; set; }
+
     public BookFormat Format { get; set; } = BookFormat.Unknown;
 
     [ObservableProperty]
@@ -35,6 +38,11 @@ public partial class BookItem : ObservableObject
     public partial string? Tags { get; set; }
 
     public bool MetadataExtracted { get; set; }
+
+    public bool TitleEditedManually { get; set; }
+    public bool SeriesEditedManually { get; set; }
+    public string? CoverError { get; set; }
+    public string? ContentFingerprint { get; set; }
 
     public DateTime AddedAtUtc { get; set; } = DateTime.UtcNow;
 

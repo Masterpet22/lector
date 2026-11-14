@@ -5,9 +5,14 @@ Lector de cómics y documentos **CBZ, CBR y PDF** para **Android y Windows**, de
 ## Funciones
 
 - Apertura de archivos individuales e importación de colecciones mediante el escaneo de carpetas.
+- Escaneo de carpetas con progreso, cancelación, resumen de archivos añadidos, existentes y fallidos, y reintento de fallos. Las portadas pendientes se muestran por separado.
+- Exportación e importación de respaldos JSON versionados con progreso, marcadores, metadatos corregidos, preferencias por documento y ajustes generales.
 - Biblioteca con portadas, progreso de lectura y agrupación de series a partir de metadatos y títulos.
 - Búsqueda por título, serie o etiqueta, con filtros combinables por formato y estado de lectura.
 - Sección «Continuar leyendo» con lecturas recientes, página guardada y porcentaje cuando se conoce el total.
+- Acciones por documento para corregir título y serie, cambiar el estado, quitar la entrada, recuperar el acceso y reintentar una portada fallida.
+- Marcadores de páginas por documento y navegación mediante una lista de marcadores o una cuadrícula de miniaturas.
+- Ajustes de vista, escala, dirección de lectura y filtro visual por documento, con opción para volver a los valores generales.
 - Orden natural de páginas y títulos: `2` aparece antes que `10`.
 - Lectura en página individual, doble página cuando el espacio lo permite y desplazamiento vertical continuo.
 - Dirección de lectura de izquierda a derecha o de derecha a izquierda para manga.
@@ -50,8 +55,18 @@ La publicación indicada abajo es autónoma para Windows x64 e incluye .NET y Wi
 3. Busca por título, serie o etiqueta y combina los selectores de formato y estado para encontrar documentos. **Limpiar filtros** restablece los tres criterios; los grupos de series muestran solo los libros coincidentes.
 4. Selecciona una portada de la biblioteca para leer. Si aparece un grupo de serie, ábrelo para ver sus documentos. En **Continuar leyendo**, pulsa **Continuar** para abrir una lectura pendiente desde la página guardada; esta sección muestra las lecturas de toda la biblioteca, independientemente de los filtros.
 5. Usa **Anterior**, **Siguiente** o la barra de progreso para navegar por el documento.
+   En la barra superior, **Guardar marcador** o **Quitar marcador** cambia la marca de la página actual. **Marcadores** muestra las páginas guardadas y **Miniaturas** abre una cuadrícula; toca una página para ir directamente a ella. El punto indica la página actual y la estrella indica una página marcada. **← Volver** cierra la vista de navegación.
+   Los controles de vista, ajuste, dirección y filtro guardan los cambios para el libro abierto. La barra indica **Ajustes de este libro** cuando existe una personalización; **Restablecer ajustes** la elimina y aplica los valores generales. Un libro sin personalización sigue los cambios posteriores de **Configuración**.
 6. En **Configuración**, elige la disposición, el ajuste de página, la dirección de lectura y los filtros visuales.
 7. Al volver del lector, se actualiza la biblioteca. Los documentos completados dejan de aparecer en **Continuar leyendo**. Si todavía no se conoce el total de páginas, se indica **Total desconocido** y se oculta el porcentaje.
+8. Pulsa **Acciones** en un documento para editar su título o serie. **Marcar como leído** guarda la última página como progreso y requiere conocer el total; **Marcar como no leído** vuelve a la página 1. **Quitar de la biblioteca** elimina la entrada y su progreso, pero conserva el archivo original.
+9. Si se movió un archivo o se perdió el permiso, usa **Volver a localizar / Conceder acceso** y elige el documento mediante el selector. Se conservan sus datos de lectura. La aplicación rechaza una ruta ya importada y comprueba el formato, el número de páginas y, cuando existe, la huella de la primera página. Si falla una portada, el estado aparece en la tarjeta y **Reintentar portada** vuelve a generarla.
+10. Durante **Escanear carpeta**, observa el avance de indexación y las portadas pendientes. **Cancelar escaneo** conserva lo ya añadido. Al terminar, revisa el resumen y usa **Reintentar fallidos** si hay archivos con error.
+11. Pulsa **Exportar datos** para guardar un respaldo JSON. En otro dispositivo, pulsa **Importar respaldo** y después asocia cada documento pendiente desde **Acciones → Volver a localizar / Conceder acceso**. El respaldo contiene datos de lectura, pero no los archivos CBZ, CBR o PDF originales: cópialos también al destino.
+
+### Combinación de respaldos
+
+El formato actual es `nebula-reader-data` versión 1. La importación valida todo el archivo antes de modificar la biblioteca y aplica los cambios en una transacción. Si ya existe un libro con el mismo ID, conserva su ruta local; gana el progreso con fecha de lectura más reciente y, en empate, el local. Se conservan las correcciones manuales locales de título y serie, se unen los marcadores y se mantienen las preferencias por documento locales cuando existen. Los ajustes generales del respaldo se aplican al importar. Los libros nuevos aparecen pendientes de asociación con sus archivos originales.
 
 ### Controles en Windows
 
@@ -81,7 +96,7 @@ En Android, utiliza los gestos táctiles del visor para ampliar y desplazar la p
 
 El proyecto declara Android API 21 y Windows 10, versión 1809, como mínimos de plataforma. Los destinos de compilación son `net10.0-android` y `net10.0-windows10.0.19041.0`; este último solo se agrega al compilar desde Windows. La compatibilidad de ejecución también depende de los requisitos de las bibliotecas nativas utilizadas.
 
-Consulta [Herramientas Android](HERRAMIENTAS_ANDROID.md) para más detalles del entorno.
+Consulta [Herramientas de desarrollo](HERRAMIENTAS_DE_DESARROLLO.md) para más detalles del entorno.
 
 ### Preparar el entorno
 

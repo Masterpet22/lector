@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NebulaReader.Models;
@@ -36,6 +37,13 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     private readonly object _pageLoadSync = new();
     private readonly HashSet<int> _inFlightPages = new();
     private readonly HashSet<(int PageIndex, int WidthPx)> _inFlightFitBuilds = new();
+    private readonly HashSet<int> _bookmarkedPages = new();
+    private readonly SemaphoreSlim _thumbnailGate = new(2, 2);
+    private readonly SemaphoreSlim _preferencesWriteLock = new(1, 1);
+    private readonly ConcurrentDictionary<long, Task<Stream>> _thumbnailTasks = new();
+    private CancellationTokenSource? _thumbnailCts;
+    private long _nextThumbnailTaskId;
+    private int _lastNavigationPage;
     private volatile bool _pdfAspectScanStarted;
     private float _defaultPageAspectRatio = 1.414f;
     private int _lastNavigationDirection = 1;
@@ -44,6 +52,33 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     private bool _suppressSliderSync;
 
     public event EventHandler? PageContentReady;
+
+    public ObservableCollection<PageNavigationItem> ThumbnailPages { get; } = new();
+    public ObservableCollection<PageNavigationItem> BookmarkPages { get; } = new();
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PreferencesScopeLabel))]
+    public partial bool HasBookPreferences { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsBookPreferencesReady { get; set; }
+
+    public string PreferencesScopeLabel => HasBookPreferences ? "Ajustes de este libro" : "Ajustes generales";
+
+    [ObservableProperty]
+    public partial bool IsThumbnailGridVisible { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsBookmarkListVisible { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsNavigationOverlayVisible { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsCurrentPageBookmarked { get; set; }
+
+    public string BookmarkButtonLabel => IsCurrentPageBookmarked ? "Quitar marcador" : "Guardar marcador";
+    public bool HasBookmarks => BookmarkPages.Count > 0;
 
     [ObservableProperty]
     public partial BookItem? CurrentBook { get; set; }
@@ -160,6 +195,13 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     {
         if (query.TryGetValue("Book", out var value) && value is BookItem book)
         {
+            CloseNavigationOverlay();
+            _bookmarkedPages.Clear();
+            _lastNavigationPage = 0;
+            RefreshBookmarkItems();
+            IsBookPreferencesReady = false;
+            HasBookPreferences = false;
+            SyncFromSettings();
             CurrentBook = book;
             Title = book.Title;
             TotalPages = book.TotalPages;
@@ -347,6 +389,7 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
 
         _lastNavigationDirection = clamped >= CurrentPageIndex ? 1 : -1;
         SetPageIndexCore(clamped);
+        UpdateNavigationSelection();
 
         var (minKeep, maxKeep) = GetKeepWindowRange(CurrentPageIndex);
         _pageCacheService.EvictOutsideRange(CurrentBook.Id, minKeep, maxKeep);
@@ -405,37 +448,38 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     }
 
     [RelayCommand]
-    private void ToggleReadingDirection()
+    private Task ToggleReadingDirectionAsync()
     {
-        _settingsService.RightToLeftMangaMode = !_settingsService.RightToLeftMangaMode;
+        return ChangeBookPreferencesAsync(p => p.RightToLeftManga = !p.RightToLeftManga);
     }
 
     [RelayCommand]
-    private void ToggleVerticalScroll()
+    private Task ToggleVerticalScrollAsync()
     {
-        _settingsService.ContinuousVerticalScroll = !_settingsService.ContinuousVerticalScroll;
+        return ChangeBookPreferencesAsync(p => p.LayoutMode = p.LayoutMode == ReaderLayoutMode.ContinuousVertical
+            ? ReaderLayoutMode.DoublePage : ReaderLayoutMode.ContinuousVertical);
     }
 
     [RelayCommand]
-    private void CycleLayoutMode()
+    private Task CycleLayoutModeAsync()
     {
-        _settingsService.LayoutMode = LayoutMode switch
+        return ChangeBookPreferencesAsync(p => p.LayoutMode = p.LayoutMode switch
         {
             ReaderLayoutMode.SinglePage => ReaderLayoutMode.DoublePage,
             ReaderLayoutMode.DoublePage => ReaderLayoutMode.ContinuousVertical,
             _ => ReaderLayoutMode.SinglePage
-        };
+        });
     }
 
     [RelayCommand]
-    private void CyclePageFitMode()
+    private Task CyclePageFitModeAsync()
     {
-        _settingsService.PageFitMode = PageFitMode switch
+        return ChangeBookPreferencesAsync(p => p.PageFitMode = p.PageFitMode switch
         {
             PageFitMode.FitPage => PageFitMode.FitWidth,
             PageFitMode.FitWidth => PageFitMode.FitHeight,
             _ => PageFitMode.FitPage
-        };
+        });
     }
 
     [RelayCommand]
@@ -445,19 +489,39 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     }
 
     [RelayCommand]
-    private void CycleVisualFilter()
+    private Task CycleVisualFilterAsync()
     {
-        _settingsService.VisualFilter = VisualFilter switch
+        return ChangeBookPreferencesAsync(p => p.VisualFilter = p.VisualFilter switch
         {
             ReaderVisualFilter.None => ReaderVisualFilter.NightInvert,
             ReaderVisualFilter.NightInvert => ReaderVisualFilter.Sepia,
             _ => ReaderVisualFilter.None
-        };
+        });
+    }
+
+    [RelayCommand]
+    private async Task ResetBookPreferencesAsync()
+    {
+        var book = CurrentBook;
+        if (book == null || !IsBookPreferencesReady || !HasBookPreferences) return;
+        await _preferencesWriteLock.WaitAsync();
+        try
+        {
+            await _libraryService.DeleteReaderPreferencesAsync(book.Id);
+            if (CurrentBook?.Id != book.Id) return;
+            HasBookPreferences = false;
+            SyncFromSettings();
+        }
+        finally
+        {
+            _preferencesWriteLock.Release();
+        }
     }
 
     [RelayCommand]
     private async Task CloseReaderAsync()
     {
+        await CloseNavigationOverlayAsync();
         _persistDebounceCts?.Cancel();
         _persistDebounceCts?.Dispose();
         _persistDebounceCts = null;
@@ -518,6 +582,13 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
         IsBusy = true;
         try
         {
+            await CloseNavigationOverlayAsync();
+            var preferences = await _libraryService.GetReaderPreferencesAsync(book.Id, ct);
+            if (ct.IsCancellationRequested || CurrentBook?.Id != book.Id) return;
+            HasBookPreferences = preferences != null;
+            if (preferences != null) ApplyReaderPreferences(preferences);
+            else SyncFromSettings();
+            IsBookPreferencesReady = true;
             _bookSource?.Dispose();
             _bookSource = null;
 
@@ -543,6 +614,12 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
                 ? Math.Clamp(CurrentPageIndex, 0, TotalPages - 1)
                 : 0;
             SetPageIndexCore(targetIndex);
+            var bookmarks = await _libraryService.GetBookmarkedPagesAsync(book.Id, ct);
+            if (ct.IsCancellationRequested || CurrentBook?.Id != book.Id) return;
+            _bookmarkedPages.Clear();
+            foreach (var page in bookmarks.Where(page => page >= 1 && page <= TotalPages))
+                _bookmarkedPages.Add(page);
+            RefreshBookmarkItems();
 
             StartPreloadWorker(book, source, preloadCt);
             RaisePageContentReady();
@@ -1018,6 +1095,7 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     {
         MainThread.BeginInvokeOnMainThread(() =>
         {
+            if (HasBookPreferences) return;
             SyncFromSettings();
             RaisePageContentReady();
         });
@@ -1025,19 +1103,60 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
 
     private void SyncFromSettings()
     {
-        IsNightMode = _settingsService.NightReadingModeEnabled;
-        VisualFilter = _settingsService.VisualFilter;
-        IsRightToLeftManga = _settingsService.RightToLeftMangaMode;
-        LayoutMode = _settingsService.LayoutMode;
+        ApplyReaderModes(_settingsService.LayoutMode, _settingsService.PageFitMode,
+            _settingsService.RightToLeftMangaMode, _settingsService.VisualFilter);
+    }
+
+    private void ApplyReaderPreferences(BookReaderPreferences preferences)
+    {
+        ApplyReaderModes(preferences.LayoutMode, preferences.PageFitMode,
+            preferences.RightToLeftManga, preferences.VisualFilter);
+    }
+
+    private void ApplyReaderModes(ReaderLayoutMode layout, PageFitMode fit, bool rightToLeft, ReaderVisualFilter filter)
+    {
+        IsNightMode = filter != ReaderVisualFilter.None;
+        VisualFilter = filter;
+        IsRightToLeftManga = rightToLeft;
+        LayoutMode = layout;
         IsContinuousVertical = LayoutMode == ReaderLayoutMode.ContinuousVertical;
-        IsDoublePageEnabled = _settingsService.DoublePageSpreadEnabled;
-        PageFitMode = _settingsService.PageFitMode;
+        IsDoublePageEnabled = LayoutMode == ReaderLayoutMode.DoublePage;
+        PageFitMode = fit;
 
         RecalculateDoublePageState();
         OnPropertyChanged(nameof(DirectionModeLabel));
         OnPropertyChanged(nameof(LayoutModeLabel));
         OnPropertyChanged(nameof(FitModeLabel));
         OnPropertyChanged(nameof(FilterModeLabel));
+    }
+
+    private BookReaderPreferences CaptureReaderPreferences(string bookId) => new()
+    {
+        BookId = bookId,
+        LayoutMode = LayoutMode,
+        PageFitMode = PageFitMode,
+        RightToLeftManga = IsRightToLeftManga,
+        VisualFilter = VisualFilter
+    };
+
+    private async Task ChangeBookPreferencesAsync(Action<BookReaderPreferences> change)
+    {
+        await _preferencesWriteLock.WaitAsync();
+        try
+        {
+            var book = CurrentBook;
+            if (book == null || !IsBookPreferencesReady) return;
+            var preferences = CaptureReaderPreferences(book.Id);
+            change(preferences);
+            await _libraryService.SaveReaderPreferencesAsync(preferences);
+            if (CurrentBook?.Id != book.Id) return;
+            HasBookPreferences = true;
+            ApplyReaderPreferences(preferences);
+        }
+        finally
+        {
+            _preferencesWriteLock.Release();
+        }
     }
 
     private void RecalculateDoublePageState()
@@ -1104,5 +1223,150 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
             TotalPages = TotalPages,
             UpdatedAtUtc = DateTime.UtcNow
         });
+    }
+
+    [RelayCommand]
+    private async Task ToggleCurrentPageBookmarkAsync()
+    {
+        var book = CurrentBook;
+        if (book == null || TotalPages <= 0) return;
+        var page = CurrentPageIndex + 1;
+        var add = !_bookmarkedPages.Contains(page);
+        await _libraryService.SetBookmarkAsync(book.Id, page, add);
+        if (CurrentBook?.Id != book.Id) return;
+        if (add) _bookmarkedPages.Add(page);
+        else _bookmarkedPages.Remove(page);
+        RefreshBookmarkItems();
+        UpdateNavigationSelection();
+    }
+
+    [RelayCommand]
+    private void ShowBookmarks()
+    {
+        CloseNavigationOverlay();
+        IsBookmarkListVisible = true;
+        IsNavigationOverlayVisible = true;
+    }
+
+    [RelayCommand]
+    private void ShowThumbnails()
+    {
+        if (CurrentBook == null || _bookSource == null || TotalPages <= 0) return;
+        CloseNavigationOverlay();
+        var source = _bookSource;
+        var session = new CancellationTokenSource();
+        _thumbnailCts = session;
+        for (var page = 1; page <= TotalPages; page++)
+        {
+            var pageIndex = page - 1;
+            ThumbnailPages.Add(new PageNavigationItem
+            {
+                PageNumber = page,
+                IsCurrent = pageIndex == CurrentPageIndex,
+                IsBookmarked = _bookmarkedPages.Contains(page),
+                ThumbnailSource = ImageSource.FromStream(ct => TrackThumbnailAsync(source, pageIndex, session.Token, ct))
+            });
+        }
+        IsThumbnailGridVisible = true;
+        IsNavigationOverlayVisible = true;
+    }
+
+    [RelayCommand]
+    private void CloseNavigationOverlay()
+    {
+        _thumbnailCts?.Cancel();
+        _thumbnailCts?.Dispose();
+        _thumbnailCts = null;
+        IsNavigationOverlayVisible = false;
+        IsThumbnailGridVisible = false;
+        IsBookmarkListVisible = false;
+        ThumbnailPages.Clear();
+    }
+
+    private async Task CloseNavigationOverlayAsync()
+    {
+        CloseNavigationOverlay();
+        await Task.WhenAll(_thumbnailTasks.Values.ToArray());
+    }
+
+    private Task<Stream> TrackThumbnailAsync(IBookSource source, int pageIndex, CancellationToken sessionToken, CancellationToken imageToken)
+    {
+        var id = Interlocked.Increment(ref _nextThumbnailTaskId);
+        var task = GenerateThumbnailAsync(source, pageIndex, sessionToken, imageToken);
+        _thumbnailTasks[id] = task;
+        _ = task.ContinueWith(completed => { _thumbnailTasks.TryRemove(id, out var ignored); }, TaskScheduler.Default);
+        return task;
+    }
+
+    private async Task<Stream> GenerateThumbnailAsync(IBookSource source, int pageIndex, CancellationToken sessionToken, CancellationToken imageToken)
+    {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(sessionToken, imageToken);
+        var ct = linked.Token;
+        var entered = false;
+        try
+        {
+            await _thumbnailGate.WaitAsync(ct);
+            entered = true;
+            ct.ThrowIfCancellationRequested();
+            SKBitmap? bitmap;
+            if (source is ISkiaBookSource skiaSource)
+                bitmap = await skiaSource.GetPageBitmapAsync(pageIndex, 320, ct);
+            else
+            {
+                await using var stream = await source.GetPageStreamAsync(pageIndex, ct);
+                bitmap = await Task.Run(() => DecodeAndScaleSafe(stream, 320), ct);
+            }
+            using (bitmap)
+            {
+                ct.ThrowIfCancellationRequested();
+                if (bitmap == null) return new MemoryStream();
+                using var image = SKImage.FromBitmap(bitmap);
+                using var data = image.Encode(SKEncodedImageFormat.Jpeg, 75);
+                return data == null ? new MemoryStream() : new MemoryStream(data.ToArray(), writable: false);
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            return new MemoryStream();
+        }
+        catch (ObjectDisposedException) when (ct.IsCancellationRequested)
+        {
+            return new MemoryStream();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"No se pudo generar la miniatura de la página {pageIndex + 1}: {ex}");
+            return new MemoryStream();
+        }
+        finally
+        {
+            if (entered) _thumbnailGate.Release();
+        }
+    }
+
+    private void RefreshBookmarkItems()
+    {
+        BookmarkPages.Clear();
+        foreach (var page in _bookmarkedPages.Order())
+            BookmarkPages.Add(new PageNavigationItem { PageNumber = page, IsCurrent = page == CurrentPageIndex + 1, IsBookmarked = true });
+        OnPropertyChanged(nameof(HasBookmarks));
+        UpdateNavigationSelection();
+    }
+
+    private void UpdateNavigationSelection()
+    {
+        var page = CurrentPageIndex + 1;
+        IsCurrentPageBookmarked = _bookmarkedPages.Contains(page);
+        OnPropertyChanged(nameof(BookmarkButtonLabel));
+        if (_lastNavigationPage > 0 && _lastNavigationPage <= ThumbnailPages.Count)
+            ThumbnailPages[_lastNavigationPage - 1].IsCurrent = false;
+        if (page > 0 && page <= ThumbnailPages.Count)
+        {
+            ThumbnailPages[page - 1].IsCurrent = true;
+            ThumbnailPages[page - 1].IsBookmarked = IsCurrentPageBookmarked;
+        }
+        _lastNavigationPage = page;
+        foreach (var item in BookmarkPages)
+            item.IsCurrent = item.PageNumber == page;
     }
 }

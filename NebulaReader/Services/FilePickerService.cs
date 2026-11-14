@@ -18,6 +18,10 @@ public partial class FilePickerService : IFilePickerService
     {
         ct.ThrowIfCancellationRequested();
 
+#if ANDROID
+        return await PickBookFilePlatformAsync(ct).ConfigureAwait(false);
+#else
+
         var fileTypes = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
         {
             { DevicePlatform.Android, new[] { "application/pdf", "application/vnd.comicbook+zip", "application/vnd.comicbook-rar", "application/zip", "application/x-rar-compressed", "*/*" } },
@@ -31,6 +35,7 @@ public partial class FilePickerService : IFilePickerService
         });
 
         return result?.FullPath;
+#endif
     }
 
     public Task<string?> PickFolderAsync(CancellationToken ct = default)
@@ -44,6 +49,29 @@ public partial class FilePickerService : IFilePickerService
         return EnumerateBookFilesPlatformAsync(folderPathOrUri, ct);
     }
 
+    public async Task<Stream?> PickBackupAsync(CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        var fileTypes = new FilePickerFileType(new Dictionary<DevicePlatform, IEnumerable<string>>
+        {
+            { DevicePlatform.Android, new[] { "application/json", "text/plain", "*/*" } },
+            { DevicePlatform.WinUI, new[] { ".json" } }
+        });
+        var result = await FilePicker.Default.PickAsync(new PickOptions
+        {
+            PickerTitle = "Selecciona un respaldo de NebulaReader (.json)",
+            FileTypes = fileTypes
+        });
+        return result == null ? null : await result.OpenReadAsync();
+    }
+
+    public Task<bool> SaveBackupAsync(Stream source, string suggestedName, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(source);
+        ArgumentException.ThrowIfNullOrWhiteSpace(suggestedName);
+        return SaveBackupPlatformAsync(source, suggestedName, ct);
+    }
+
     internal static bool IsSupportedBookFileName(string? fileName)
     {
         if (string.IsNullOrWhiteSpace(fileName) || fileName.StartsWith('.'))
@@ -55,5 +83,7 @@ public partial class FilePickerService : IFilePickerService
     }
 
     private partial Task<string?> PickFolderPlatformAsync(CancellationToken ct);
+    private partial Task<string?> PickBookFilePlatformAsync(CancellationToken ct);
     private partial Task<IReadOnlyList<string>> EnumerateBookFilesPlatformAsync(string folderPathOrUri, CancellationToken ct);
+    private partial Task<bool> SaveBackupPlatformAsync(Stream source, string suggestedName, CancellationToken ct);
 }

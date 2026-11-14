@@ -8,6 +8,90 @@ namespace NebulaReader.Services;
 
 public partial class FilePickerService
 {
+    public const int CreateBackupRequestCode = 9403;
+    private static TaskCompletionSource<AndroidUri?>? _pendingBackupSaveTcs;
+
+    public static bool TryCompleteBackupSaveResult(int requestCode, Result resultCode, Intent? data)
+    {
+        if (requestCode != CreateBackupRequestCode) return false;
+        var tcs = Interlocked.Exchange(ref _pendingBackupSaveTcs, null);
+        if (tcs != null)
+            tcs.TrySetResult(resultCode == Result.Ok ? data?.Data : null);
+        return true;
+    }
+
+    private async partial Task<bool> SaveBackupPlatformAsync(Stream source, string suggestedName, CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var tcs = new TaskCompletionSource<AndroidUri?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Interlocked.Exchange(ref _pendingBackupSaveTcs, tcs)?.TrySetCanceled();
+        using var registration = ct.Register(() => tcs.TrySetCanceled(ct));
+        await MainThread.InvokeOnMainThreadAsync(() =>
+        {
+            var activity = Platform.CurrentActivity ?? throw new InvalidOperationException("No hay una Activity activa.");
+            var intent = new Intent(Intent.ActionCreateDocument);
+            intent.AddCategory(Intent.CategoryOpenable);
+            intent.SetType("application/json");
+            intent.PutExtra(Intent.ExtraTitle, suggestedName);
+            intent.AddFlags(ActivityFlags.GrantWriteUriPermission);
+            activity.StartActivityForResult(intent, CreateBackupRequestCode);
+        }).ConfigureAwait(false);
+
+        var uri = await tcs.Task.ConfigureAwait(false);
+        if (uri == null) return false;
+        await using var output = AppContext.Context.ContentResolver?.OpenOutputStream(uri)
+            ?? throw new IOException("No se pudo abrir el destino del respaldo.");
+        if (source.CanSeek) source.Position = 0;
+        await source.CopyToAsync(output, ct).ConfigureAwait(false);
+        await output.FlushAsync(ct).ConfigureAwait(false);
+        return true;
+    }
+
+    public const int OpenDocumentRequestCode = 9402;
+    private static TaskCompletionSource<string?>? _pendingBookPickTcs;
+
+    public static bool TryCompleteBookPickResult(int requestCode, Result resultCode, Intent? data)
+    {
+        if (requestCode != OpenDocumentRequestCode) return false;
+        var tcs = Interlocked.Exchange(ref _pendingBookPickTcs, null);
+        if (tcs == null) return true;
+        if (resultCode != Result.Ok || data?.Data is not AndroidUri uri)
+        {
+            tcs.TrySetResult(null);
+            return true;
+        }
+        try
+        {
+            var resolver = AppContext.Context.ContentResolver!;
+            using var cursor = resolver.Query(uri, [IOpenableColumns.DisplayName], null, null, null);
+            var nameColumn = cursor?.GetColumnIndex(IOpenableColumns.DisplayName) ?? -1;
+            if (cursor == null || !cursor.MoveToFirst() || nameColumn < 0 ||
+                !IsSupportedBookFileName(cursor.GetString(nameColumn)))
+                throw new InvalidOperationException("Selecciona un archivo CBZ, CBR o PDF.");
+            resolver.TakePersistableUriPermission(uri, ActivityFlags.GrantReadUriPermission);
+            tcs.TrySetResult(uri.ToString());
+        }
+        catch (Exception ex) { tcs.TrySetException(ex); }
+        return true;
+    }
+
+    private async partial Task<string?> PickBookFilePlatformAsync(CancellationToken ct)
+    {
+        ct.ThrowIfCancellationRequested();
+        var tcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        Interlocked.Exchange(ref _pendingBookPickTcs, tcs)?.TrySetCanceled();
+        using var registration = ct.Register(() => tcs.TrySetCanceled(ct));
+        await MainThread.InvokeOnMainThreadAsync(() =>
+        {
+            var activity = Platform.CurrentActivity ?? throw new InvalidOperationException("No hay una Activity activa.");
+            var intent = new Intent(Intent.ActionOpenDocument);
+            intent.AddCategory(Intent.CategoryOpenable);
+            intent.SetType("*/*");
+            intent.AddFlags(ActivityFlags.GrantReadUriPermission | ActivityFlags.GrantPersistableUriPermission);
+            activity.StartActivityForResult(intent, OpenDocumentRequestCode);
+        }).ConfigureAwait(false);
+        return await tcs.Task.ConfigureAwait(false);
+    }
     public const int OpenDocumentTreeRequestCode = 9401;
     private static readonly object FolderPickSync = new();
     private static TaskCompletionSource<string?>? _pendingFolderPickTcs;

@@ -1,4 +1,5 @@
 using NebulaReader.ViewModels;
+using NebulaReader.Models;
 
 namespace NebulaReader.Views;
 
@@ -171,5 +172,48 @@ public partial class LibraryPage : ContentPage
         Grid.SetRow(view, row);
         Grid.SetColumn(view, column);
         view.HorizontalOptions = horizontalOptions;
+    }
+
+    private async void OnBookActionsClicked(object sender, EventArgs e)
+    {
+        if (sender is not Button { BindingContext: LibraryDisplayItem { Book: { } book } }) return;
+        try
+        {
+            var action = await DisplayActionSheetAsync(book.Title, "Cancelar", null,
+                "Editar título y serie", "Marcar como leído", "Marcar como no leído",
+                "Volver a localizar / Conceder acceso", "Reintentar portada", "Quitar de la biblioteca");
+            switch (action)
+            {
+                case "Editar título y serie":
+                    var title = await DisplayPromptAsync("Editar título", "Título", initialValue: book.Title);
+                    if (title == null) return;
+                    var series = await DisplayPromptAsync("Editar serie", "Serie (vacío para quitar)", initialValue: book.SeriesName ?? "");
+                    if (series == null) return;
+                    await ViewModel.EditDetailsAsync(book, title, series);
+                    break;
+                case "Marcar como leído":
+                    if (await DisplayAlertAsync("Marcar como leído", "Se guardará la última página como progreso. ¿Continuar?", "Sí", "Cancelar"))
+                        await ViewModel.SetStatusAsync(book, ReadingStatus.Completed);
+                    break;
+                case "Marcar como no leído":
+                    if (await DisplayAlertAsync("Marcar como no leído", "El progreso volverá a la página 1. ¿Continuar?", "Sí", "Cancelar"))
+                        await ViewModel.SetStatusAsync(book, ReadingStatus.Unread);
+                    break;
+                case "Volver a localizar / Conceder acceso":
+                    await ViewModel.RecoverBookAsync(book);
+                    break;
+                case "Reintentar portada":
+                    await ViewModel.RetryCoverAsync(book);
+                    break;
+                case "Quitar de la biblioteca":
+                    if (await DisplayAlertAsync("Quitar documento", "Se quitará la entrada y su progreso de la biblioteca. El archivo original se conservará. ¿Continuar?", "Quitar", "Cancelar"))
+                        await ViewModel.RemoveBookAsync(book);
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlertAsync("No se pudo completar la acción", ex.Message, "Cerrar");
+        }
     }
 }

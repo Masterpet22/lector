@@ -13,7 +13,42 @@ public partial class LibraryViewModel : BaseViewModel
 {
     private readonly ILibraryService _libraryService;
     private readonly IFilePickerService _filePickerService;
+    private readonly ILibraryBackupService _backupService;
     private readonly IFullScreenService _fullScreenService;
+    private CancellationTokenSource? _importCts;
+    private int _importRunId;
+
+    [ObservableProperty]
+    public partial bool IsImporting { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ImportFraction))]
+    public partial int ImportProcessed { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ImportFraction))]
+    public partial int ImportTotal { get; set; }
+
+    [ObservableProperty]
+    public partial string ImportProgressText { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PendingCoverText))]
+    public partial int PendingCoverCount { get; set; }
+
+    [ObservableProperty]
+    public partial bool HasImportReport { get; set; }
+
+    [ObservableProperty]
+    public partial string ImportSummary { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasImportFailures))]
+    public partial ObservableCollection<ImportFailure> ImportFailures { get; set; } = new();
+
+    public double ImportFraction => ImportTotal > 0 ? (double)ImportProcessed / ImportTotal : 0;
+    public string PendingCoverText => $"Portadas pendientes: {PendingCoverCount}";
+    public bool HasImportFailures => ImportFailures.Count > 0;
 
     [ObservableProperty]
     public partial ObservableCollection<BookItem> Books { get; set; } = new();
@@ -108,12 +143,16 @@ public partial class LibraryViewModel : BaseViewModel
     public LibraryViewModel(
         ILibraryService libraryService,
         IFilePickerService filePickerService,
+        ILibraryBackupService backupService,
         IFullScreenService fullScreenService)
     {
         _libraryService = libraryService;
         _filePickerService = filePickerService;
+        _backupService = backupService;
         _fullScreenService = fullScreenService;
         _libraryService.BookUpdated += OnBookUpdated;
+        _libraryService.PendingCoverCountChanged += OnPendingCoverCountChanged;
+        PendingCoverCount = _libraryService.PendingCoverCount;
         _fullScreenService.FullScreenChanged += OnFullScreenChanged;
         IsFullScreen = _fullScreenService.IsFullScreen;
         Title = "Biblioteca - Nebula Reader";
@@ -123,6 +162,9 @@ public partial class LibraryViewModel : BaseViewModel
     {
         MainThread.BeginInvokeOnMainThread(() => IsFullScreen = enabled);
     }
+
+    private void OnPendingCoverCountChanged(object? sender, int count) =>
+        MainThread.BeginInvokeOnMainThread(() => PendingCoverCount = count);
 
     [RelayCommand]
     private void ToggleFullScreen()
@@ -147,6 +189,12 @@ public partial class LibraryViewModel : BaseViewModel
                     existing.SeriesName = updated.SeriesName;
                     existing.Tags = updated.Tags;
                     existing.MetadataExtracted = updated.MetadataExtracted;
+                    existing.Title = updated.Title;
+                    existing.FilePath = updated.FilePath;
+                    existing.OriginalFilePath = updated.OriginalFilePath;
+                    existing.CoverError = updated.CoverError;
+                    existing.TitleEditedManually = updated.TitleEditedManually;
+                    existing.SeriesEditedManually = updated.SeriesEditedManually;
                 }
 
                 RebuildDisplayItems();
@@ -230,17 +278,7 @@ public partial class LibraryViewModel : BaseViewModel
                 return;
             }
 
-            StatusMessage = "Escaneando carpeta...";
-            var imported = await _libraryService.ImportFolderAsync(folderPathOrUri);
-            foreach (var book in imported)
-            {
-                UpsertBookInCollection(book);
-            }
-
-            RebuildDisplayItems();
-            StatusMessage = imported.Count > 0
-                ? $"Se indexaron {imported.Count} documento(s). Total en biblioteca: {Books.Count}."
-                : "No se encontraron archivos CBZ, CBR o PDF en la carpeta seleccionada.";
+            await RunImportAsync((progress, ct) => _libraryService.ImportFolderAsync(folderPathOrUri, progress, ct));
         }
         catch (Exception ex)
         {
@@ -250,6 +288,111 @@ public partial class LibraryViewModel : BaseViewModel
         {
             IsBusy = false;
         }
+    }
+
+    [RelayCommand]
+    private void CancelImport()
+    {
+        _importCts?.Cancel();
+        ImportProgressText = "Cancelando el escaneo...";
+    }
+
+    [RelayCommand]
+    private async Task RetryFailedImportsAsync()
+    {
+        if (IsBusy || ImportFailures.Count == 0) return;
+        IsBusy = true;
+        try
+        {
+            var paths = ImportFailures.Select(f => f.FilePath).ToArray();
+            await RunImportAsync((progress, ct) => _libraryService.RetryImportFailuresAsync(paths, progress, ct));
+        }
+        catch (Exception ex) { StatusMessage = $"Error al reintentar: {ex.Message}"; }
+        finally { IsBusy = false; }
+    }
+
+    private async Task RunImportAsync(Func<IProgress<FolderImportProgress>, CancellationToken, Task<FolderImportResult>> run)
+    {
+        _importCts = new CancellationTokenSource();
+        var runId = ++_importRunId;
+        IsImporting = true;
+        HasImportReport = true;
+        ImportProcessed = 0;
+        ImportTotal = 0;
+        ImportFailures = new ObservableCollection<ImportFailure>();
+        ImportSummary = string.Empty;
+        ImportProgressText = "Buscando archivos compatibles...";
+        try
+        {
+            var progress = new Progress<FolderImportProgress>(p =>
+            {
+                if (runId != _importRunId) return;
+                ImportProcessed = p.Processed;
+                ImportTotal = p.Total;
+                PendingCoverCount = p.PendingCovers;
+                ImportProgressText = $"Indexación: {p.Processed}/{p.Total} · añadidos {p.Added}, existentes {p.Existing}, fallidos {p.Failed}";
+            });
+            var result = await run(progress, _importCts.Token);
+            foreach (var failure in result.Failures) ImportFailures.Add(failure);
+            OnPropertyChanged(nameof(HasImportFailures));
+            await RefreshBooksAsync();
+            ImportProcessed = result.Processed;
+            ImportTotal = result.Total;
+            ImportSummary = $"{(result.Cancelled ? "Cancelado" : "Terminado")}: {result.Added} añadidos, {result.Existing} existentes, {result.Failed} fallidos.";
+            StatusMessage = ImportSummary;
+        }
+        finally
+        {
+            IsImporting = false;
+            _importCts.Dispose();
+            _importCts = null;
+            _importRunId++;
+            PendingCoverCount = _libraryService.PendingCoverCount;
+        }
+    }
+
+    [RelayCommand]
+    private async Task ExportBackupAsync()
+    {
+        if (IsBusy) return;
+        IsBusy = true;
+        try
+        {
+            using var output = new MemoryStream();
+            var count = await _backupService.ExportAsync(output);
+            var name = $"NebulaReader-respaldo-{DateTime.Now:yyyyMMdd-HHmmss}.json";
+            StatusMessage = await _filePickerService.SaveBackupAsync(output, name)
+                ? $"Respaldo guardado: {count} documento(s). No incluye los archivos originales."
+                : "Exportación cancelada.";
+        }
+        catch (Exception ex) { StatusMessage = $"Error al exportar respaldo: {ex.Message}"; }
+        finally { IsBusy = false; }
+    }
+
+    [RelayCommand]
+    private async Task ImportBackupAsync()
+    {
+        if (IsBusy) return;
+        IsBusy = true;
+        try
+        {
+            await using var input = await _filePickerService.PickBackupAsync();
+            if (input == null) { StatusMessage = "Importación de respaldo cancelada."; return; }
+            var result = await _backupService.ImportAsync(input);
+            await RefreshBooksAsync();
+            StatusMessage = $"Respaldo importado: {result.Added} nuevos, {result.Merged} combinados. Asocia los archivos pendientes desde Acciones.";
+        }
+        catch (Exception ex) { StatusMessage = $"No se importó el respaldo: {ex.Message}"; }
+        finally { IsBusy = false; }
+    }
+
+    private async Task RefreshBooksAsync()
+    {
+        var items = await _libraryService.GetBooksAsync();
+        Books.Clear();
+        foreach (var item in items) Books.Add(item);
+        RebuildDisplayItems();
+        UpdateStatusSummary();
     }
 
     [RelayCommand]
@@ -285,10 +428,60 @@ public partial class LibraryViewModel : BaseViewModel
     private async Task OpenBookAsync(BookItem? book)
     {
         if (book == null) return;
+        var access = await _libraryService.CheckAccessAsync(book);
+        if (access != BookAccessState.Available)
+        {
+            StatusMessage = access switch
+            {
+                BookAccessState.Missing => "Archivo ausente. Usa Volver a localizar.",
+                BookAccessState.PermissionDenied => "Permiso perdido. Usa Conceder acceso.",
+                _ => "Documento dañado o ilegible. Comprueba el archivo y vuelve a localizarlo."
+            };
+            try { await RecoverBookAsync(book); }
+            catch (Exception ex) { StatusMessage = $"No se pudo recuperar el documento: {ex.Message}"; }
+            return;
+        }
         await Shell.Current.GoToAsync("ReaderPage", new Dictionary<string, object>
         {
             { "Book", book }
         });
+    }
+
+    public async Task RemoveBookAsync(BookItem book)
+    {
+        await _libraryService.RemoveBookAsync(book.Id);
+        Books.Remove(book);
+        RebuildDisplayItems();
+        UpdateStatusSummary();
+    }
+
+    public async Task SetStatusAsync(BookItem book, ReadingStatus status)
+    {
+        UpsertBookInCollection(await _libraryService.SetReadingStatusAsync(book.Id, status));
+        RebuildDisplayItems();
+        UpdateStatusSummary();
+    }
+
+    public async Task EditDetailsAsync(BookItem book, string title, string? series)
+    {
+        UpsertBookInCollection(await _libraryService.EditDetailsAsync(book.Id, title, series));
+        RebuildDisplayItems();
+        UpdateStatusSummary();
+    }
+
+    public async Task RecoverBookAsync(BookItem book)
+    {
+        var path = await _filePickerService.PickBookFileAsync();
+        if (string.IsNullOrWhiteSpace(path)) return;
+        UpsertBookInCollection(await _libraryService.RelocateBookAsync(book.Id, path));
+        RebuildDisplayItems();
+        UpdateStatusSummary();
+    }
+
+    public async Task RetryCoverAsync(BookItem book)
+    {
+        await _libraryService.RetryCoverAsync(book.Id);
+        StatusMessage = $"Reintentando portada de {book.Title}.";
     }
 
     [RelayCommand]

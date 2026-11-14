@@ -26,6 +26,8 @@ public sealed partial class LibraryDisplayItem : ObservableObject
     public bool HasKnownPageCount { get; init; }
     public string? TagsText { get; init; }
     public bool HasTags => !string.IsNullOrWhiteSpace(TagsText);
+    public bool HasCoverError { get; init; }
+    public string? CoverStateText { get; init; }
 
     public string? Cover1 { get; init; }
     public string? Cover2 { get; init; }
@@ -39,6 +41,7 @@ public sealed partial class LibraryDisplayItem : ObservableObject
 
     public static LibraryDisplayItem FromSingleBook(BookItem book, IReadOnlyList<string>? displayTags = null, double coverHeight = 200)
     {
+        var needsLocation = book.FilePath.StartsWith("backup://", StringComparison.OrdinalIgnoreCase);
         var tagsText = displayTags is { Count: > 0 }
             ? string.Join(" · ", displayTags.Take(2))
             : null;
@@ -56,7 +59,11 @@ public sealed partial class LibraryDisplayItem : ObservableObject
             Progress = LibraryBrowseService.GetProgress(book),
             HasKnownPageCount = book.TotalPages > 0,
             TagsText = tagsText,
-            Cover1 = book.CoverThumbnailPath
+            Cover1 = book.CoverThumbnailPath,
+            HasCoverError = needsLocation || !string.IsNullOrWhiteSpace(book.CoverError),
+            CoverStateText = needsLocation
+                ? $"Archivo por asociar · {book.OriginalFilePath ?? "Ubicación anterior desconocida"}"
+                : !string.IsNullOrWhiteSpace(book.CoverError) ? "No se pudo generar la portada · Reintentar en Acciones" : null
         };
     }
 

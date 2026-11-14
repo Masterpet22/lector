@@ -73,6 +73,44 @@
                                                    HorizontalOptions="Center"
                                                    VerticalOptions="Center" />
                             </Grid>
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
+                                <Button Text="Exportar datos" Command="{Binding ExportBackupCommand}" />
+                                <Button Grid.Column="1" Text="Importar respaldo" Command="{Binding ImportBackupCommand}" />
+                            </Grid>
+                            <Label Text="El respaldo guarda datos de lectura; no incluye los archivos CBZ, CBR o PDF."
+                                   TextColor="{StaticResource TextSecondary}" FontSize="11" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <Border IsVisible="{Binding HasImportReport}"
+                            BackgroundColor="{StaticResource Surface1}"
+                            Stroke="{StaticResource SubtleBorder}"
+                            StrokeShape="RoundRectangle 16" Padding="12">
+                        <VerticalStackLayout Spacing="8">
+                            <Label Text="Importación" Style="{StaticResource EyebrowLabel}" />
+                            <Label Text="{Binding ImportProgressText}" TextColor="{StaticResource TextPrimary}" />
+                            <ProgressBar Progress="{Binding ImportFraction}"
+                                         ProgressColor="{StaticResource NeonPurpleBright}" />
+                            <Label Text="{Binding PendingCoverText}" TextColor="{StaticResource TextSecondary}" />
+                            <Button Text="Cancelar escaneo" IsVisible="{Binding IsImporting}"
+                                    Command="{Binding CancelImportCommand}" HorizontalOptions="Start" />
+                            <Label Text="{Binding ImportSummary}" TextColor="{StaticResource TextPrimary}" />
+                            <CollectionView ItemsSource="{Binding ImportFailures}"
+                                            IsVisible="{Binding HasImportFailures}"
+                                            HeightRequest="135" SelectionMode="None">
+                                <CollectionView.ItemTemplate>
+                                    <DataTemplate x:DataType="models:ImportFailure">
+                                        <VerticalStackLayout Padding="4" Spacing="2">
+                                            <Label Text="{Binding FilePath}" TextColor="{StaticResource TextPrimary}"
+                                                   FontSize="11" LineBreakMode="MiddleTruncation" />
+                                            <Label Text="{Binding Error}" TextColor="{StaticResource TextSecondary}"
+                                                   FontSize="11" />
+                                        </VerticalStackLayout>
+                                    </DataTemplate>
+                                </CollectionView.ItemTemplate>
+                            </CollectionView>
+                            <Button Text="Reintentar fallidos" IsVisible="{Binding HasImportFailures}"
+                                    Command="{Binding RetryFailedImportsCommand}" HorizontalOptions="Start" />
                         </VerticalStackLayout>
                     </Border>
 
@@ -136,6 +174,8 @@
                                                 <Button Text="Continuar" Padding="8,3" MinimumHeightRequest="36"
                                                         Command="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.OpenBookCommand, x:DataType=views:LibraryPage}"
                                                         CommandParameter="{Binding Book}" />
+                                                <Button Text="Acciones" Padding="8,3" MinimumHeightRequest="36"
+                                                        Clicked="OnBookActionsClicked" />
                                             </VerticalStackLayout>
                                         </Grid>
                                     </Border>
@@ -235,7 +275,7 @@
                                 CommandParameter="{Binding .}" />
                         </Border.GestureRecognizers>
 
-                        <Grid RowDefinitions="Auto,Auto,Auto,Auto" RowSpacing="6">
+                        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="6">
                             <Border Grid.Row="0"
                                     HeightRequest="{Binding CoverHeight}"
                                     BackgroundColor="{StaticResource BgCanvas}"
@@ -330,6 +370,11 @@
                                    Margin="3,0"
                                    TextColor="{StaticResource NeonPurpleBright}"
                                    LineBreakMode="TailTruncation" />
+                            <Label Grid.Row="4" Text="{Binding CoverStateText}"
+                                   IsVisible="{Binding HasCoverError}" FontSize="11"
+                                   TextColor="{StaticResource TextSecondary}" />
+                            <Button Grid.Row="5" Text="Acciones" IsVisible="{Binding IsSingleBook}"
+                                    Clicked="OnBookActionsClicked" />
                         </Grid>
                     </Border>
                 </DataTemplate>

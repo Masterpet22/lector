@@ -66,6 +66,7 @@
                             HorizontalScrollBarVisibility="Never">
                     <HorizontalStackLayout Spacing="8">
                         <Border Style="{StaticResource ReaderIconChip}"
+                                IsEnabled="{Binding IsBookPreferencesReady}"
                                 SemanticProperties.Description="{Binding LayoutModeLabel}">
                             <Border.GestureRecognizers>
                                 <TapGestureRecognizer Command="{Binding CycleLayoutModeCommand}" />
@@ -81,11 +82,13 @@
                         </Border>
                         <Button Text="{Binding FitModeLabel}"
                                 Style="{StaticResource HudButton}"
+                                IsEnabled="{Binding IsBookPreferencesReady}"
                                 Command="{Binding CyclePageFitModeCommand}" />
                         <Button Text="{Binding FullScreenButtonLabel}"
                                 Style="{StaticResource HudButton}"
                                 Command="{Binding ToggleFullScreenCommand}" />
                         <Border Style="{StaticResource ReaderIconChip}"
+                                IsEnabled="{Binding IsBookPreferencesReady}"
                                 SemanticProperties.Description="{Binding DirectionModeLabel}">
                             <Border.GestureRecognizers>
                                 <TapGestureRecognizer Command="{Binding ToggleReadingDirectionCommand}" />
@@ -101,7 +104,24 @@
                         </Border>
                         <Button Text="{Binding FilterModeLabel}"
                                 Style="{StaticResource HudButton}"
+                                IsEnabled="{Binding IsBookPreferencesReady}"
                                 Command="{Binding CycleVisualFilterCommand}" />
+                        <Label Text="{Binding PreferencesScopeLabel}"
+                               TextColor="{StaticResource TextSecondary}"
+                               FontSize="12" VerticalTextAlignment="Center" />
+                        <Button Text="Restablecer ajustes"
+                                Style="{StaticResource HudButton}"
+                                IsEnabled="{Binding HasBookPreferences}"
+                                Command="{Binding ResetBookPreferencesCommand}" />
+                        <Button Text="{Binding BookmarkButtonLabel}"
+                                Style="{StaticResource HudButton}"
+                                Command="{Binding ToggleCurrentPageBookmarkCommand}" />
+                        <Button Text="Marcadores"
+                                Style="{StaticResource HudButton}"
+                                Command="{Binding ShowBookmarksCommand}" />
+                        <Button Text="Miniaturas"
+                                Style="{StaticResource HudButton}"
+                                Clicked="OnShowThumbnailsClicked" />
                     </HorizontalStackLayout>
                 </ScrollView>
             </Grid>
@@ -153,5 +173,74 @@
                 </Grid>
             </VerticalStackLayout>
         </Border>
+
+        <Grid IsVisible="{Binding IsNavigationOverlayVisible}"
+              BackgroundColor="{StaticResource BgCanvas}"
+              RowDefinitions="Auto,*"
+              Padding="14,12">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" Margin="0,0,0,12">
+                <Button Text="← Volver" Style="{StaticResource HudButton}"
+                        Command="{Binding CloseNavigationOverlayCommand}" />
+                <Label Grid.Column="1" Text="Navegación de páginas"
+                       TextColor="{StaticResource TextPrimary}"
+                       FontAttributes="Bold" VerticalTextAlignment="Center" />
+            </Grid>
+
+            <CollectionView x:Name="BookmarksView" Grid.Row="1"
+                            IsVisible="{Binding IsBookmarkListVisible}"
+                            ItemsSource="{Binding BookmarkPages}"
+                            SelectionMode="Single"
+                            SelectionChanged="OnBookmarkSelected"
+                            EmptyView="Este documento no tiene páginas marcadas.">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="vm:PageNavigationItem">
+                        <Border BackgroundColor="{StaticResource Surface3}"
+                                Stroke="{StaticResource SubtleBorder}"
+                                StrokeShape="RoundRectangle 12"
+                                Padding="14,10" Margin="0,0,0,6">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <Label Text="{Binding PageNumber, StringFormat='Página {0}'}"
+                                       TextColor="{StaticResource TextPrimary}" VerticalTextAlignment="Center" />
+                                <Label Grid.Column="1" Text="Actual"
+                                       IsVisible="{Binding IsCurrent}"
+                                       TextColor="{StaticResource NeonPurpleBright}" />
+                            </Grid>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+
+            <CollectionView x:Name="ThumbnailsView" Grid.Row="1"
+                            IsVisible="{Binding IsThumbnailGridVisible}"
+                            ItemsSource="{Binding ThumbnailPages}"
+                            SelectionMode="Single"
+                            SelectionChanged="OnThumbnailSelected">
+                <CollectionView.ItemsLayout>
+                    <GridItemsLayout Orientation="Vertical" Span="3"
+                                     VerticalItemSpacing="8" HorizontalItemSpacing="8" />
+                </CollectionView.ItemsLayout>
+                <CollectionView.ItemTemplate>
+                    <DataTemplate x:DataType="vm:PageNavigationItem">
+                        <Border BackgroundColor="{StaticResource Surface3}"
+                                Stroke="{StaticResource SubtleBorder}"
+                                StrokeShape="RoundRectangle 10"
+                                Padding="5">
+                            <VerticalStackLayout Spacing="4">
+                                <Image Source="{Binding ThumbnailSource}" HeightRequest="110"
+                                       Aspect="AspectFit" />
+                                <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4">
+                                    <Label Text="{Binding PageNumber}"
+                                           TextColor="{StaticResource TextPrimary}" FontSize="12" />
+                                    <Label Grid.Column="1" Text="●" IsVisible="{Binding IsCurrent}"
+                                           TextColor="{StaticResource NeonPurpleBright}" FontSize="12" />
+                                    <Label Grid.Column="2" Text="★" IsVisible="{Binding IsBookmarked}"
+                                           TextColor="{StaticResource NeonPurpleBright}" FontSize="12" />
+                                </Grid>
+                            </VerticalStackLayout>
+                        </Border>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+        </Grid>
     </Grid>
 </ContentPage>

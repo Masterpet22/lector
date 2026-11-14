@@ -27,6 +27,13 @@ public sealed class CoverThumbnailService : ICoverThumbnailService
         _coversCacheDir = coversCacheDir;
     }
 
+    public void Invalidate(string bookId)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(bookId);
+        var path = Path.Combine(_coversCacheDir, $"{bookId}.jpg");
+        if (File.Exists(path)) File.Delete(path);
+    }
+
     public async Task<(string? ThumbnailPath, int PageCount)> GenerateCoverAsync(
         string bookId,
         string filePathOrUri,

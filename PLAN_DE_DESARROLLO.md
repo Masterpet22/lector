@@ -2,7 +2,7 @@
 
 Este plan organiza las próximas mejoras del lector CBZ, CBR y PDF para Android y Windows. La prioridad es facilitar la búsqueda de documentos, retomar la lectura y recuperar el acceso a los archivos sin perder el progreso.
 
-La Entrega 1 está implementada; las entregas posteriores y las validaciones manuales indicadas siguen pendientes. Las funciones actuales y las instrucciones de instalación y compilación se describen en [Readme.md](Readme.md).
+Las Entregas 1, 2, 3, 4 y 5 están implementadas; las validaciones manuales indicadas siguen pendientes. Las funciones actuales y las instrucciones de instalación y compilación se describen en [Readme.md](Readme.md).
 
 ## Base actual
 
@@ -89,41 +89,45 @@ Si VS Code conserva diagnósticos de una compilación anterior, actualizar el pa
 
 ### Administración por documento
 
-- [ ] Incorporar un menú de acciones en cada libro.
-- [ ] Permitir quitar una entrada de la biblioteca conservando el archivo original.
-- [ ] Permitir marcar como leído o no leído, con reglas coherentes para el progreso.
-- [ ] Permitir corregir el título y la serie.
-- [ ] Conservar las correcciones manuales durante posteriores extracciones de metadatos.
+- [x] Incorporar un menú de acciones en cada libro.
+- [x] Permitir quitar una entrada de la biblioteca conservando el archivo original.
+- [x] Permitir marcar como leído o no leído, con reglas coherentes para el progreso.
+- [x] Permitir corregir el título y la serie.
+- [x] Conservar las correcciones manuales durante posteriores extracciones de metadatos.
 
 **Criterios de aceptación:** las modificaciones persisten al reiniciar; quitar una entrada no elimina el archivo; los cambios actualizan los filtros y las agrupaciones. La interfaz deja claro qué ocurre con el progreso al cambiar el estado.
 
 ### Recuperación de archivos inaccesibles
 
-- [ ] Distinguir entre archivo ausente, permiso perdido y documento dañado.
-- [ ] Ofrecer «Volver a localizar» para un archivo movido.
-- [ ] Ofrecer «Conceder acceso» cuando falten permisos, especialmente en Android.
-- [ ] Conservar la identidad del libro, su progreso y sus metadatos al actualizar la ubicación.
-- [ ] Comprobar que el archivo elegido corresponde al documento esperado y evitar entradas duplicadas.
+- [x] Distinguir entre archivo ausente, permiso perdido y documento dañado.
+- [x] Ofrecer «Volver a localizar» para un archivo movido.
+- [x] Ofrecer «Conceder acceso» cuando falten permisos, especialmente en Android.
+- [x] Conservar la identidad del libro, su progreso y sus metadatos al actualizar la ubicación.
+- [x] Comprobar que el archivo elegido corresponde al documento esperado y evitar entradas duplicadas.
 
 **Criterios de aceptación:** mover un documento y volver a localizarlo permite continuar la lectura; recuperar permisos no crea un libro nuevo; cancelar la recuperación conserva los datos existentes.
 
 ### Errores y reintentos de portadas
 
-- [ ] Registrar los errores de generación de portadas con contexto suficiente para diagnosticarlos.
-- [ ] Mostrar un estado comprensible en los libros cuya portada no pudo generarse.
-- [ ] Ofrecer una acción «Reintentar».
-- [ ] Mantener operativa la biblioteca aunque falle un archivo.
+- [x] Registrar los errores de generación de portadas con contexto suficiente para diagnosticarlos.
+- [x] Mostrar un estado comprensible en los libros cuya portada no pudo generarse.
+- [x] Ofrecer una acción «Reintentar».
+- [x] Mantener operativa la biblioteca aunque falle un archivo.
 
 **Punto de partida:** [LibraryService.cs](NebulaReader/Services/LibraryService.cs) silencia algunos errores durante la generación de portadas. El comportamiento debe permitir diagnosticar y recuperar estos fallos sin interrumpir los demás documentos.
+
+**Implementación:** las acciones de cada tarjeta se guardan en SQLite sin modificar el archivo original. Marcar como leído requiere un total conocido y sitúa el progreso en la última página; marcar como no leído lo reinicia en la primera. El selector Android conserva el permiso de lectura del documento elegido. La recuperación rechaza rutas duplicadas, compara formato y total de páginas, y compara la huella de la primera página para los libros que ya la tengan. Los libros anteriores sin huella se comprueban mediante formato y total conocido. La portada se invalida al cambiar la ubicación; los errores quedan registrados y se muestran con una acción para reintentar.
+
+**Validación manual pendiente:** mover un archivo, revocar el permiso Android, seleccionar un documento incorrecto y reintentar una portada en Windows y Android físico. Confirmar visualmente el menú, los filtros y la agrupación tras editar metadatos.
 
 ## Entrega 3: Marcadores y navegación visual
 
 ### Marcadores
 
-- [ ] Persistir los marcadores asociados a cada documento.
-- [ ] Añadir acciones para guardar y quitar el marcador de la página actual.
-- [ ] Mostrar una lista de páginas marcadas y permitir abrirlas directamente.
-- [ ] Preservar los marcadores al actualizar el progreso o recuperar una ruta.
+- [x] Persistir los marcadores asociados a cada documento.
+- [x] Añadir acciones para guardar y quitar el marcador de la página actual.
+- [x] Mostrar una lista de páginas marcadas y permitir abrirlas directamente.
+- [x] Preservar los marcadores al actualizar el progreso o recuperar una ruta.
 
 **Punto de partida:** [ReadingProgress.cs](NebulaReader/Models/ReadingProgress.cs) declara `BookmarkedPages`, pero [LibraryDatabase.cs](NebulaReader/Services/LibraryDatabase.cs) no persiste esa lista. Es necesario completar el almacenamiento y la interfaz.
 
@@ -131,44 +135,64 @@ Si VS Code conserva diagnósticos de una compilación anterior, actualizar el pa
 
 ### Cuadrícula de miniaturas
 
-- [ ] Añadir una vista de miniaturas con número de página.
-- [ ] Señalar la página actual y las páginas marcadas.
-- [ ] Generar miniaturas bajo demanda y limitar su consumo de memoria.
-- [ ] Cancelar las cargas pendientes al cerrar la vista o cambiar de documento.
+- [x] Añadir una vista de miniaturas con número de página.
+- [x] Señalar la página actual y las páginas marcadas.
+- [x] Generar miniaturas bajo demanda y limitar su consumo de memoria.
+- [x] Cancelar las cargas pendientes al cerrar la vista o cambiar de documento.
 
 **Criterios de aceptación:** seleccionar una miniatura abre la página correcta; recorrer un documento extenso no mantiene todas sus imágenes decodificadas en memoria; cerrar la cuadrícula libera el trabajo y los recursos que ya no se necesitan.
 
+**Implementación:** una tabla `BookBookmarks` se crea al abrir la base existente y guarda páginas por identidad de documento; actualizar el progreso o la ruta no toca las marcas. Al quitar un libro se eliminan sus marcadores. El visor ofrece guardar o quitar la marca actual, abrir la lista y seleccionar una página. La cuadrícula virtualizada solicita miniaturas al mostrar cada celda, decodifica a un máximo de 320 píxeles y limita a dos las generaciones simultáneas. Al cerrar la vista o cambiar de libro se cancelan las solicitudes y se liberan los elementos de la cuadrícula.
+
+**Validación automatizada:** la prueba de migración y persistencia comprueba marcas únicas, reapertura de SQLite, progreso, cambio de ruta y eliminación del libro. La suite completa cuenta con 29 pruebas aprobadas. Windows x64 y Android ARM64 compilan en Release con cero advertencias y cero errores.
+
+**Verificación visual Android del 14 de noviembre de 2026:** en un Moto G Stylus 5G se instaló la APK Release y se abrió el CBZ de prueba de tres páginas. Se comprobó que guardar y quitar un marcador actualiza el botón y la lista, que la cuadrícula muestra las tres miniaturas con indicadores de página actual y marcada, y que tocar la miniatura 3 abre la página 3. Los marcadores de las páginas 1 y 3 sobrevivieron al cierre del lector y al reinicio completo del proceso; el progreso volvió a la página guardada. La app permaneció activa y no aparecieron cierres nuevos durante esta sesión. Las capturas están en `releases/logs/android-visual-*.png` (carpeta local excluida de Git).
+
+**Validación manual pendiente:** comprobar la lista y la cuadrícula en Windows y en Android con CBR y PDF, incluyendo un documento extenso, cambios rápidos de libro y cierre durante una carga de miniaturas. Medir el consumo de memoria en esos casos. El control visual de Windows no pudo conectarse: el servicio nativo devolvió `Computer Use native pipe is unavailable` incluso después de reiniciar la sesión e intentar un segundo acceso.
+
 ## Entrega 4: Preferencias por documento
 
-- [ ] Guardar por libro el modo de vista, el ajuste, la dirección de lectura y el filtro visual.
-- [ ] Usar las preferencias generales como valores iniciales para documentos sin personalización.
-- [ ] Permitir restablecer un documento a los valores generales.
-- [ ] Mantener las preferencias al volver a localizar el archivo.
+- [x] Guardar por libro el modo de vista, el ajuste, la dirección de lectura y el filtro visual.
+- [x] Usar las preferencias generales como valores iniciales para documentos sin personalización.
+- [x] Permitir restablecer un documento a los valores generales.
+- [x] Mantener las preferencias al volver a localizar el archivo.
 
 **Criterios de aceptación:** un manga conserva la lectura invertida y un PDF conserva el ajuste al ancho sin afectar a otros libros. Las preferencias sobreviven al reinicio y el restablecimiento elimina la personalización del documento.
+
+**Implementación:** la tabla `BookReaderPreferences` guarda una configuración completa por identidad de libro. Si no existe una fila, el visor toma los valores generales y sigue sus cambios. La primera modificación desde el visor guarda los cuatro valores actuales para ese documento sin modificar los ajustes generales. **Restablecer ajustes** elimina la fila y vuelve a aplicar los valores generales. El cambio de ruta conserva la misma identidad y sus preferencias; quitar el libro elimina también su configuración.
+
+**Validación automatizada:** la prueba de migración comprueba que una biblioteca existente abre sin personalizaciones, que manga y PDF guardan valores independientes, que los cambios sobreviven a la reapertura y a la reubicación, y que restablecer un libro no afecta al otro ni al progreso. Las 30 pruebas de la suite pasan. Windows x64 compiló en Release sin advertencias ni errores; la APK Android ARM64 se publicó correctamente.
+
+**Validación visual pendiente:** confirmar los cuatro controles y el restablecimiento en Windows y Android físico, incluidos cambios de valores generales y reapertura de ambos libros. La APK se instaló en el Moto G Stylus 5G, pero el teléfono cambió a otra aplicación durante la prueba; se detuvo la interacción ADB para no interferir con su uso. El acceso visual automatizado a Windows sigue sin estar disponible por el error del canal nativo de Computer Use.
 
 ## Entrega 5: Importación controlada y respaldo
 
 ### Importación con progreso y cancelación
 
-- [ ] Mostrar archivos procesados y total cuando se conozca.
-- [ ] Separar el progreso de indexación del trabajo pendiente de portadas.
-- [ ] Permitir cancelar el escaneo sin borrar los documentos ya importados.
-- [ ] Continuar con el resto de la colección si falla un archivo.
-- [ ] Presentar un resumen de documentos añadidos, existentes y fallidos.
+- [x] Mostrar archivos procesados y total cuando se conozca.
+- [x] Separar el progreso de indexación del trabajo pendiente de portadas.
+- [x] Permitir cancelar el escaneo sin borrar los documentos ya importados.
+- [x] Continuar con el resto de la colección si falla un archivo.
+- [x] Presentar un resumen de documentos añadidos, existentes y fallidos.
 
 **Criterios de aceptación:** la interfaz sigue respondiendo durante el escaneo; cancelar detiene el trabajo pendiente; repetir una importación no duplica entradas; los fallos se pueden identificar y reintentar.
 
 ### Exportación e importación de datos
 
-- [ ] Definir un formato de respaldo versionado.
-- [ ] Exportar progreso, marcadores, metadatos corregidos y preferencias.
-- [ ] Validar el respaldo antes de modificar los datos locales.
-- [ ] Definir cómo combinar datos existentes y resolver conflictos.
-- [ ] Permitir asociar los documentos con sus ubicaciones en el equipo de destino.
-- [ ] Explicar que el respaldo de datos no incluye los archivos CBZ, CBR o PDF originales.
+- [x] Definir un formato de respaldo versionado.
+- [x] Exportar progreso, marcadores, metadatos corregidos y preferencias.
+- [x] Validar el respaldo antes de modificar los datos locales.
+- [x] Definir cómo combinar datos existentes y resolver conflictos.
+- [x] Permitir asociar los documentos con sus ubicaciones en el equipo de destino.
+- [x] Explicar que el respaldo de datos no incluye los archivos CBZ, CBR o PDF originales.
 
 **Criterios de aceptación:** una exportación seguida de una importación restaura los datos de lectura; un respaldo inválido no daña la biblioteca; las rutas de otro dispositivo se pueden recuperar sin perder el progreso.
+
+**Implementación:** el escaneo enumera los archivos antes de indexarlos y presenta procesados/total, recuentos y portadas pendientes por separado. Cada archivo se procesa de forma aislada; los fallos se muestran con ruta y causa, y pueden reintentarse. Cancelar detiene el siguiente archivo y conserva los anteriores. El respaldo JSON usa el esquema `nebula-reader-data`, versión 1. Contiene progreso, marcadores, título y serie corregidos, etiquetas, preferencias por documento y ajustes generales del lector. Se valida completo antes de una transacción de importación. En una coincidencia por ID se conserva la ruta local, gana el progreso con fecha de lectura más reciente (el local en empate), se conservan las correcciones manuales locales, se unen los marcadores y solo se toman las preferencias del respaldo si no existen preferencias locales. Los ajustes generales del respaldo se aplican al importar. Las entradas nuevas quedan pendientes de asociación con el archivo original desde **Acciones → Volver a localizar / Conceder acceso**.
+
+**Validación automatizada:** 32 pruebas superadas. Las pruebas nuevas comprueban el escaneo con fallo, duplicado y cancelación; también el ciclo exportar/importar, la restauración de ajustes generales, la conservación de ruta y progreso local, la unión de marcadores y el rechazo de un respaldo inválido sin alterar la biblioteca.
+
+**Compilaciones y comprobación visual:** publicadas la APK Android ARM64 y la versión autónoma Windows x64, con EXE y ZIP en `releases/`. La APK se instaló en el Moto G Stylus 5G y se comprobó visualmente la barra de importación y respaldo. Una exportación y su posterior importación de una biblioteca vacía finalizaron con mensajes correctos. Queda pendiente probar el flujo con una colección real grande y revisar visualmente Windows: el canal nativo de Computer Use sigue sin conectarse.
 
 ## Validación antes de distribuir
 

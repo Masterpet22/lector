@@ -41,6 +41,7 @@ public static class MauiProgram
         builder.Services.AddSingleton<ILibraryDatabase, LibraryDatabase>();
         builder.Services.AddSingleton<ICoverThumbnailService, CoverThumbnailService>();
         builder.Services.AddSingleton<ILibraryService, LibraryService>();
+        builder.Services.AddSingleton<ILibraryBackupService, LibraryBackupService>();
         builder.Services.AddSingleton<IFilePickerService, FilePickerService>();
         builder.Services.AddSingleton<IPageCacheService, PageCacheService>();
         builder.Services.AddSingleton<IReaderSettingsService, ReaderSettingsService>();

@@ -16,5 +16,7 @@ public class MainActivity : MauiAppCompatActivity
     {
         base.OnActivityResult(requestCode, resultCode, data);
         FilePickerService.TryCompleteFolderPickResult(requestCode, resultCode, data);
+        FilePickerService.TryCompleteBookPickResult(requestCode, resultCode, data);
+        FilePickerService.TryCompleteBackupSaveResult(requestCode, resultCode, data);
     }
 }

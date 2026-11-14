@@ -9,6 +9,17 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\NebulaReader\Models\BookBookmark.cs" Link="Core\BookBookmark.cs" />
+    <Compile Include="..\NebulaReader\Models\BookReaderPreferences.cs" Link="Core\BookReaderPreferences.cs" />
+    <Compile Include="..\NebulaReader\Models\ReaderLayoutMode.cs" Link="Core\ReaderLayoutMode.cs" />
+    <Compile Include="..\NebulaReader\Models\PageFitMode.cs" Link="Core\PageFitMode.cs" />
+    <Compile Include="..\NebulaReader\Models\ReaderVisualFilter.cs" Link="Core\ReaderVisualFilter.cs" />
+    <Compile Include="..\NebulaReader\Models\LibraryBackup.cs" Link="Core\LibraryBackup.cs" />
+    <Compile Include="..\NebulaReader\Models\FolderImportReport.cs" Link="Core\FolderImportReport.cs" />
+    <Compile Include="..\NebulaReader\Services\ILibraryBackupService.cs" Link="Core\ILibraryBackupService.cs" />
+    <Compile Include="..\NebulaReader\Services\IReaderSettingsService.cs" Link="Core\IReaderSettingsService.cs" />
+    <Compile Include="..\NebulaReader\Services\LibraryBackupService.cs" Link="Core\LibraryBackupService.cs" />
+    <Compile Include="..\NebulaReader\Services\FolderImportRunner.cs" Link="Core\FolderImportRunner.cs" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.14.1" />
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
     <PackageReference Include="sqlite-net-pcl" Version="1.11.285" />

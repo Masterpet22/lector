@@ -5,6 +5,7 @@ namespace NebulaReader.Services;
 /// </summary>
 public interface ICoverThumbnailService
 {
+    void Invalidate(string bookId);
     Task<(string? ThumbnailPath, int PageCount)> GenerateCoverAsync(
         string bookId,
         string filePathOrUri,

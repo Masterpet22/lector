@@ -1300,9 +1300,37 @@ public partial class ReaderPage : ContentPage
         SyncSliderFromViewModel();
     }
 
+    private void OnShowThumbnailsClicked(object? sender, EventArgs e)
+    {
+        var vm = ViewModel;
+        if (vm == null) return;
+        vm.ShowThumbnailsCommand.Execute(null);
+        if (vm.IsThumbnailGridVisible)
+            ThumbnailsView.ScrollTo(vm.CurrentPageIndex, position: ScrollToPosition.Center, animate: false);
+    }
+
+    private async void OnBookmarkSelected(object? sender, SelectionChangedEventArgs e) =>
+        await NavigateFromOverlayAsync(BookmarksView, e);
+
+    private async void OnThumbnailSelected(object? sender, SelectionChangedEventArgs e) =>
+        await NavigateFromOverlayAsync(ThumbnailsView, e);
+
+    private async Task NavigateFromOverlayAsync(CollectionView view, SelectionChangedEventArgs e)
+    {
+        if (e.CurrentSelection.FirstOrDefault() is not PageNavigationItem item || ViewModel is not { } vm) return;
+        view.SelectedItem = null;
+        vm.CloseNavigationOverlayCommand.Execute(null);
+        await vm.GoToPageAsync(item.PageNumber - 1);
+    }
+
     protected override bool OnBackButtonPressed()
     {
         if (ViewModel is not { } vm) return base.OnBackButtonPressed();
+        if (vm.IsNavigationOverlayVisible)
+        {
+            vm.CloseNavigationOverlayCommand.Execute(null);
+            return true;
+        }
         // Usar la misma salida que el botón del visor: persistir antes de recargar la biblioteca.
         if (!vm.CloseReaderCommand.IsRunning)
         {
@@ -1314,6 +1342,7 @@ public partial class ReaderPage : ContentPage
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
+        ViewModel?.CloseNavigationOverlayCommand.Execute(null);
         StopFlingInertia();
         _sliderTrackClickCts?.Cancel();
         _sliderTrackClickCts?.Dispose();

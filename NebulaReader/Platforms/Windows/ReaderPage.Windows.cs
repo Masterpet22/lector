@@ -79,6 +79,15 @@ public partial class ReaderPage
     {
         var vm = ViewModel;
         if (vm == null) return;
+        if (vm.IsNavigationOverlayVisible)
+        {
+            if (e.Key == VirtualKey.Escape)
+            {
+                vm.CloseNavigationOverlayCommand.Execute(null);
+                e.Handled = true;
+            }
+            return;
+        }
 
         switch (e.Key)
         {
