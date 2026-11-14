@@ -1,4 +1,5 @@
 using CommunityToolkit.Mvvm.ComponentModel;
+using NebulaReader.Services;
 
 namespace NebulaReader.Models;
 
@@ -21,6 +22,8 @@ public sealed partial class LibraryDisplayItem : ObservableObject
     public int BookCount { get; init; }
     public string BadgeText { get; init; } = string.Empty;
     public string SubtitleText { get; init; } = string.Empty;
+    public double Progress { get; init; }
+    public bool HasKnownPageCount { get; init; }
     public string? TagsText { get; init; }
     public bool HasTags => !string.IsNullOrWhiteSpace(TagsText);
 
@@ -49,7 +52,9 @@ public sealed partial class LibraryDisplayItem : ObservableObject
             GroupBooks = [book],
             BookCount = 1,
             BadgeText = book.Format.ToString().ToUpperInvariant(),
-            SubtitleText = $"Pág. {book.CurrentPage}/{(book.TotalPages > 0 ? book.TotalPages : 1)}",
+            SubtitleText = LibraryBrowseService.GetProgressText(book),
+            Progress = LibraryBrowseService.GetProgress(book),
+            HasKnownPageCount = book.TotalPages > 0,
             TagsText = tagsText,
             Cover1 = book.CoverThumbnailPath
         };

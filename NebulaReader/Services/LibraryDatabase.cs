@@ -18,7 +18,12 @@ public sealed class LibraryDatabase : ILibraryDatabase
     private SQLiteAsyncConnection? _connection;
 
     public LibraryDatabase()
+#if ANDROID || WINDOWS
         : this(Path.Combine(FileSystem.AppDataDirectory, "nebulareader_library.db3"))
+#else
+        : this(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            "NebulaReader", "nebulareader_library.db3"))
+#endif
     {
     }
 
@@ -61,6 +66,19 @@ public sealed class LibraryDatabase : ILibraryDatabase
         await conn.InsertOrReplaceAsync(book).ConfigureAwait(false);
     }
 
+    public async Task UpdateBookMetadataAsync(BookItem book, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(book);
+        ct.ThrowIfCancellationRequested();
+        var conn = await GetConnectionAsync(ct).ConfigureAwait(false);
+        // Una portada puede terminar después de una lectura: no guardar su copia antigua del progreso.
+        await conn.ExecuteAsync(
+            "UPDATE Books SET CoverThumbnailPath = ?, TotalPages = CASE WHEN ? > 0 THEN ? ELSE TotalPages END, " +
+            "SeriesName = ?, Tags = ?, MetadataExtracted = ? WHERE Id = ?",
+            book.CoverThumbnailPath, book.TotalPages, book.TotalPages,
+            book.SeriesName, book.Tags, book.MetadataExtracted, book.Id).ConfigureAwait(false);
+    }
+
     public async Task UpdateProgressAsync(ReadingProgress progress, CancellationToken ct = default)
     {
         ArgumentNullException.ThrowIfNull(progress);
@@ -88,7 +106,12 @@ public sealed class LibraryDatabase : ILibraryDatabase
             ? ReadingStatus.Completed
             : ReadingStatus.Reading;
 
-        await conn.UpdateAsync(book).ConfigureAwait(false);
+        // No sobrescribir portadas o metadatos que hayan cambiado durante la lectura.
+        await conn.ExecuteAsync(
+            "UPDATE Books SET CurrentPage = ?, " +
+            "TotalPages = CASE WHEN ? > 0 THEN ? ELSE TotalPages END, LastReadAtUtc = ?, Status = ? WHERE Id = ?",
+            book.CurrentPage, progress.TotalPages, progress.TotalPages, book.LastReadAtUtc, book.Status, book.Id)
+            .ConfigureAwait(false);
     }
 
     public async Task DeleteBookAsync(string bookId, CancellationToken ct = default)

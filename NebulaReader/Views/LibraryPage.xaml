@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:NebulaReader.ViewModels"
              xmlns:models="clr-namespace:NebulaReader.Models"
+             xmlns:views="clr-namespace:NebulaReader.Views"
              x:Class="NebulaReader.Views.LibraryPage"
              x:Name="LibraryRootPage"
              x:DataType="vm:LibraryViewModel"
@@ -10,102 +11,172 @@
              BackgroundColor="{StaticResource BgCanvas}"
              Title="{Binding Title}">
 
-    <Grid x:Name="LibraryRootGrid" RowDefinitions="Auto,Auto,Auto,*,Auto" Padding="18,16" RowSpacing="16">
-        <Border x:Name="LibraryToolbarBorder"
-                Grid.Row="0"
-                BackgroundColor="{StaticResource Surface1}"
-                Stroke="{StaticResource SubtleBorder}"
-                StrokeThickness="1"
-                StrokeShape="RoundRectangle 22"
-                Padding="18,16">
-            <VerticalStackLayout Spacing="16">
-                <Grid ColumnDefinitions="48,*" ColumnSpacing="12">
-                    <Image Grid.Column="0" Source="nebula_brand.png"
-                           WidthRequest="48" HeightRequest="48"
-                           Aspect="AspectFit" VerticalOptions="Center"
-                           SemanticProperties.Description="Nebula Reader" />
-                    <VerticalStackLayout Grid.Column="1" Spacing="3">
-                        <Label Text="NEBULA READER" Style="{StaticResource EyebrowLabel}" />
-                        <Label Text="Tu biblioteca" Style="{StaticResource SectionTitleLabel}" />
-                        <Label Text="Tus historias, listas para continuar."
-                               TextColor="{StaticResource TextSecondary}"
-                               FontSize="12" />
-                    </VerticalStackLayout>
-                </Grid>
-            <Grid x:Name="LibraryToolbarGrid"
-                  ColumnDefinitions="*,*"
-                  RowDefinitions="Auto,Auto,Auto"
-                  ColumnSpacing="8"
-                  RowSpacing="8">
-                <Button x:Name="OpenFileButton"
-                        Grid.Row="0"
-                        Grid.Column="0"
-                        Text="Abrir archivo"
-                        Style="{StaticResource PrimaryNeonButton}"
-                        Command="{Binding OpenFileCommand}" />
-                <Button x:Name="ScanFolderButton"
-                        Grid.Row="0"
-                        Grid.Column="1"
-                        Text="Escanear carpeta"
-                        Command="{Binding ImportFolderCommand}" />
-                <Button x:Name="SettingsButton"
-                        Grid.Row="1"
-                        Grid.Column="0"
-                        Text="Configuración"
-                        Command="{Binding OpenSettingsCommand}" />
-                <Button x:Name="FullScreenButton"
-                        Grid.Row="1"
-                        Grid.Column="1"
-                        Text="{Binding FullScreenButtonLabel}"
-                        Command="{Binding ToggleFullScreenCommand}" />
-                <ActivityIndicator x:Name="ToolbarBusyIndicator"
-                                   Grid.Row="2"
-                                   Grid.Column="0"
-                                   Grid.ColumnSpan="2"
-                                   IsRunning="{Binding IsBusy}"
-                                   IsVisible="{Binding IsBusy}"
-                                   Color="{StaticResource NeonPurpleBright}"
-                                   HorizontalOptions="Center"
-                                   VerticalOptions="Center" />
-            </Grid>
-            </VerticalStackLayout>
-        </Border>
-
-        <!-- Barra de navegación dentro de una serie/saga -->
-        <Border x:Name="LibraryBreadcrumbBorder"
-                Grid.Row="1"
-                IsVisible="{Binding IsInsideGroup}"
-                BackgroundColor="{StaticResource Surface1}"
-                Stroke="{StaticResource SubtleBorder}"
-                StrokeThickness="1"
-                StrokeShape="RoundRectangle 16"
-                Padding="12,9">
-            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
-                <Button Grid.Column="0"
-                        Text="← Biblioteca"
-                        Style="{StaticResource HudButton}"
-                        Command="{Binding ExitGroupCommand}" />
-                <Label Grid.Column="1"
-                       Text="{Binding ActiveGroupTitle}"
-                       VerticalOptions="Center"
-                       TextColor="{StaticResource TextPrimary}"
-                       FontFamily="OpenSansSemibold"
-                       FontSize="15"
-                       FontAttributes="Bold"
-                       LineBreakMode="TailTruncation" />
-            </Grid>
-        </Border>
-
-        <Grid Grid.Row="2" ColumnDefinitions="*,Auto" Margin="2,0">
-            <Label Grid.Column="0" Text="COLECCIÓN" Style="{StaticResource EyebrowLabel}" VerticalOptions="Center" />
-            <Label Grid.Column="1" Text="CBZ · CBR · PDF"
-                   TextColor="{StaticResource TextMuted}"
-                   FontSize="11" VerticalOptions="Center" />
-        </Grid>
-
-        <CollectionView Grid.Row="3"
+    <Grid x:Name="LibraryRootGrid" RowDefinitions="*,Auto" Padding="18,16" RowSpacing="16">
+        <CollectionView Grid.Row="0"
                         ItemsSource="{Binding DisplayItems}"
                         SelectionMode="None">
+            <CollectionView.Header>
+                <VerticalStackLayout Spacing="14" Padding="0,0,0,14">
+                    <Border x:Name="LibraryToolbarBorder"
+                            BackgroundColor="{StaticResource Surface1}"
+                            Stroke="{StaticResource SubtleBorder}"
+                            StrokeThickness="1"
+                            StrokeShape="RoundRectangle 22"
+                            Padding="18,16">
+                        <VerticalStackLayout Spacing="16">
+                            <Grid ColumnDefinitions="48,*" ColumnSpacing="12">
+                                <Image Grid.Column="0" Source="nebula_brand.png"
+                                       WidthRequest="48" HeightRequest="48"
+                                       Aspect="AspectFit" VerticalOptions="Center"
+                                       SemanticProperties.Description="Nebula Reader" />
+                                <VerticalStackLayout Grid.Column="1" Spacing="3">
+                                    <Label Text="NEBULA READER" Style="{StaticResource EyebrowLabel}" />
+                                    <Label Text="Tu biblioteca" Style="{StaticResource SectionTitleLabel}" />
+                                    <Label Text="Tus historias, listas para continuar."
+                                           TextColor="{StaticResource TextSecondary}"
+                                           FontSize="12" />
+                                </VerticalStackLayout>
+                            </Grid>
+                            <Grid x:Name="LibraryToolbarGrid"
+                                  ColumnDefinitions="*,*"
+                                  RowDefinitions="Auto,Auto,Auto"
+                                  ColumnSpacing="8"
+                                  RowSpacing="8">
+                                <Button x:Name="OpenFileButton"
+                                        Grid.Row="0"
+                                        Grid.Column="0"
+                                        Text="Abrir archivo"
+                                        Style="{StaticResource PrimaryNeonButton}"
+                                        Command="{Binding OpenFileCommand}" />
+                                <Button x:Name="ScanFolderButton"
+                                        Grid.Row="0"
+                                        Grid.Column="1"
+                                        Text="Escanear carpeta"
+                                        Command="{Binding ImportFolderCommand}" />
+                                <Button x:Name="SettingsButton"
+                                        Grid.Row="1"
+                                        Grid.Column="0"
+                                        Text="Configuración"
+                                        Command="{Binding OpenSettingsCommand}" />
+                                <Button x:Name="FullScreenButton"
+                                        Grid.Row="1"
+                                        Grid.Column="1"
+                                        Text="{Binding FullScreenButtonLabel}"
+                                        Command="{Binding ToggleFullScreenCommand}" />
+                                <ActivityIndicator x:Name="ToolbarBusyIndicator"
+                                                   Grid.Row="2"
+                                                   Grid.Column="0"
+                                                   Grid.ColumnSpan="2"
+                                                   IsRunning="{Binding IsBusy}"
+                                                   IsVisible="{Binding IsBusy}"
+                                                   Color="{StaticResource NeonPurpleBright}"
+                                                   HorizontalOptions="Center"
+                                                   VerticalOptions="Center" />
+                            </Grid>
+                        </VerticalStackLayout>
+                    </Border>
+
+
+                    <Border BackgroundColor="{StaticResource Surface1}" Stroke="{StaticResource SubtleBorder}"
+                            StrokeShape="RoundRectangle 16" Padding="12">
+                        <VerticalStackLayout Spacing="8">
+                            <SearchBar Placeholder="Buscar título, serie o etiqueta"
+                                       Text="{Binding SearchText, Mode=TwoWay}"
+                                       TextColor="{StaticResource TextPrimary}"
+                                       PlaceholderColor="{StaticResource TextMuted}"
+                                       SemanticProperties.Description="Buscar en la biblioteca" />
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
+                                <VerticalStackLayout>
+                                    <Label Text="Formato" Style="{StaticResource EyebrowLabel}" />
+                                    <!-- El Header se recicla al salir del estado vacío. Anclar ambos enlaces a la
+                                         página evita que el Picker pierda ItemsSource durante la selección nativa. -->
+                                    <Picker Title="Formato"
+                                            ItemsSource="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.FormatOptions, x:DataType=views:LibraryPage}"
+                                            SelectedIndex="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.SelectedFormatIndex, Mode=TwoWay, x:DataType=views:LibraryPage}" />
+                                </VerticalStackLayout>
+                                <VerticalStackLayout Grid.Column="1">
+                                    <Label Text="Estado" Style="{StaticResource EyebrowLabel}" />
+                                    <Picker Title="Estado de lectura"
+                                            ItemsSource="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.StatusOptions, x:DataType=views:LibraryPage}"
+                                            SelectedIndex="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.SelectedStatusIndex, Mode=TwoWay, x:DataType=views:LibraryPage}" />
+                                </VerticalStackLayout>
+                            </Grid>
+                            <Button Text="Limpiar filtros" Command="{Binding ClearFiltersCommand}"
+                                    IsVisible="{Binding HasActiveFilters}" HorizontalOptions="Start" />
+                        </VerticalStackLayout>
+                    </Border>
+
+                    <VerticalStackLayout Spacing="8" IsVisible="{Binding HasContinueReading}">
+                        <Label Text="CONTINUAR LEYENDO" Style="{StaticResource EyebrowLabel}" />
+                        <CollectionView ItemsSource="{Binding ContinueReadingItems}" HeightRequest="156"
+                                        SelectionMode="None">
+                            <CollectionView.ItemsLayout>
+                                <LinearItemsLayout Orientation="Horizontal" ItemSpacing="12" />
+                            </CollectionView.ItemsLayout>
+                            <CollectionView.ItemTemplate>
+                                <DataTemplate x:DataType="models:LibraryDisplayItem">
+                                    <Border WidthRequest="282" Padding="12" BackgroundColor="{StaticResource Surface1}"
+                                            Stroke="{StaticResource SubtleBorder}" StrokeShape="RoundRectangle 16">
+                                        <Grid ColumnDefinitions="76,*" ColumnSpacing="12">
+                                            <Border BackgroundColor="{StaticResource Surface2}" StrokeThickness="0"
+                                                    StrokeShape="RoundRectangle 10">
+                                                <Grid>
+                                                    <Label Text="{Binding BadgeText}" HorizontalOptions="Center"
+                                                           VerticalOptions="Center" TextColor="{StaticResource TextMuted}" />
+                                                    <Image Source="{Binding Cover1}" Aspect="AspectFill" />
+                                                </Grid>
+                                            </Border>
+                                            <VerticalStackLayout Grid.Column="1" Spacing="7" VerticalOptions="Center">
+                                                <Label Text="{Binding Title}" MaxLines="2" LineBreakMode="TailTruncation"
+                                                       FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
+                                                <Label Text="{Binding SubtitleText}" FontSize="11"
+                                                       TextColor="{StaticResource TextSecondary}" />
+                                                <ProgressBar Progress="{Binding Progress}" IsVisible="{Binding HasKnownPageCount}"
+                                                             ProgressColor="{StaticResource NeonPurpleBright}" />
+                                                <Button Text="Continuar" Padding="8,3" MinimumHeightRequest="36"
+                                                        Command="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.OpenBookCommand, x:DataType=views:LibraryPage}"
+                                                        CommandParameter="{Binding Book}" />
+                                            </VerticalStackLayout>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </CollectionView.ItemTemplate>
+                        </CollectionView>
+                    </VerticalStackLayout>
+                    <!-- Barra de navegación dentro de una serie/saga -->
+                    <Border x:Name="LibraryBreadcrumbBorder"
+                            IsVisible="{Binding IsInsideGroup}"
+                            BackgroundColor="{StaticResource Surface1}"
+                            Stroke="{StaticResource SubtleBorder}"
+                            StrokeThickness="1"
+                            StrokeShape="RoundRectangle 16"
+                            Padding="12,9">
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                            <Button Grid.Column="0"
+                                    Text="← Biblioteca"
+                                    Style="{StaticResource HudButton}"
+                                    Command="{Binding ExitGroupCommand}" />
+                            <Label Grid.Column="1"
+                                   Text="{Binding ActiveGroupTitle}"
+                                   VerticalOptions="Center"
+                                   TextColor="{StaticResource TextPrimary}"
+                                   FontFamily="OpenSansSemibold"
+                                   FontSize="15"
+                                   FontAttributes="Bold"
+                                   LineBreakMode="TailTruncation" />
+                        </Grid>
+                    </Border>
+
+                    <Grid ColumnDefinitions="*,Auto" Margin="2,0">
+                        <Label Grid.Column="0" Text="COLECCIÓN" Style="{StaticResource EyebrowLabel}" VerticalOptions="Center" />
+                        <Label Grid.Column="1" Text="CBZ · CBR · PDF"
+                               TextColor="{StaticResource TextMuted}"
+                               FontSize="11" VerticalOptions="Center" />
+                    </Grid>
+
+                </VerticalStackLayout>
+            </CollectionView.Header>
+
             <CollectionView.ItemsLayout>
                 <GridItemsLayout x:Name="LibraryGridLayout"
                                  Orientation="Vertical"
@@ -132,12 +203,12 @@
                                    FontSize="12"
                                    CharacterSpacing="2"
                                    HorizontalTextAlignment="Center" />
-                            <Label Text="Tu biblioteca está vacía"
+                            <Label Text="{Binding EmptyTitle}"
                                    TextColor="{StaticResource TextPrimary}"
                                    FontSize="19"
                                    FontAttributes="Bold"
                                    HorizontalTextAlignment="Center" />
-                            <Label Text="Pulsa 'Abrir Archivo' o 'Escanear Carpeta' para importar cómics (.cbz, .cbr) o PDF."
+                            <Label Text="{Binding EmptyMessage}"
                                    TextColor="{StaticResource TextSecondary}"
                                    HorizontalTextAlignment="Center" />
                         </VerticalStackLayout>
@@ -160,8 +231,7 @@
                         </Border.Triggers>
                         <Border.GestureRecognizers>
                             <TapGestureRecognizer
-                                x:DataType="{x:Null}"
-                                Command="{Binding Source={x:Reference LibraryRootPage}, Path=BindingContext.OpenItemCommand}"
+                                Command="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.OpenItemCommand, x:DataType=views:LibraryPage}"
                                 CommandParameter="{Binding .}" />
                         </Border.GestureRecognizers>
 
@@ -268,7 +338,7 @@
 
         <!-- Pie de estado -->
         <Border x:Name="LibraryFooterBorder"
-                Grid.Row="4"
+                Grid.Row="1"
                 BackgroundColor="{StaticResource Surface1}"
                 Stroke="{StaticResource SubtleBorder}"
                 StrokeThickness="1"

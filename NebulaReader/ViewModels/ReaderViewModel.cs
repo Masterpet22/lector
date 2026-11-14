@@ -546,6 +546,8 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
 
             StartPreloadWorker(book, source, preloadCt);
             RaisePageContentReady();
+            // Registrar también una apertura sin cambio de página para ordenar las lecturas recientes.
+            await PersistProgressAsync();
         }
         catch (OperationCanceledException)
         {

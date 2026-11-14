@@ -22,6 +22,57 @@ public partial class LibraryViewModel : BaseViewModel
     public partial ObservableCollection<LibraryDisplayItem> DisplayItems { get; set; } = new();
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasContinueReading))]
+    public partial ObservableCollection<LibraryDisplayItem> ContinueReadingItems { get; set; } = new();
+
+    public bool HasContinueReading => ContinueReadingItems.Count > 0;
+    public IReadOnlyList<string> FormatOptions { get; } = ["Todos los formatos", "CBZ", "CBR", "PDF"];
+    public IReadOnlyList<string> StatusOptions { get; } = ["Todos los estados", "No leído", "Leyendo", "Completado"];
+
+    [ObservableProperty]
+    public partial string SearchText { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial int SelectedFormatIndex { get; set; }
+
+    [ObservableProperty]
+    public partial int SelectedStatusIndex { get; set; }
+
+    public bool HasActiveFilters => !string.IsNullOrWhiteSpace(SearchText) ||
+        SelectedFormatIndex > 0 || SelectedStatusIndex > 0;
+    public string EmptyTitle => HasActiveFilters ? "No hay resultados" : "Tu biblioteca está vacía";
+    public string EmptyMessage => HasActiveFilters
+        ? "Prueba otra búsqueda o limpia los filtros para ver tus documentos."
+        : "Pulsa 'Abrir archivo' o 'Escanear carpeta' para importar cómics o PDF.";
+    private int _matchingBookCount;
+    private bool _clearingFilters;
+
+    partial void OnSearchTextChanged(string value) => RefreshFilters();
+    partial void OnSelectedFormatIndexChanged(int value) => RefreshFilters();
+    partial void OnSelectedStatusIndexChanged(int value) => RefreshFilters();
+
+    private void RefreshFilters()
+    {
+        if (_clearingFilters) return;
+        OnPropertyChanged(nameof(HasActiveFilters));
+        OnPropertyChanged(nameof(EmptyTitle));
+        OnPropertyChanged(nameof(EmptyMessage));
+        RebuildDisplayItems();
+        UpdateStatusSummary();
+    }
+
+    [RelayCommand]
+    private void ClearFilters()
+    {
+        _clearingFilters = true;
+        SearchText = string.Empty;
+        SelectedFormatIndex = 0;
+        SelectedStatusIndex = 0;
+        _clearingFilters = false;
+        RefreshFilters();
+    }
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(IsInsideGroup))]
     public partial string? ActiveGroupTitle { get; set; }
 
@@ -120,6 +171,10 @@ public partial class LibraryViewModel : BaseViewModel
 
             RebuildDisplayItems();
             UpdateStatusSummary();
+        }
+        catch (Exception ex)
+        {
+            StatusMessage = $"Error al cargar biblioteca: {ex.Message}";
         }
         finally
         {
@@ -244,11 +299,14 @@ public partial class LibraryViewModel : BaseViewModel
 
     private void RebuildDisplayItems()
     {
-        var buckets = BookMetadataExtractor.BuildLibraryGroups(
-            Books,
-            b => b.Title,
-            b => b.SeriesName,
-            b => b.Tags);
+        ContinueReadingItems = new ObservableCollection<LibraryDisplayItem>(
+            LibraryBrowseService.GetContinueReading(Books)
+                .Select(book => LibraryDisplayItem.FromSingleBook(book)));
+
+        var buckets = LibraryBrowseService.FilterGroups(Books, SearchText,
+            SelectedFormatIndex is >= 1 and <= 3 ? (BookFormat)SelectedFormatIndex : null,
+            SelectedStatusIndex is >= 1 and <= 3 ? (ReadingStatus)(SelectedStatusIndex - 1) : null);
+        _matchingBookCount = buckets.Sum(bucket => bucket.Items.Count);
 
         var nextItems = new List<LibraryDisplayItem>();
 
@@ -272,7 +330,9 @@ public partial class LibraryViewModel : BaseViewModel
                 return;
             }
 
-            ActiveGroupTitle = null;
+            // Mantener la navegación si una búsqueda deja esta serie sin coincidencias.
+            DisplayItems = new ObservableCollection<LibraryDisplayItem>();
+            return;
         }
 
         foreach (var bucket in buckets)
@@ -287,6 +347,13 @@ public partial class LibraryViewModel : BaseViewModel
 
     private void UpdateStatusSummary()
     {
+        if (HasActiveFilters)
+        {
+            StatusMessage = IsInsideGroup
+                ? $"{ActiveGroupTitle}: {DisplayItems.Count} documento(s) coinciden."
+                : $"{_matchingBookCount} de {Books.Count} documento(s) coinciden.";
+            return;
+        }
         if (IsInsideGroup)
         {
             StatusMessage = $"{ActiveGroupTitle}: {DisplayItems.Count} documento(s).";

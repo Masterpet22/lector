@@ -1300,6 +1300,17 @@ public partial class ReaderPage : ContentPage
         SyncSliderFromViewModel();
     }
 
+    protected override bool OnBackButtonPressed()
+    {
+        if (ViewModel is not { } vm) return base.OnBackButtonPressed();
+        // Usar la misma salida que el botón del visor: persistir antes de recargar la biblioteca.
+        if (!vm.CloseReaderCommand.IsRunning)
+        {
+            _ = vm.CloseReaderCommand.ExecuteAsync(null);
+        }
+        return true;
+    }
+
     protected override void OnDisappearing()
     {
         base.OnDisappearing();

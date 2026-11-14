@@ -9,10 +9,13 @@ public partial class LibraryPage : ContentPage
 {
     private bool? _isToolbarWideMode;
 
+    public LibraryViewModel ViewModel { get; }
+
     public LibraryPage(LibraryViewModel viewModel)
     {
+        ViewModel = viewModel;
         InitializeComponent();
-        BindingContext = viewModel;
+        BindingContext = ViewModel;
     }
 
     protected override async void OnAppearing()

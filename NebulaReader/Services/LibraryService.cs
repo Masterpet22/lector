@@ -179,8 +179,12 @@ public class LibraryService : ILibraryService
 
                 if (changed)
                 {
-                    await _database.SaveBookAsync(book).ConfigureAwait(false);
-                    _bookUpdatedWeakEvent.HandleEvent(this, book, nameof(BookUpdated));
+                    await _database.UpdateBookMetadataAsync(book).ConfigureAwait(false);
+                    var current = await _database.GetBookByPathAsync(book.FilePath).ConfigureAwait(false);
+                    if (current != null)
+                    {
+                        _bookUpdatedWeakEvent.HandleEvent(this, current, nameof(BookUpdated));
+                    }
                 }
             }
             catch
