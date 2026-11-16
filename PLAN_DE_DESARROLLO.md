@@ -1,4 +1,4 @@
-# Plan de desarrollo de la interfaz de NebulaReader
+# Plan de desarrollo de la interfaz de Nebula Reader
 
 ## Objetivo y punto de partida
 

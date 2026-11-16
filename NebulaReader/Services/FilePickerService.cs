@@ -59,7 +59,7 @@ public partial class FilePickerService : IFilePickerService
         });
         var result = await FilePicker.Default.PickAsync(new PickOptions
         {
-            PickerTitle = "Selecciona un respaldo de NebulaReader (.json)",
+            PickerTitle = "Selecciona un respaldo de Nebula Reader (.json)",
             FileTypes = fileTypes
         });
         return result == null ? null : await result.OpenReadAsync();

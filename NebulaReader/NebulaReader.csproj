@@ -16,7 +16,7 @@
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
 
 		<!-- Display name -->
-		<ApplicationTitle>NebulaReader</ApplicationTitle>
+		<ApplicationTitle>Nebula Reader</ApplicationTitle>
 
 		<!-- App Identifier -->
 		<ApplicationId>com.masterpet.nebulareader</ApplicationId>

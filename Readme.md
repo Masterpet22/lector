@@ -1,4 +1,4 @@
-# NebulaReader
+# Nebula Reader
 
 Lector de cómics y documentos **CBZ, CBR y PDF** para **Android y Windows**, desarrollado con .NET 10 y .NET MAUI. Permite organizar una biblioteca local, continuar la lectura desde la última página y adaptar el visor a cómics, manga y documentos.
 
@@ -37,7 +37,7 @@ Los siguientes archivos se generan al publicar el proyecto; la carpeta `releases
 
 1. Copia `releases/android/com.masterpet.nebulareader-Signed.apk` al dispositivo Android ARM64.
 2. Abre la APK y, si Android lo solicita, permite la instalación desde la aplicación con la que abriste el archivo.
-3. Completa la instalación y abre **NebulaReader**.
+3. Completa la instalación y abre **Nebula Reader**.
 
 La compilación local utiliza un certificado de desarrollo. Para distribuir actualizaciones con una identidad de firma propia o publicar en una tienda, configura un keystore de distribución y conserva sus credenciales fuera del repositorio.
 

@@ -1,6 +1,6 @@
 # Herramientas de desarrollo
 
-La rama contiene **NebulaReader**, una aplicación .NET MAUI dirigida a Android
+La rama contiene **Nebula Reader**, una aplicación .NET MAUI dirigida a Android
 (`net10.0-android`). No es un proyecto Android/Gradle independiente: se compila
 desde `NebulaReader.slnx` y `NebulaReader/NebulaReader.csproj`.
 
