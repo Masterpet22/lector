@@ -35,7 +35,7 @@ Los siguientes archivos se generan al publicar el proyecto; la carpeta `releases
 
 ### Android
 
-1. Copia `releases/android/com.masterpet.nebulareader-Signed.apk` al dispositivo Android ARM64.
+1. Copia `releases/android/app.nebulareader.mobile-Signed.apk` al dispositivo Android ARM64.
 2. Abre la APK y, si Android lo solicita, permite la instalación desde la aplicación con la que abriste el archivo.
 3. Completa la instalación y abre **Nebula Reader**.
 
@@ -121,7 +121,7 @@ dotnet workload install maui-windows
 dotnet publish NebulaReader/NebulaReader.csproj -f net10.0-android -p:TargetFrameworks=net10.0-android -r android-arm64 -c Release -p:AndroidPackageFormats=apk -o releases/android
 ```
 
-El paquete instalable se genera como `releases/android/com.masterpet.nebulareader-Signed.apk`. Esta configuración compila exclusivamente para ARM64.
+El paquete instalable se genera como `releases/android/app.nebulareader.mobile-Signed.apk`. Esta configuración compila exclusivamente para ARM64.
 
 ### Generar el ejecutable Windows x64
 
