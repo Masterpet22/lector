@@ -11,8 +11,8 @@
              BackgroundColor="{StaticResource BgCanvas}"
              Title="{Binding Title}">
 
-    <Grid x:Name="LibraryRootGrid" RowDefinitions="*,Auto" ColumnDefinitions="Auto,*"
-          Padding="18,16" RowSpacing="12" ColumnSpacing="16">
+    <Grid x:Name="LibraryRootGrid" RowDefinitions="*,Auto" ColumnDefinitions="0,*"
+          Padding="18,16" RowSpacing="12" ColumnSpacing="0">
         <Border x:Name="PrimarySidebar" Grid.Row="0" Grid.Column="0"
                 Style="{StaticResource SectionPanel}"
                 WidthRequest="246" IsVisible="False" Padding="14"

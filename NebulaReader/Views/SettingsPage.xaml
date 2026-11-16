@@ -7,6 +7,7 @@
              x:Class="NebulaReader.Views.SettingsPage"
              x:Name="SettingsRootPage"
              x:DataType="vm:SettingsViewModel"
+             Shell.NavBarIsVisible="False"
              BackgroundColor="{StaticResource BgCanvas}"
              Title="{Binding Title}">
 

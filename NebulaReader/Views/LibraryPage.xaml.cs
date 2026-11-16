@@ -116,6 +116,7 @@ public partial class LibraryPage : ContentPage
         PrimarySidebar.IsVisible = isWide;
         PrimarySidebar.WidthRequest = Math.Clamp(width * 0.2, 200, 246);
         BottomNavigation.IsVisible = !isWide;
+        ApplyRootGridMetrics(isWide);
         ManagementHeaderButton.IsVisible = !isWide;
         CompactFilterToggle.IsVisible = isCompact;
         InlineFilters.IsVisible = !isCompact && !isWide;
@@ -126,10 +127,47 @@ public partial class LibraryPage : ContentPage
         UpdateContentLayout(contentWidth);
     }
 
+    private const double SidebarSpacing = 16;
+
+    /// <summary>
+    /// Fija el ancho de la columna del panel lateral y la fila de navegación inferior. Con columnas Auto,
+    /// cambiar IsVisible durante OnSizeAllocated no remedía el Grid y la columna central conservaba el ancho
+    /// de pantalla completo, de modo que el contenido se salía por la derecha.
+    /// </summary>
+    private void ApplyRootGridMetrics(bool isWide)
+    {
+        var sidebarColumn = isWide ? PrimarySidebar.WidthRequest : 0;
+        var changed = false;
+
+        if (LibraryRootGrid.ColumnDefinitions[0].Width.Value != sidebarColumn ||
+            !LibraryRootGrid.ColumnDefinitions[0].Width.IsAbsolute)
+        {
+            LibraryRootGrid.ColumnDefinitions[0].Width = new GridLength(sidebarColumn);
+            changed = true;
+        }
+
+        var spacing = isWide ? SidebarSpacing : 0;
+        if (LibraryRootGrid.ColumnSpacing != spacing)
+        {
+            LibraryRootGrid.ColumnSpacing = spacing;
+            changed = true;
+        }
+
+        var bottomRow = isWide ? new GridLength(0) : GridLength.Auto;
+        if (LibraryRootGrid.RowDefinitions[1].Height != bottomRow)
+        {
+            LibraryRootGrid.RowDefinitions[1].Height = bottomRow;
+            changed = true;
+        }
+
+        if (changed)
+            Dispatcher.Dispatch(() => LibraryRootGrid.InvalidateMeasure());
+    }
+
     private double GetVisibleContentWidth(double pageWidth)
     {
         var expectedWidth = pageWidth - LibraryRootGrid.Padding.HorizontalThickness -
-            (PrimarySidebar.IsVisible ? PrimarySidebar.WidthRequest + LibraryRootGrid.ColumnSpacing : 0);
+            (PrimarySidebar.IsVisible ? PrimarySidebar.WidthRequest + SidebarSpacing : 0);
 
         return ResponsiveLayout.GetVisibleWidth(expectedWidth, MainContentGrid.Width,
             LibraryCollection.IsVisible ? LibraryCollection.Width : 0);
