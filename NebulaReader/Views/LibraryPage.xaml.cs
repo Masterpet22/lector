@@ -1,5 +1,7 @@
 using NebulaReader.ViewModels;
 using NebulaReader.Models;
+using NebulaReader.Services;
+using System.ComponentModel;
 
 namespace NebulaReader.Views;
 
@@ -8,7 +10,12 @@ namespace NebulaReader.Views;
 /// </summary>
 public partial class LibraryPage : ContentPage
 {
-    private bool? _isToolbarWideMode;
+    private const string LibraryViewPreferenceKey = "library_view_mode";
+    private int _firstVisibleLibraryItem;
+    private bool _restoringLibraryPosition;
+    private bool _initialLoadStarted;
+    private int _notificationVersion;
+    private DataTemplate? _cardTemplate;
 
     public LibraryViewModel ViewModel { get; }
 
@@ -16,7 +23,10 @@ public partial class LibraryPage : ContentPage
     {
         ViewModel = viewModel;
         InitializeComponent();
+        _cardTemplate = LibraryCollection.ItemTemplate as DataTemplate;
+        LibraryViewPicker.SelectedIndex = Math.Clamp(Preferences.Default.Get(LibraryViewPreferenceKey, 2), 0, 7);
         BindingContext = ViewModel;
+        ViewModel.PropertyChanged += OnViewModelPropertyChanged;
     }
 
     protected override async void OnAppearing()
@@ -24,9 +34,22 @@ public partial class LibraryPage : ContentPage
         base.OnAppearing();
         UpdateAdaptiveLayout(Width, Height);
 
-        if (BindingContext is LibraryViewModel vm)
+        if (_initialLoadStarted || BindingContext is not LibraryViewModel vm) return;
+        _initialLoadStarted = true;
+
+        try
         {
+            _restoringLibraryPosition = true;
+            StartupLoadingStatus.Text = "Cargando biblioteca...";
             await vm.LoadLibraryCommand.ExecuteAsync(null);
+            StartupLoadingStatus.Text = "Actualizando biblioteca...";
+            await vm.SynchronizeLibraryAsync();
+            RestoreLibraryPosition();
+        }
+        finally
+        {
+            StartupLoadingOverlay.IsVisible = false;
+            ShowSyncNotification(vm.ImportSummary);
         }
     }
 
@@ -36,11 +59,36 @@ public partial class LibraryPage : ContentPage
         UpdateAdaptiveLayout(width, height);
     }
 
+    private void OnMainContentSizeChanged(object? sender, EventArgs e)
+    {
+        if (MainContentGrid.Width <= 0) return;
+        var contentWidth = GetVisibleContentWidth(Width);
+        UpdateHeaderLayout(contentWidth, Width >= 1000, Width < 760);
+        UpdateContentLayout(contentWidth);
+    }
+
+    private void OnLibraryCollectionSizeChanged(object? sender, EventArgs e)
+    {
+        if (LibraryCollection.Width > 0)
+            UpdateContentLayout(GetVisibleContentWidth(Width));
+    }
+
+    private void OnHomeScrollSizeChanged(object? sender, EventArgs e)
+    {
+        if (HomeScroll.Width > 0) UpdateRecentCardWidth(HomeScroll.Width);
+    }
+
     protected override bool OnBackButtonPressed()
     {
-        if (BindingContext is LibraryViewModel vm && vm.IsInsideGroup)
+        if (BindingContext is LibraryViewModel vm && vm.IsLibrarySelected && vm.IsInsideGroup)
         {
             vm.ExitGroupCommand.Execute(null);
+            return true;
+        }
+
+        if (BindingContext is LibraryViewModel { IsLibrarySelected: true } library)
+        {
+            library.ShowHomeCommand.Execute(null);
             return true;
         }
 
@@ -55,6 +103,8 @@ public partial class LibraryPage : ContentPage
         }
 
         var isCompactHeight = height < 520;
+        var isWide = width >= 1000;
+        var isCompact = width < 760;
 
         // 1. Espaciado adaptable para evitar recortes en móviles horizontales de altura reducida
         LibraryRootGrid.Padding = isCompactHeight ? new Thickness(10, 6) : new Thickness(18, 16);
@@ -63,115 +113,233 @@ public partial class LibraryPage : ContentPage
         LibraryBreadcrumbBorder.Padding = isCompactHeight ? new Thickness(10, 6) : new Thickness(12, 9);
         LibraryFooterBorder.Padding = isCompactHeight ? new Thickness(10, 5) : new Thickness(14, 9);
 
-        UpdateToolbarLayout(width, isCompactHeight);
+        PrimarySidebar.IsVisible = isWide;
+        PrimarySidebar.WidthRequest = Math.Clamp(width * 0.2, 200, 246);
+        BottomNavigation.IsVisible = !isWide;
+        ManagementHeaderButton.IsVisible = !isWide;
+        CompactFilterToggle.IsVisible = isCompact;
+        InlineFilters.IsVisible = !isCompact && !isWide;
+        ViewModel.UseCompactFilters = isCompact;
 
-        // 2. Columnas adaptables para pantallas móviles (320dp..920dp), tabletas y monitores (HD/FHD/2K/4K)
-        int targetSpan;
-        if (DeviceInfo.Current.Idiom == DeviceIdiom.Phone)
+        var contentWidth = GetVisibleContentWidth(width);
+        UpdateHeaderLayout(contentWidth, isWide, isCompact);
+        UpdateContentLayout(contentWidth);
+    }
+
+    private double GetVisibleContentWidth(double pageWidth)
+    {
+        var expectedWidth = pageWidth - LibraryRootGrid.Padding.HorizontalThickness -
+            (PrimarySidebar.IsVisible ? PrimarySidebar.WidthRequest + LibraryRootGrid.ColumnSpacing : 0);
+
+        return ResponsiveLayout.GetVisibleWidth(expectedWidth, MainContentGrid.Width,
+            LibraryCollection.IsVisible ? LibraryCollection.Width : 0);
+    }
+
+    private void UpdateHeaderLayout(double contentWidth, bool isWide, bool isCompact)
+    {
+        var stackedToolbar = contentWidth < 560;
+        LibraryToolbarGrid.RowSpacing = stackedToolbar ? 8 : 0;
+        Grid.SetColumnSpan(LibraryToolbarTitle, stackedToolbar ? 4 : 1);
+        Grid.SetRow(AddHeaderButton, stackedToolbar ? 1 : 0);
+        Grid.SetColumn(AddHeaderButton, stackedToolbar ? 0 : 1);
+        Grid.SetColumnSpan(AddHeaderButton, stackedToolbar ? 2 : 1);
+        Grid.SetRow(RefreshLibraryButton, stackedToolbar ? 1 : 0);
+        Grid.SetColumn(RefreshLibraryButton, 2);
+        Grid.SetColumnSpan(RefreshLibraryButton, stackedToolbar ? 2 : 1);
+        Grid.SetRow(ManagementHeaderButton, stackedToolbar ? 2 : 0);
+        Grid.SetColumn(ManagementHeaderButton, stackedToolbar ? 0 : 3);
+        Grid.SetColumnSpan(ManagementHeaderButton, stackedToolbar ? 4 : 1);
+
+        var stackedSearch = contentWidth < 520;
+        Grid.SetColumnSpan(LibrarySearchBar, stackedSearch ? 2 : 1);
+        Grid.SetRow(CompactFilterToggle, stackedSearch ? 1 : 0);
+        Grid.SetColumn(CompactFilterToggle, stackedSearch ? 0 : 1);
+        Grid.SetColumnSpan(CompactFilterToggle, stackedSearch ? 2 : 1);
+        if (!isWide && !isCompact)
         {
-            targetSpan = width >= 720 ? 4 : (width >= 500 ? 3 : 2);
-        }
-        else if (DeviceInfo.Current.Idiom == DeviceIdiom.Tablet)
-        {
-            targetSpan = Math.Clamp((int)Math.Floor(width / 195.0), 3, 6);
+            Grid.SetRow(InlineFilters, 0);
+            Grid.SetColumn(InlineFilters, 1);
+            Grid.SetColumnSpan(InlineFilters, 1);
+            InlineFilters.WidthRequest = Math.Min(360, Math.Max(0, contentWidth * 0.43));
         }
         else
         {
-            targetSpan = width >= 900
-                ? Math.Clamp((int)Math.Floor(width / 195.0), 4, 8)
-                : Math.Clamp((int)Math.Floor(width / 180.0), 2, 4);
+            Grid.SetRow(InlineFilters, 1);
+            Grid.SetColumn(InlineFilters, 0);
+            Grid.SetColumnSpan(InlineFilters, 2);
+            InlineFilters.WidthRequest = -1;
         }
 
-        if (LibraryGridLayout.Span != targetSpan)
+    }
+
+    private void UpdateContentLayout(double contentWidth)
+    {
+        if (contentWidth <= 0 || LibraryGridLayout == null) return;
+
+        var mode = Math.Max(0, LibraryViewPicker.SelectedIndex);
+        DetailsColumnHeader.IsVisible = mode == 5;
+        var isCard = mode <= 2;
+        var isCompactIcon = mode is 3 or 6;
+        var templateKey = mode switch
         {
-            LibraryGridLayout.Span = targetSpan;
+            3 or 6 => "CompactIconTemplate",
+            4 => "ListItemTemplate",
+            5 => "DetailsItemTemplate",
+            7 => "ContentItemTemplate",
+            _ => null
+        };
+        var template = templateKey is null ? _cardTemplate : LibraryCollection.Resources[templateKey] as DataTemplate;
+        if (template != null && !ReferenceEquals(LibraryCollection.ItemTemplate, template))
+            LibraryCollection.ItemTemplate = template;
+
+        // Reservar unos DIP para el scrollbar y medir con el ancho real del área central.
+        var hSpacing = Height < 520 ? 7.0 : 10.0;
+        var gridWidth = Math.Max(0, contentWidth - 8);
+        var minimumItemWidth = mode switch
+        {
+            0 => 320.0,
+            1 => 260.0,
+            2 => 200.0,
+            3 => 120.0,
+            6 => 96.0,
+            _ => gridWidth
+        };
+        var targetSpan = isCard || isCompactIcon
+            ? ResponsiveLayout.GetColumnCount(gridWidth, minimumItemWidth, hSpacing, 12)
+            : 1;
+
+        if (LibraryCollection.ItemsLayout is GridItemsLayout currentLayout && currentLayout.Span != targetSpan)
+        {
+            // WinUI necesita un nuevo ItemsLayout para distribuir de nuevo las tarjetas al reducir la ventana.
+            LibraryCollection.ItemsLayout = new GridItemsLayout(targetSpan, ItemsLayoutOrientation.Vertical)
+            {
+                HorizontalItemSpacing = hSpacing,
+                VerticalItemSpacing = hSpacing
+            };
+            if (ViewModel.IsLibrarySelected) RestoreLibraryPosition();
         }
 
-        var hSpacing = isCompactHeight ? 8.0 : 14.0;
-        LibraryGridLayout.HorizontalItemSpacing = hSpacing;
-        LibraryGridLayout.VerticalItemSpacing = hSpacing;
-
-        // 3. Alto proporcional de portada para que las tarjetas mantengan proporción sin desbordar ni cortarse
-        var horizontalChrome = LibraryRootGrid.Padding.HorizontalThickness + ((targetSpan - 1) * hSpacing);
-        var approxColWidth = Math.Max(110.0, (width - horizontalChrome) / targetSpan);
-        var desiredCoverHeight = Math.Clamp(approxColWidth * 1.28, 130.0, 245.0);
-
-        if (isCompactHeight)
+        if (LibraryCollection.ItemsLayout is GridItemsLayout gridLayout)
         {
-            desiredCoverHeight = Math.Min(desiredCoverHeight, Math.Clamp(height * 0.36, 110.0, 155.0));
+            gridLayout.HorizontalItemSpacing = hSpacing;
+            gridLayout.VerticalItemSpacing = hSpacing;
         }
 
-        if (BindingContext is LibraryViewModel vm)
+        // Las tarjetas mantienen sus acciones; las vistas compactas abren al tocar el elemento.
+        var approxColWidth = Math.Max(110.0, (gridWidth - ((targetSpan - 1) * hSpacing)) / targetSpan);
+        ViewModel.UseStackedBookActions = approxColWidth < 190;
+        var desiredCoverHeight = mode switch
         {
-            vm.UpdateCardCoverHeight(Math.Round(desiredCoverHeight));
+            0 => Math.Clamp(approxColWidth * 0.85, 180.0, 280.0),
+            1 => Math.Clamp(approxColWidth * 0.85, 150.0, 220.0),
+            _ => Math.Clamp(approxColWidth * 0.85, 110.0, 180.0)
+        };
+
+        if (Height < 520)
+        {
+            desiredCoverHeight = Math.Min(desiredCoverHeight, Math.Clamp(Height * 0.32, 100.0, 140.0));
+        }
+
+        UpdateRecentCardWidth(contentWidth);
+        ViewModel.UpdateCardCoverHeight(Math.Round(desiredCoverHeight));
+    }
+
+    private void OnLibraryViewChanged(object sender, EventArgs e)
+    {
+        if (LibraryViewPicker.SelectedIndex < 0 || LibraryGridLayout == null) return;
+        Preferences.Default.Set(LibraryViewPreferenceKey, LibraryViewPicker.SelectedIndex);
+        _firstVisibleLibraryItem = 0;
+        UpdateContentLayout(GetVisibleContentWidth(Width));
+        if (ViewModel.IsLibrarySelected) LibraryCollection.ScrollTo(0, position: ScrollToPosition.Start, animate: false);
+    }
+
+    private void UpdateRecentCardWidth(double contentWidth)
+    {
+        // ScrollView puede reservar una barra vertical dentro de su Width. Dejar aire
+        // adicional evita que el borde derecho de la última tarjeta quede recortado.
+        var viewportWidth = HomeScroll.Width > 0 ? Math.Min(contentWidth, HomeScroll.Width) : contentWidth;
+        ViewModel.RecentCardWidth = Math.Round(ResponsiveLayout.GetRecentCardWidth(viewportWidth));
+    }
+
+    private void OnViewModelPropertyChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName is nameof(LibraryViewModel.SearchText) or
+            nameof(LibraryViewModel.SelectedFormatIndex) or
+            nameof(LibraryViewModel.SelectedStatusIndex) or
+            nameof(LibraryViewModel.ActiveGroupTitle))
+        {
+            _firstVisibleLibraryItem = 0;
+            _restoringLibraryPosition = true;
+            RestoreLibraryPosition();
+        }
+        else if (e.PropertyName == nameof(LibraryViewModel.IsHomeSelected))
+        {
+            _restoringLibraryPosition = true;
+            RestoreLibraryPosition();
         }
     }
 
-    private void UpdateToolbarLayout(double width, bool isCompactHeight)
+    private void OnLibraryScrolled(object sender, ItemsViewScrolledEventArgs e)
     {
-        if (LibraryToolbarGrid == null)
-        {
-            return;
-        }
-
-        LibraryToolbarGrid.RowSpacing = isCompactHeight ? 6 : 8;
-        LibraryToolbarGrid.ColumnSpacing = isCompactHeight ? 6 : 8;
-
-        var isWide = width >= 660;
-        if (_isToolbarWideMode == isWide)
-        {
-            return;
-        }
-
-        _isToolbarWideMode = isWide;
-
-        LibraryToolbarGrid.ColumnDefinitions.Clear();
-        LibraryToolbarGrid.RowDefinitions.Clear();
-
-        if (isWide)
-        {
-            LibraryToolbarGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
-            LibraryToolbarGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
-            LibraryToolbarGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
-            LibraryToolbarGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Auto));
-            LibraryToolbarGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
-            LibraryToolbarGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-
-            SetToolbarItemPlacement(OpenFileButton, 0, 0, LayoutOptions.Start);
-            SetToolbarItemPlacement(ScanFolderButton, 0, 1, LayoutOptions.Start);
-            SetToolbarItemPlacement(SettingsButton, 0, 2, LayoutOptions.Start);
-            SetToolbarItemPlacement(FullScreenButton, 0, 3, LayoutOptions.Start);
-
-            Grid.SetRow(ToolbarBusyIndicator, 0);
-            Grid.SetColumn(ToolbarBusyIndicator, 4);
-            Grid.SetColumnSpan(ToolbarBusyIndicator, 1);
-            ToolbarBusyIndicator.HorizontalOptions = LayoutOptions.Start;
-        }
-        else
-        {
-            LibraryToolbarGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
-            LibraryToolbarGrid.ColumnDefinitions.Add(new ColumnDefinition(GridLength.Star));
-            LibraryToolbarGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-            LibraryToolbarGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-            LibraryToolbarGrid.RowDefinitions.Add(new RowDefinition(GridLength.Auto));
-
-            SetToolbarItemPlacement(OpenFileButton, 0, 0, LayoutOptions.Fill);
-            SetToolbarItemPlacement(ScanFolderButton, 0, 1, LayoutOptions.Fill);
-            SetToolbarItemPlacement(SettingsButton, 1, 0, LayoutOptions.Fill);
-            SetToolbarItemPlacement(FullScreenButton, 1, 1, LayoutOptions.Fill);
-
-            Grid.SetRow(ToolbarBusyIndicator, 2);
-            Grid.SetColumn(ToolbarBusyIndicator, 0);
-            Grid.SetColumnSpan(ToolbarBusyIndicator, 2);
-            ToolbarBusyIndicator.HorizontalOptions = LayoutOptions.Center;
-        }
+        if (!_restoringLibraryPosition && ViewModel.IsLibrarySelected && e.FirstVisibleItemIndex >= 0)
+            _firstVisibleLibraryItem = e.FirstVisibleItemIndex;
     }
 
-    private static void SetToolbarItemPlacement(View view, int row, int column, LayoutOptions horizontalOptions)
+    private void RestoreLibraryPosition()
     {
-        Grid.SetRow(view, row);
-        Grid.SetColumn(view, column);
-        view.HorizontalOptions = horizontalOptions;
+        if (!ViewModel.IsLibrarySelected) return;
+        if (ViewModel.DisplayItems.Count == 0)
+        {
+            _restoringLibraryPosition = false;
+            return;
+        }
+
+        var index = Math.Min(_firstVisibleLibraryItem, ViewModel.DisplayItems.Count - 1);
+        Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(80), () =>
+        {
+            if (ViewModel.IsLibrarySelected && ViewModel.DisplayItems.Count > index)
+                LibraryCollection.ScrollTo(index, position: ScrollToPosition.Start, animate: false);
+
+            Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(120), () =>
+                _restoringLibraryPosition = false);
+        });
+    }
+
+    private async void OnAddClicked(object sender, EventArgs e)
+    {
+        var action = await DisplayActionSheetAsync("Añadir a la biblioteca", "Cancelar", null,
+            "Abrir archivo", "Escanear carpeta");
+
+        if (action == "Abrir archivo")
+            await ViewModel.OpenFileCommand.ExecuteAsync(null);
+        else if (action == "Escanear carpeta")
+            await ViewModel.ImportFolderCommand.ExecuteAsync(null);
+    }
+
+    private async void OnRefreshLibraryClicked(object sender, EventArgs e)
+    {
+        if (ViewModel.IsBusy) return;
+        await ViewModel.SynchronizeLibraryAsync();
+        ShowSyncNotification(ViewModel.ImportSummary);
+    }
+
+    private void ShowSyncNotification(string message)
+    {
+        if (string.IsNullOrWhiteSpace(message)) return;
+
+        var version = ++_notificationVersion;
+        LibrarySyncNotificationText.Text = message;
+        LibrarySyncNotification.IsVisible = true;
+        Dispatcher.DispatchDelayed(TimeSpan.FromSeconds(5), () =>
+        {
+            if (version == _notificationVersion)
+                LibrarySyncNotification.IsVisible = false;
+        });
+    }
+
+    private async void OnManagementClicked(object sender, EventArgs e)
+    {
+        await Navigation.PushAsync(new ManagementPage(ViewModel));
     }
 
     private async void OnBookActionsClicked(object sender, EventArgs e)

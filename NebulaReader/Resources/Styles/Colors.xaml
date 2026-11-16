@@ -22,7 +22,7 @@
 
     <Color x:Key="TextPrimary">#F5F3FF</Color>
     <Color x:Key="TextSecondary">#A99FC8</Color>
-    <Color x:Key="TextMuted">#766B99</Color>
+    <Color x:Key="TextMuted">#978BB8</Color>
 
     <!-- Tokens base MAUI alineados al tema oscuro neón -->
     <Color x:Key="Primary">#B026FF</Color>

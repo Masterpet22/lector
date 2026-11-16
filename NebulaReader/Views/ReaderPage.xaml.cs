@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using NebulaReader.Models;
+using NebulaReader.Services;
 using NebulaReader.ViewModels;
 using SkiaSharp;
 using SkiaSharp.Views.Maui;
@@ -93,6 +94,7 @@ public partial class ReaderPage : ContentPage
     private int _pendingSliderPage = 1;
     private CancellationTokenSource? _sliderTrackClickCts;
     private bool _platformInputAttached;
+    private CancellationTokenSource? _hudHideCts;
 
     private SKSamplingOptions CurrentSampling => _isActivelyInteracting ? FastGestureSampling : HighQualitySampling;
 
@@ -151,6 +153,13 @@ public partial class ReaderPage : ContentPage
             MainThread.BeginInvokeOnMainThread(SyncSliderFromViewModel);
         }
 
+        if (e.PropertyName is nameof(ReaderViewModel.IsHudVisible)
+            or nameof(ReaderViewModel.IsReadingOptionsVisible)
+            or nameof(ReaderViewModel.IsNavigationOverlayVisible))
+        {
+            MainThread.BeginInvokeOnMainThread(ScheduleHudHide);
+        }
+
         if (e.PropertyName is nameof(ReaderViewModel.PageFitMode) or nameof(ReaderViewModel.LayoutMode))
         {
             ResetZoomAndVerticalPosition();
@@ -170,10 +179,50 @@ public partial class ReaderPage : ContentPage
     protected override void OnAppearing()
     {
         base.OnAppearing();
+        if (_readerSurfaceView.Handler?.PlatformView != null)
+        {
+            AttachPlatformInput(_readerSurfaceView);
+            _platformInputAttached = true;
+        }
+        if (ViewModel is { } vm) vm.IsHudVisible = true;
         ViewModel?.UpdateViewportSize(Width, Height);
         UpdateAdaptiveHudLayout(Width, Height);
         SyncSliderFromViewModel();
         InvalidateCanvasSurface();
+        ScheduleHudHide();
+    }
+
+    private void RevealHud()
+    {
+        if (ViewModel is not { } vm || vm.IsNavigationOverlayVisible) return;
+        vm.IsHudVisible = true;
+        ScheduleHudHide();
+    }
+
+    private void ScheduleHudHide()
+    {
+        _hudHideCts?.Cancel();
+        _hudHideCts?.Dispose();
+        _hudHideCts = null;
+        if (ViewModel is not { IsHudVisible: true, IsReadingOptionsVisible: false, IsNavigationOverlayVisible: false }) return;
+        var cts = new CancellationTokenSource();
+        _hudHideCts = cts;
+        _ = HideHudAfterInactivityAsync(cts.Token);
+    }
+
+    private async Task HideHudAfterInactivityAsync(CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(5), token);
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                if (!token.IsCancellationRequested && !_sliderDragActive && !_isActivelyInteracting
+                    && ViewModel is { IsReadingOptionsVisible: false, IsNavigationOverlayVisible: false } vm)
+                    vm.IsHudVisible = false;
+            });
+        }
+        catch (OperationCanceledException) { }
     }
 
     protected override void OnSizeAllocated(double width, double height)
@@ -197,12 +246,41 @@ public partial class ReaderPage : ContentPage
 
         TopHudBar.Margin = isCompactHeight ? new Thickness(8, 6, 8, 0) : new Thickness(14, 14, 14, 0);
         TopHudBar.Padding = isCompactHeight ? new Thickness(10, 8) : new Thickness(14, 12);
-        TopHudGrid.RowSpacing = isCompactHeight ? 6 : 10;
-        TopButtonsScroll.MaximumHeightRequest = 48;
+        var compactWidth = width < 900;
+        var veryNarrow = width < 340;
+        TopHudGrid.RowSpacing = compactWidth ? 6 : 0;
+        Grid.SetColumnSpan(ReaderTitleLabel, compactWidth ? 3 : 1);
+        Grid.SetRow(GoToPageButton, compactWidth ? 1 : 0);
+        Grid.SetColumn(GoToPageButton, compactWidth ? 0 : 2);
+        Grid.SetColumnSpan(GoToPageButton, veryNarrow ? 4 : compactWidth ? 2 : 1);
+        Grid.SetRow(ReadingOptionsButton, veryNarrow ? 2 : compactWidth ? 1 : 0);
+        Grid.SetColumn(ReadingOptionsButton, compactWidth && !veryNarrow ? 2 : veryNarrow ? 0 : 3);
+        Grid.SetColumnSpan(ReadingOptionsButton, veryNarrow ? 4 : compactWidth ? 2 : 1);
+        GoToPageButton.Text = "Ir a página";
+        ReadingOptionsButton.Text = "Opciones de lectura";
+        ReadingOptionsPanel.WidthRequest = Math.Min(340, Math.Max(0, width - 16));
+        var thumbnailSpan = ResponsiveLayout.GetColumnCount(width - 30, 140, 10, 8);
+        if (ThumbnailGridLayout.Span != thumbnailSpan)
+        {
+            ThumbnailGridLayout.Span = thumbnailSpan;
+            if (ViewModel is { IsThumbnailGridVisible: true } reader)
+                Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(80), () =>
+                    ThumbnailsView.ScrollTo(reader.CurrentPageIndex, position: ScrollToPosition.Center, animate: false));
+        }
 
         BottomHudBar.Margin = isCompactHeight ? new Thickness(8, 0, 8, 6) : new Thickness(14, 0, 14, 14);
         BottomHudBar.Padding = isCompactHeight ? new Thickness(12, 6) : new Thickness(16, 10, 16, 12);
         BottomHudStack.Spacing = isCompactHeight ? 2 : 6;
+        var stackedNavigation = width < 360;
+        BottomNavigationGrid.RowSpacing = stackedNavigation ? 6 : 0;
+        Grid.SetRow(PageIndicatorLabel, 0);
+        Grid.SetColumn(PageIndicatorLabel, stackedNavigation ? 0 : 1);
+        Grid.SetColumnSpan(PageIndicatorLabel, stackedNavigation ? 3 : 1);
+        Grid.SetRow(PreviousPageButton, stackedNavigation ? 1 : 0);
+        Grid.SetRow(NextPageButton, stackedNavigation ? 1 : 0);
+        var pageButtonPadding = width < 400 ? new Thickness(5, 8) : new Thickness(12, 8);
+        PreviousPageButton.Padding = pageButtonPadding;
+        NextPageButton.Padding = pageButtonPadding;
 
         if (width > 980)
         {
@@ -1240,6 +1318,7 @@ public partial class ReaderPage : ContentPage
     {
         _sliderDragActive = true;
         _sliderTrackClickCts?.Cancel();
+        _hudHideCts?.Cancel();
     }
 
     private void OnPageSliderValueChanged(object? sender, ValueChangedEventArgs e)
@@ -1298,6 +1377,7 @@ public partial class ReaderPage : ContentPage
         ResetZoomAndVerticalPosition();
         await vm.OnSliderPageSelectedAsync(_pendingSliderPage);
         SyncSliderFromViewModel();
+        ScheduleHudHide();
     }
 
     private void OnShowThumbnailsClicked(object? sender, EventArgs e)
@@ -1326,6 +1406,11 @@ public partial class ReaderPage : ContentPage
     protected override bool OnBackButtonPressed()
     {
         if (ViewModel is not { } vm) return base.OnBackButtonPressed();
+        if (vm.IsReadingOptionsVisible)
+        {
+            vm.CloseReadingOptionsCommand.Execute(null);
+            return true;
+        }
         if (vm.IsNavigationOverlayVisible)
         {
             vm.CloseNavigationOverlayCommand.Execute(null);
@@ -1343,6 +1428,10 @@ public partial class ReaderPage : ContentPage
     {
         base.OnDisappearing();
         ViewModel?.CloseNavigationOverlayCommand.Execute(null);
+        ViewModel?.CloseReadingOptionsCommand.Execute(null);
+        _hudHideCts?.Cancel();
+        _hudHideCts?.Dispose();
+        _hudHideCts = null;
         StopFlingInertia();
         _sliderTrackClickCts?.Cancel();
         _sliderTrackClickCts?.Dispose();

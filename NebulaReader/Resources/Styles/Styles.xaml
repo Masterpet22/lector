@@ -33,7 +33,7 @@
         <Setter Property="CornerRadius" Value="14"/>
         <Setter Property="Padding" Value="14,10"/>
         <Setter Property="MinimumHeightRequest" Value="44"/>
-        <Setter Property="MinimumWidthRequest" Value="40"/>
+        <Setter Property="MinimumWidthRequest" Value="44"/>
         <Setter Property="VisualStateManager.VisualStateGroups">
             <VisualStateGroupList>
                 <VisualStateGroup x:Name="CommonStates">
@@ -42,6 +42,13 @@
                         <VisualState.Setters>
                             <Setter Property="BackgroundColor" Value="{StaticResource Surface3}" />
                             <Setter Property="BorderColor" Value="{StaticResource NeonPurpleBright}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="Focused">
+                        <VisualState.Setters>
+                            <Setter Property="BorderColor" Value="{StaticResource NeonPurpleBright}" />
+                            <Setter Property="BorderWidth" Value="2" />
+                            <Setter Property="BackgroundColor" Value="{StaticResource Surface3}" />
                         </VisualState.Setters>
                     </VisualState>
                     <VisualState x:Name="Disabled">
@@ -67,6 +74,7 @@
         <Setter Property="CornerRadius" Value="14"/>
         <Setter Property="Padding" Value="16,10"/>
         <Setter Property="MinimumHeightRequest" Value="44"/>
+        <Setter Property="MinimumWidthRequest" Value="44"/>
         <Setter Property="Shadow">
             <Shadow Brush="{StaticResource NeonPurple}" Offset="0,2" Radius="10" Opacity="0.22" />
         </Setter>
@@ -78,6 +86,13 @@
                         <VisualState.Setters>
                             <Setter Property="BackgroundColor" Value="{StaticResource NeonPurpleBright}" />
                             <Setter Property="TextColor" Value="{StaticResource BgCanvas}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="Focused">
+                        <VisualState.Setters>
+                            <Setter Property="BorderColor" Value="{StaticResource White}" />
+                            <Setter Property="BorderWidth" Value="2" />
+                            <Setter Property="BackgroundColor" Value="{StaticResource NeonPurpleDeep}" />
                         </VisualState.Setters>
                     </VisualState>
                     <VisualState x:Name="Disabled">
@@ -101,7 +116,8 @@
         <Setter Property="FontSize" Value="12"/>
         <Setter Property="CornerRadius" Value="12"/>
         <Setter Property="Padding" Value="12,8"/>
-        <Setter Property="MinimumHeightRequest" Value="40"/>
+        <Setter Property="MinimumHeightRequest" Value="44"/>
+        <Setter Property="MinimumWidthRequest" Value="44"/>
         <Setter Property="VisualStateManager.VisualStateGroups">
             <VisualStateGroupList>
                 <VisualStateGroup x:Name="CommonStates">
@@ -110,6 +126,13 @@
                         <VisualState.Setters>
                             <Setter Property="BackgroundColor" Value="{StaticResource NeonPurpleDeep}" />
                             <Setter Property="BorderColor" Value="{StaticResource NeonPurpleBright}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="Focused">
+                        <VisualState.Setters>
+                            <Setter Property="BorderColor" Value="{StaticResource NeonPurpleBright}" />
+                            <Setter Property="BorderWidth" Value="2" />
+                            <Setter Property="BackgroundColor" Value="{StaticResource Surface3}" />
                         </VisualState.Setters>
                     </VisualState>
                 </VisualStateGroup>
@@ -124,6 +147,22 @@
         <Setter Property="StrokeShape" Value="RoundRectangle 12" />
         <Setter Property="Padding" Value="12,8" />
         <Setter Property="MinimumHeightRequest" Value="40" />
+    </Style>
+
+    <Style TargetType="Border" x:Key="SectionPanel">
+        <Setter Property="BackgroundColor" Value="{StaticResource Surface1}" />
+        <Setter Property="Stroke" Value="{StaticResource SubtleBorder}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 16" />
+        <Setter Property="Padding" Value="16" />
+    </Style>
+
+    <Style TargetType="Border" x:Key="DocumentCard">
+        <Setter Property="BackgroundColor" Value="{StaticResource Surface1}" />
+        <Setter Property="Stroke" Value="{StaticResource SubtleBorder}" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="StrokeShape" Value="RoundRectangle 20" />
+        <Setter Property="Padding" Value="9" />
     </Style>
 
     <Style TargetType="CheckBox">
@@ -164,13 +203,48 @@
         <Setter Property="FontSize" Value="22" />
     </Style>
 
+    <Style TargetType="Label" x:Key="FilterCaption">
+        <Setter Property="TextColor" Value="{StaticResource TextSecondary}" />
+        <Setter Property="FontSize" Value="13" />
+    </Style>
+
     <Style TargetType="Picker">
         <Setter Property="TextColor" Value="{StaticResource TextPrimary}" />
         <Setter Property="TitleColor" Value="{StaticResource TextSecondary}" />
         <Setter Property="BackgroundColor" Value="Transparent" />
         <Setter Property="FontFamily" Value="OpenSansRegular"/>
         <Setter Property="FontSize" Value="14" />
-        <Setter Property="MinimumHeightRequest" Value="42"/>
+        <Setter Property="MinimumHeightRequest" Value="44"/>
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="Focused">
+                        <VisualState.Setters>
+                            <Setter Property="BackgroundColor" Value="{StaticResource Surface3}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
+    </Style>
+
+    <Style TargetType="SearchBar">
+        <Setter Property="TextColor" Value="{StaticResource TextPrimary}" />
+        <Setter Property="PlaceholderColor" Value="{StaticResource TextMuted}" />
+        <Setter Property="MinimumHeightRequest" Value="44" />
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="Focused">
+                        <VisualState.Setters>
+                            <Setter Property="BackgroundColor" Value="{StaticResource Surface3}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
     </Style>
 
     <Style TargetType="ProgressBar">
@@ -181,6 +255,18 @@
         <Setter Property="MinimumTrackColor" Value="{StaticResource NeonPurple}" />
         <Setter Property="MaximumTrackColor" Value="{StaticResource Surface3}" />
         <Setter Property="ThumbColor" Value="{StaticResource NeonPurpleBright}" />
+        <Setter Property="VisualStateManager.VisualStateGroups">
+            <VisualStateGroupList>
+                <VisualStateGroup x:Name="CommonStates">
+                    <VisualState x:Name="Normal" />
+                    <VisualState x:Name="Focused">
+                        <VisualState.Setters>
+                            <Setter Property="ThumbColor" Value="{StaticResource White}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                </VisualStateGroup>
+            </VisualStateGroupList>
+        </Setter>
     </Style>
 
     <Style TargetType="Switch">
@@ -200,6 +286,12 @@
                         <VisualState.Setters>
                             <Setter Property="OnColor" Value="{StaticResource Surface3}" />
                             <Setter Property="ThumbColor" Value="{StaticResource TextSecondary}" />
+                        </VisualState.Setters>
+                    </VisualState>
+                    <VisualState x:Name="Focused">
+                        <VisualState.Setters>
+                            <Setter Property="BackgroundColor" Value="{StaticResource Surface3}" />
+                            <Setter Property="ThumbColor" Value="{StaticResource NeonPurpleBright}" />
                         </VisualState.Setters>
                     </VisualState>
                 </VisualStateGroup>

@@ -34,13 +34,13 @@ public partial class FilePickerService
             ct.ThrowIfCancellationRequested();
             if (!Directory.Exists(folderPathOrUri))
             {
-                return Array.Empty<string>();
+                throw new DirectoryNotFoundException($"La carpeta no está disponible: {folderPathOrUri}");
             }
 
             return Directory
                 .EnumerateFiles(folderPathOrUri, "*.*", new EnumerationOptions
                 {
-                    IgnoreInaccessible = true,
+                    IgnoreInaccessible = false,
                     RecurseSubdirectories = true
                 })
                 .Where(path => IsSupportedBookFileName(Path.GetFileName(path)))

@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using NebulaReader.Models;
@@ -12,6 +13,13 @@ public partial class SettingsViewModel : BaseViewModel
 {
     private readonly IReaderSettingsService _settingsService;
     private readonly IFullScreenService _fullScreenService;
+    private readonly IImportedFolderStore _importedFolderStore;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasNoImportedFolders))]
+    public partial ObservableCollection<ImportedFolderEntry> ImportedFolders { get; set; } = new();
+
+    public bool HasNoImportedFolders => ImportedFolders.Count == 0;
 
     public IReadOnlyList<string> LayoutModeOptions { get; } =
     [
@@ -55,10 +63,12 @@ public partial class SettingsViewModel : BaseViewModel
     [ObservableProperty]
     public partial bool IsFullScreen { get; set; }
 
-    public SettingsViewModel(IReaderSettingsService settingsService, IFullScreenService fullScreenService)
+    public SettingsViewModel(IReaderSettingsService settingsService, IFullScreenService fullScreenService,
+        IImportedFolderStore importedFolderStore)
     {
         _settingsService = settingsService;
         _fullScreenService = fullScreenService;
+        _importedFolderStore = importedFolderStore;
         Title = "Configuración";
 
         NightReadingModeEnabled = _settingsService.VisualFilter == ReaderVisualFilter.NightInvert;
@@ -80,6 +90,17 @@ public partial class SettingsViewModel : BaseViewModel
         };
         IsFullScreen = _fullScreenService.IsFullScreen;
         _fullScreenService.FullScreenChanged += OnFullScreenChanged;
+        ReloadImportedFolders();
+    }
+
+    public void ReloadImportedFolders() => ImportedFolders = new ObservableCollection<ImportedFolderEntry>(
+        _importedFolderStore.GetFolders().Select(path => new ImportedFolderEntry { PathOrUri = path }));
+
+    [RelayCommand]
+    private void RemoveImportedFolder(string pathOrUri)
+    {
+        _importedFolderStore.Remove(pathOrUri);
+        ReloadImportedFolders();
     }
 
     private void OnFullScreenChanged(object? sender, bool enabled)

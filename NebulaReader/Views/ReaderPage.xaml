@@ -32,16 +32,14 @@
             <Grid x:Name="TopHudGrid"
                   ColumnSpacing="8"
                   RowSpacing="6"
-                  RowDefinitions="Auto,Auto"
-                  ColumnDefinitions="Auto,*,Auto">
-                <Button Grid.Row="0"
-                        Grid.Column="0"
+                  RowDefinitions="Auto,Auto,Auto"
+                  ColumnDefinitions="Auto,*,Auto,Auto">
+                <Button Grid.Column="0"
                         Text="← Volver"
                         Style="{StaticResource HudButton}"
                         Command="{Binding CloseReaderCommand}" />
 
-                <Label Grid.Row="0"
-                       Grid.Column="1"
+                <Label x:Name="ReaderTitleLabel" Grid.Column="1"
                        Text="{Binding Title}"
                        TextColor="{StaticResource TextPrimary}"
                        FontFamily="OpenSansSemibold"
@@ -52,78 +50,16 @@
                        VerticalTextAlignment="Center"
                        HorizontalTextAlignment="Center" />
 
-                <Button Grid.Row="0"
-                        Grid.Column="2"
-                        Text="{Binding RotationLockLabel}"
+                <Button x:Name="GoToPageButton" Grid.Column="2"
+                        Text="Ir a página"
+                        SemanticProperties.Description="Ir a página: marcadores y miniaturas"
                         Style="{StaticResource HudButton}"
-                        Command="{Binding ToggleRotationLockCommand}" />
-
-                <ScrollView x:Name="TopButtonsScroll"
-                            Grid.Row="1"
-                            Grid.ColumnSpan="3"
-                            Orientation="Horizontal"
-                            VerticalScrollBarVisibility="Never"
-                            HorizontalScrollBarVisibility="Never">
-                    <HorizontalStackLayout Spacing="8">
-                        <Border Style="{StaticResource ReaderIconChip}"
-                                IsEnabled="{Binding IsBookPreferencesReady}"
-                                SemanticProperties.Description="{Binding LayoutModeLabel}">
-                            <Border.GestureRecognizers>
-                                <TapGestureRecognizer Command="{Binding CycleLayoutModeCommand}" />
-                            </Border.GestureRecognizers>
-                            <HorizontalStackLayout Spacing="8">
-                                <Image Source="{Binding LayoutModeIcon}"
-                                       WidthRequest="20" HeightRequest="20"
-                                       Aspect="AspectFit" VerticalOptions="Center" />
-                                <Label Text="{Binding LayoutModeLabel}"
-                                       FontFamily="OpenSansSemibold" FontSize="12"
-                                       LineBreakMode="NoWrap" VerticalOptions="Center" />
-                            </HorizontalStackLayout>
-                        </Border>
-                        <Button Text="{Binding FitModeLabel}"
-                                Style="{StaticResource HudButton}"
-                                IsEnabled="{Binding IsBookPreferencesReady}"
-                                Command="{Binding CyclePageFitModeCommand}" />
-                        <Button Text="{Binding FullScreenButtonLabel}"
-                                Style="{StaticResource HudButton}"
-                                Command="{Binding ToggleFullScreenCommand}" />
-                        <Border Style="{StaticResource ReaderIconChip}"
-                                IsEnabled="{Binding IsBookPreferencesReady}"
-                                SemanticProperties.Description="{Binding DirectionModeLabel}">
-                            <Border.GestureRecognizers>
-                                <TapGestureRecognizer Command="{Binding ToggleReadingDirectionCommand}" />
-                            </Border.GestureRecognizers>
-                            <HorizontalStackLayout Spacing="8">
-                                <Image Source="{Binding ReadingDirectionIcon}"
-                                       WidthRequest="20" HeightRequest="20"
-                                       Aspect="AspectFit" VerticalOptions="Center" />
-                                <Label Text="{Binding DirectionModeLabel}"
-                                       FontFamily="OpenSansSemibold" FontSize="12"
-                                       LineBreakMode="NoWrap" VerticalOptions="Center" />
-                            </HorizontalStackLayout>
-                        </Border>
-                        <Button Text="{Binding FilterModeLabel}"
-                                Style="{StaticResource HudButton}"
-                                IsEnabled="{Binding IsBookPreferencesReady}"
-                                Command="{Binding CycleVisualFilterCommand}" />
-                        <Label Text="{Binding PreferencesScopeLabel}"
-                               TextColor="{StaticResource TextSecondary}"
-                               FontSize="12" VerticalTextAlignment="Center" />
-                        <Button Text="Restablecer ajustes"
-                                Style="{StaticResource HudButton}"
-                                IsEnabled="{Binding HasBookPreferences}"
-                                Command="{Binding ResetBookPreferencesCommand}" />
-                        <Button Text="{Binding BookmarkButtonLabel}"
-                                Style="{StaticResource HudButton}"
-                                Command="{Binding ToggleCurrentPageBookmarkCommand}" />
-                        <Button Text="Marcadores"
-                                Style="{StaticResource HudButton}"
-                                Command="{Binding ShowBookmarksCommand}" />
-                        <Button Text="Miniaturas"
-                                Style="{StaticResource HudButton}"
-                                Clicked="OnShowThumbnailsClicked" />
-                    </HorizontalStackLayout>
-                </ScrollView>
+                        Command="{Binding ShowBookmarksCommand}" />
+                <Button x:Name="ReadingOptionsButton" Grid.Column="3"
+                        Text="Opciones de lectura"
+                        SemanticProperties.Description="Opciones de lectura"
+                        Style="{StaticResource HudButton}"
+                        Command="{Binding ShowReadingOptionsCommand}" />
             </Grid>
         </Border>
 
@@ -149,13 +85,14 @@
                         ValueChanged="OnPageSliderValueChanged"
                         DragCompleted="OnPageSliderDragCompleted" />
 
-                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
-                    <Button Grid.Column="0"
-                            Text="Anterior"
+                <Grid x:Name="BottomNavigationGrid" ColumnDefinitions="Auto,*,Auto"
+                      RowDefinitions="Auto,Auto" ColumnSpacing="10" RowSpacing="0">
+                    <Button x:Name="PreviousPageButton" Grid.Column="0"
+                            Text="{Binding PreviousVisualLabel}"
                             Style="{StaticResource HudButton}"
                             Command="{Binding GoPreviousVisualCommand}" />
 
-                    <Label Grid.Column="1"
+                    <Label x:Name="PageIndicatorLabel" Grid.Column="1"
                            Text="{Binding PageIndicator}"
                            TextColor="{StaticResource TextPrimary}"
                            FontFamily="OpenSansSemibold"
@@ -166,27 +103,79 @@
                            HorizontalTextAlignment="Center"
                            VerticalTextAlignment="Center" />
 
-                    <Button Grid.Column="2"
-                            Text="Siguiente"
+                    <Button x:Name="NextPageButton" Grid.Column="2"
+                            Text="{Binding NextVisualLabel}"
                             Style="{StaticResource HudButton}"
                             Command="{Binding GoNextVisualCommand}" />
                 </Grid>
+                <Button Text="{Binding BookmarkButtonLabel}"
+                        Style="{StaticResource HudButton}"
+                        Command="{Binding ToggleCurrentPageBookmarkCommand}"
+                        HorizontalOptions="Center" />
             </VerticalStackLayout>
+        </Border>
+
+        <Border x:Name="ReadingOptionsPanel"
+                IsVisible="{Binding IsReadingOptionsVisible}"
+                HorizontalOptions="End" VerticalOptions="Fill"
+                WidthRequest="340" Margin="0,8,8,8" Padding="16"
+                BackgroundColor="{StaticResource BgCanvas}"
+                Stroke="{StaticResource SubtleBorder}"
+                StrokeShape="RoundRectangle 16">
+            <ScrollView>
+                <VerticalStackLayout Spacing="12">
+                    <Grid ColumnDefinitions="*,Auto">
+                        <Label Text="Opciones de lectura" FontAttributes="Bold" FontSize="18"
+                               TextColor="{StaticResource TextPrimary}" VerticalTextAlignment="Center" />
+                        <Button Grid.Column="1" Text="Cerrar" Style="{StaticResource HudButton}"
+                                Command="{Binding CloseReadingOptionsCommand}" />
+                    </Grid>
+                    <Label Text="{Binding PreferencesScopeLabel}"
+                           TextColor="{StaticResource NeonPurpleBright}" FontAttributes="Bold" />
+                    <Label Text="Los cambios se guardan para este libro. Restablecer aplica los valores generales de Configuración."
+                           TextColor="{StaticResource TextSecondary}" />
+                    <Button Text="{Binding LayoutModeLabel}" Style="{StaticResource HudButton}"
+                            IsEnabled="{Binding IsBookPreferencesReady}"
+                            Command="{Binding CycleLayoutModeCommand}" />
+                    <Button Text="{Binding FitModeLabel}" Style="{StaticResource HudButton}"
+                            IsEnabled="{Binding IsBookPreferencesReady}"
+                            Command="{Binding CyclePageFitModeCommand}" />
+                    <Button Text="{Binding DirectionModeLabel}" Style="{StaticResource HudButton}"
+                            IsEnabled="{Binding IsBookPreferencesReady}"
+                            Command="{Binding ToggleReadingDirectionCommand}" />
+                    <Button Text="{Binding FilterModeLabel}" Style="{StaticResource HudButton}"
+                            IsEnabled="{Binding IsBookPreferencesReady}"
+                            Command="{Binding CycleVisualFilterCommand}" />
+                    <Button Text="{Binding RotationLockLabel}" Style="{StaticResource HudButton}"
+                            Command="{Binding ToggleRotationLockCommand}" />
+                    <Button Text="{Binding FullScreenButtonLabel}" Style="{StaticResource HudButton}"
+                            Command="{Binding ToggleFullScreenCommand}" />
+                    <Button Text="Restablecer ajustes de este libro" Style="{StaticResource HudButton}"
+                            IsEnabled="{Binding HasBookPreferences}"
+                            Command="{Binding ResetBookPreferencesCommand}" />
+                </VerticalStackLayout>
+            </ScrollView>
         </Border>
 
         <Grid IsVisible="{Binding IsNavigationOverlayVisible}"
               BackgroundColor="{StaticResource BgCanvas}"
-              RowDefinitions="Auto,*"
+               RowDefinitions="Auto,Auto,*"
               Padding="14,12">
             <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12" Margin="0,0,0,12">
                 <Button Text="← Volver" Style="{StaticResource HudButton}"
                         Command="{Binding CloseNavigationOverlayCommand}" />
-                <Label Grid.Column="1" Text="Navegación de páginas"
+                <Label Grid.Column="1" Text="Ir a página"
                        TextColor="{StaticResource TextPrimary}"
                        FontAttributes="Bold" VerticalTextAlignment="Center" />
             </Grid>
+            <Grid Grid.Row="1" ColumnDefinitions="*,*" ColumnSpacing="8" Margin="0,0,0,12">
+                <Button Text="Marcadores" Style="{StaticResource HudButton}"
+                        Command="{Binding ShowBookmarksCommand}" />
+                <Button Grid.Column="1" Text="Miniaturas" Style="{StaticResource HudButton}"
+                        Clicked="OnShowThumbnailsClicked" />
+            </Grid>
 
-            <CollectionView x:Name="BookmarksView" Grid.Row="1"
+            <CollectionView x:Name="BookmarksView" Grid.Row="2"
                             IsVisible="{Binding IsBookmarkListVisible}"
                             ItemsSource="{Binding BookmarkPages}"
                             SelectionMode="Single"
@@ -210,13 +199,13 @@
                 </CollectionView.ItemTemplate>
             </CollectionView>
 
-            <CollectionView x:Name="ThumbnailsView" Grid.Row="1"
+            <CollectionView x:Name="ThumbnailsView" Grid.Row="2"
                             IsVisible="{Binding IsThumbnailGridVisible}"
                             ItemsSource="{Binding ThumbnailPages}"
                             SelectionMode="Single"
                             SelectionChanged="OnThumbnailSelected">
                 <CollectionView.ItemsLayout>
-                    <GridItemsLayout Orientation="Vertical" Span="3"
+                    <GridItemsLayout x:Name="ThumbnailGridLayout" Orientation="Vertical" Span="3"
                                      VerticalItemSpacing="8" HorizontalItemSpacing="8" />
                 </CollectionView.ItemsLayout>
                 <CollectionView.ItemTemplate>

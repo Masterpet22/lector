@@ -7,155 +7,71 @@
              x:Class="NebulaReader.Views.LibraryPage"
              x:Name="LibraryRootPage"
              x:DataType="vm:LibraryViewModel"
-             Shell.NavBarIsVisible="{Binding IsNotFullScreen}"
+             Shell.NavBarIsVisible="False"
              BackgroundColor="{StaticResource BgCanvas}"
              Title="{Binding Title}">
 
-    <Grid x:Name="LibraryRootGrid" RowDefinitions="*,Auto" Padding="18,16" RowSpacing="16">
-        <CollectionView Grid.Row="0"
-                        ItemsSource="{Binding DisplayItems}"
-                        SelectionMode="None">
-            <CollectionView.Header>
-                <VerticalStackLayout Spacing="14" Padding="0,0,0,14">
-                    <Border x:Name="LibraryToolbarBorder"
-                            BackgroundColor="{StaticResource Surface1}"
-                            Stroke="{StaticResource SubtleBorder}"
-                            StrokeThickness="1"
-                            StrokeShape="RoundRectangle 22"
-                            Padding="18,16">
-                        <VerticalStackLayout Spacing="16">
-                            <Grid ColumnDefinitions="48,*" ColumnSpacing="12">
-                                <Image Grid.Column="0" Source="nebula_brand.png"
-                                       WidthRequest="48" HeightRequest="48"
-                                       Aspect="AspectFit" VerticalOptions="Center"
-                                       SemanticProperties.Description="Nebula Reader" />
-                                <VerticalStackLayout Grid.Column="1" Spacing="3">
-                                    <Label Text="NEBULA READER" Style="{StaticResource EyebrowLabel}" />
-                                    <Label Text="Tu biblioteca" Style="{StaticResource SectionTitleLabel}" />
-                                    <Label Text="Tus historias, listas para continuar."
-                                           TextColor="{StaticResource TextSecondary}"
-                                           FontSize="12" />
-                                </VerticalStackLayout>
-                            </Grid>
-                            <Grid x:Name="LibraryToolbarGrid"
-                                  ColumnDefinitions="*,*"
-                                  RowDefinitions="Auto,Auto,Auto"
-                                  ColumnSpacing="8"
-                                  RowSpacing="8">
-                                <Button x:Name="OpenFileButton"
-                                        Grid.Row="0"
-                                        Grid.Column="0"
-                                        Text="Abrir archivo"
-                                        Style="{StaticResource PrimaryNeonButton}"
-                                        Command="{Binding OpenFileCommand}" />
-                                <Button x:Name="ScanFolderButton"
-                                        Grid.Row="0"
-                                        Grid.Column="1"
-                                        Text="Escanear carpeta"
-                                        Command="{Binding ImportFolderCommand}" />
-                                <Button x:Name="SettingsButton"
-                                        Grid.Row="1"
-                                        Grid.Column="0"
-                                        Text="Configuración"
-                                        Command="{Binding OpenSettingsCommand}" />
-                                <Button x:Name="FullScreenButton"
-                                        Grid.Row="1"
-                                        Grid.Column="1"
-                                        Text="{Binding FullScreenButtonLabel}"
-                                        Command="{Binding ToggleFullScreenCommand}" />
-                                <ActivityIndicator x:Name="ToolbarBusyIndicator"
-                                                   Grid.Row="2"
-                                                   Grid.Column="0"
-                                                   Grid.ColumnSpan="2"
-                                                   IsRunning="{Binding IsBusy}"
-                                                   IsVisible="{Binding IsBusy}"
-                                                   Color="{StaticResource NeonPurpleBright}"
-                                                   HorizontalOptions="Center"
-                                                   VerticalOptions="Center" />
-                            </Grid>
-                            <Grid ColumnDefinitions="*,*" ColumnSpacing="8">
-                                <Button Text="Exportar datos" Command="{Binding ExportBackupCommand}" />
-                                <Button Grid.Column="1" Text="Importar respaldo" Command="{Binding ImportBackupCommand}" />
-                            </Grid>
-                            <Label Text="El respaldo guarda datos de lectura; no incluye los archivos CBZ, CBR o PDF."
-                                   TextColor="{StaticResource TextSecondary}" FontSize="11" />
-                        </VerticalStackLayout>
-                    </Border>
+    <Grid x:Name="LibraryRootGrid" RowDefinitions="*,Auto" ColumnDefinitions="Auto,*"
+          Padding="18,16" RowSpacing="12" ColumnSpacing="16">
+        <Border x:Name="PrimarySidebar" Grid.Row="0" Grid.Column="0"
+                Style="{StaticResource SectionPanel}"
+                WidthRequest="246" IsVisible="False" Padding="14"
+                BackgroundColor="{StaticResource Surface1}" StrokeShape="RoundRectangle 20">
+            <VerticalStackLayout Spacing="10">
+                <Label Text="NEBULA READER" Style="{StaticResource EyebrowLabel}" Margin="4,4,0,10" />
+                <Button Text="Inicio" Command="{Binding ShowHomeCommand}">
+                    <Button.Triggers>
+                        <DataTrigger TargetType="Button" Binding="{Binding IsHomeSelected}" Value="True">
+                            <Setter Property="BackgroundColor" Value="{StaticResource NeonPurpleDeep}" />
+                        </DataTrigger>
+                    </Button.Triggers>
+                </Button>
+                <Button Text="Biblioteca" Command="{Binding ShowLibraryCommand}">
+                    <Button.Triggers>
+                        <DataTrigger TargetType="Button" Binding="{Binding IsLibrarySelected}" Value="True">
+                            <Setter Property="BackgroundColor" Value="{StaticResource NeonPurpleDeep}" />
+                        </DataTrigger>
+                    </Button.Triggers>
+                </Button>
+                <BoxView HeightRequest="1" Margin="0,10" />
+                <VerticalStackLayout IsVisible="{Binding IsLibrarySelected}" Spacing="10">
+                    <Label Text="FILTRAR BIBLIOTECA" Style="{StaticResource EyebrowLabel}" />
+                    <Label Text="Formato" Style="{StaticResource FilterCaption}" />
+                    <Picker SemanticProperties.Description="Filtrar por formato"
+                            ItemsSource="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.FormatOptions, x:DataType=views:LibraryPage}"
+                            SelectedIndex="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.SelectedFormatIndex, Mode=TwoWay, x:DataType=views:LibraryPage}" />
+                    <Label Text="Estado" Style="{StaticResource FilterCaption}" />
+                    <Picker SemanticProperties.Description="Filtrar por estado de lectura"
+                            ItemsSource="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.StatusOptions, x:DataType=views:LibraryPage}"
+                            SelectedIndex="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.SelectedStatusIndex, Mode=TwoWay, x:DataType=views:LibraryPage}" />
+                    <Button Text="Limpiar filtros" Command="{Binding ClearFiltersCommand}"
+                            IsVisible="{Binding HasActiveFilters}" />
+                </VerticalStackLayout>
+                <Button Text="Gestión" Clicked="OnManagementClicked" />
+            </VerticalStackLayout>
+        </Border>
 
-                    <Border IsVisible="{Binding HasImportReport}"
-                            BackgroundColor="{StaticResource Surface1}"
-                            Stroke="{StaticResource SubtleBorder}"
-                            StrokeShape="RoundRectangle 16" Padding="12">
-                        <VerticalStackLayout Spacing="8">
-                            <Label Text="Importación" Style="{StaticResource EyebrowLabel}" />
-                            <Label Text="{Binding ImportProgressText}" TextColor="{StaticResource TextPrimary}" />
-                            <ProgressBar Progress="{Binding ImportFraction}"
-                                         ProgressColor="{StaticResource NeonPurpleBright}" />
-                            <Label Text="{Binding PendingCoverText}" TextColor="{StaticResource TextSecondary}" />
-                            <Button Text="Cancelar escaneo" IsVisible="{Binding IsImporting}"
-                                    Command="{Binding CancelImportCommand}" HorizontalOptions="Start" />
-                            <Label Text="{Binding ImportSummary}" TextColor="{StaticResource TextPrimary}" />
-                            <CollectionView ItemsSource="{Binding ImportFailures}"
-                                            IsVisible="{Binding HasImportFailures}"
-                                            HeightRequest="135" SelectionMode="None">
-                                <CollectionView.ItemTemplate>
-                                    <DataTemplate x:DataType="models:ImportFailure">
-                                        <VerticalStackLayout Padding="4" Spacing="2">
-                                            <Label Text="{Binding FilePath}" TextColor="{StaticResource TextPrimary}"
-                                                   FontSize="11" LineBreakMode="MiddleTruncation" />
-                                            <Label Text="{Binding Error}" TextColor="{StaticResource TextSecondary}"
-                                                   FontSize="11" />
-                                        </VerticalStackLayout>
-                                    </DataTemplate>
-                                </CollectionView.ItemTemplate>
-                            </CollectionView>
-                            <Button Text="Reintentar fallidos" IsVisible="{Binding HasImportFailures}"
-                                    Command="{Binding RetryFailedImportsCommand}" HorizontalOptions="Start" />
-                        </VerticalStackLayout>
-                    </Border>
-
-
-                    <Border BackgroundColor="{StaticResource Surface1}" Stroke="{StaticResource SubtleBorder}"
-                            StrokeShape="RoundRectangle 16" Padding="12">
-                        <VerticalStackLayout Spacing="8">
-                            <SearchBar Placeholder="Buscar título, serie o etiqueta"
-                                       Text="{Binding SearchText, Mode=TwoWay}"
-                                       TextColor="{StaticResource TextPrimary}"
-                                       PlaceholderColor="{StaticResource TextMuted}"
-                                       SemanticProperties.Description="Buscar en la biblioteca" />
-                            <Grid ColumnDefinitions="*,*" ColumnSpacing="12">
-                                <VerticalStackLayout>
-                                    <Label Text="Formato" Style="{StaticResource EyebrowLabel}" />
-                                    <!-- El Header se recicla al salir del estado vacío. Anclar ambos enlaces a la
-                                         página evita que el Picker pierda ItemsSource durante la selección nativa. -->
-                                    <Picker Title="Formato"
-                                            ItemsSource="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.FormatOptions, x:DataType=views:LibraryPage}"
-                                            SelectedIndex="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.SelectedFormatIndex, Mode=TwoWay, x:DataType=views:LibraryPage}" />
-                                </VerticalStackLayout>
-                                <VerticalStackLayout Grid.Column="1">
-                                    <Label Text="Estado" Style="{StaticResource EyebrowLabel}" />
-                                    <Picker Title="Estado de lectura"
-                                            ItemsSource="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.StatusOptions, x:DataType=views:LibraryPage}"
-                                            SelectedIndex="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.SelectedStatusIndex, Mode=TwoWay, x:DataType=views:LibraryPage}" />
-                                </VerticalStackLayout>
-                            </Grid>
-                            <Button Text="Limpiar filtros" Command="{Binding ClearFiltersCommand}"
-                                    IsVisible="{Binding HasActiveFilters}" HorizontalOptions="Start" />
-                        </VerticalStackLayout>
-                    </Border>
-
+        <Grid x:Name="MainContentGrid" Grid.Row="0" Grid.Column="1" RowDefinitions="Auto,*,Auto"
+              RowSpacing="12" SizeChanged="OnMainContentSizeChanged">
+            <ScrollView x:Name="HomeScroll" Grid.Row="1" IsVisible="{Binding IsHomeSelected}"
+                        SizeChanged="OnHomeScrollSizeChanged">
+                <VerticalStackLayout Spacing="16">
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                        <Label Text="Inicio" Style="{StaticResource SectionTitleLabel}"
+                               VerticalOptions="Center" />
+                        <Button Grid.Column="1" Text="Añadir" Style="{StaticResource PrimaryNeonButton}"
+                                Clicked="OnAddClicked" />
+                    </Grid>
                     <VerticalStackLayout Spacing="8" IsVisible="{Binding HasContinueReading}">
                         <Label Text="CONTINUAR LEYENDO" Style="{StaticResource EyebrowLabel}" />
-                        <CollectionView ItemsSource="{Binding ContinueReadingItems}" HeightRequest="156"
-                                        SelectionMode="None">
-                            <CollectionView.ItemsLayout>
-                                <LinearItemsLayout Orientation="Horizontal" ItemSpacing="12" />
-                            </CollectionView.ItemsLayout>
-                            <CollectionView.ItemTemplate>
+                        <FlexLayout Direction="Row" Wrap="Wrap" AlignItems="Start"
+                                    BindableLayout.ItemsSource="{Binding ContinueReadingItems}">
+                            <BindableLayout.ItemTemplate>
                                 <DataTemplate x:DataType="models:LibraryDisplayItem">
-                                    <Border WidthRequest="282" Padding="12" BackgroundColor="{StaticResource Surface1}"
-                                            Stroke="{StaticResource SubtleBorder}" StrokeShape="RoundRectangle 16">
-                                        <Grid ColumnDefinitions="76,*" ColumnSpacing="12">
+                                    <Border WidthRequest="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.RecentCardWidth, x:DataType=views:LibraryPage}"
+                                            Margin="0,0,10,10" Padding="10"
+                                            Style="{StaticResource SectionPanel}">
+                                        <Grid ColumnDefinitions="64,*" ColumnSpacing="10">
                                             <Border BackgroundColor="{StaticResource Surface2}" StrokeThickness="0"
                                                     StrokeShape="RoundRectangle 10">
                                                 <Grid>
@@ -164,28 +80,213 @@
                                                     <Image Source="{Binding Cover1}" Aspect="AspectFill" />
                                                 </Grid>
                                             </Border>
-                                            <VerticalStackLayout Grid.Column="1" Spacing="7" VerticalOptions="Center">
+                                            <VerticalStackLayout Grid.Column="1" Spacing="5" VerticalOptions="Center">
                                                 <Label Text="{Binding Title}" MaxLines="2" LineBreakMode="TailTruncation"
                                                        FontAttributes="Bold" TextColor="{StaticResource TextPrimary}" />
                                                 <Label Text="{Binding SubtitleText}" FontSize="11"
                                                        TextColor="{StaticResource TextSecondary}" />
                                                 <ProgressBar Progress="{Binding Progress}" IsVisible="{Binding HasKnownPageCount}"
                                                              ProgressColor="{StaticResource NeonPurpleBright}" />
-                                                <Button Text="Continuar" Padding="8,3" MinimumHeightRequest="36"
+                                                <Button Text="Continuar" Padding="8,3" MinimumHeightRequest="44"
                                                         Command="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.OpenBookCommand, x:DataType=views:LibraryPage}"
                                                         CommandParameter="{Binding Book}" />
-                                                <Button Text="Acciones" Padding="8,3" MinimumHeightRequest="36"
+                                                <Button Text="Acciones" Padding="8,3" MinimumHeightRequest="44"
                                                         Clicked="OnBookActionsClicked" />
                                             </VerticalStackLayout>
                                         </Grid>
                                     </Border>
                                 </DataTemplate>
-                            </CollectionView.ItemTemplate>
-                        </CollectionView>
+                            </BindableLayout.ItemTemplate>
+                        </FlexLayout>
                     </VerticalStackLayout>
+
+                    <Label Text="Aún no tienes lecturas en curso. Abre un libro desde Biblioteca."
+                           IsVisible="{Binding HasNoContinueReading}"
+                           TextColor="{StaticResource TextSecondary}" />
+                    <Button Text="Ver biblioteca" Command="{Binding ShowLibraryCommand}"
+                            HorizontalOptions="Start" />
+                </VerticalStackLayout>
+            </ScrollView>
+
+        <Border x:Name="SearchFiltersBorder" Grid.Row="0" IsVisible="{Binding IsLibrarySelected}" Style="{StaticResource SectionPanel}" BackgroundColor="{StaticResource Surface1}" Stroke="{StaticResource SubtleBorder}"
+                StrokeShape="RoundRectangle 16" Padding="12">
+            <VerticalStackLayout Spacing="8">
+                <Grid x:Name="SearchFilterRow" ColumnDefinitions="*,Auto"
+                      RowDefinitions="Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="6">
+                    <SearchBar x:Name="LibrarySearchBar" Placeholder="Buscar título, serie o etiqueta"
+                               Text="{Binding SearchText, Mode=TwoWay}"
+                               TextColor="{StaticResource TextPrimary}"
+                               PlaceholderColor="{StaticResource TextMuted}"
+                               SemanticProperties.Description="Buscar en la biblioteca" />
+                    <Button x:Name="CompactFilterToggle" Grid.Column="1"
+                            Text="{Binding FilterButtonLabel}"
+                            SemanticProperties.Description="Filtrar biblioteca"
+                            Command="{Binding ToggleFilterPanelCommand}" />
+                <Grid x:Name="InlineFilters" Grid.Row="1" Grid.ColumnSpan="2"
+                      ColumnDefinitions="*,*" ColumnSpacing="12">
+                    <VerticalStackLayout>
+                        <Label Text="Formato" Style="{StaticResource FilterCaption}" />
+                        <Picker SemanticProperties.Description="Filtrar por formato"
+                                ItemsSource="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.FormatOptions, x:DataType=views:LibraryPage}"
+                                SelectedIndex="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.SelectedFormatIndex, Mode=TwoWay, x:DataType=views:LibraryPage}" />
+                    </VerticalStackLayout>
+                    <VerticalStackLayout Grid.Column="1">
+                        <Label Text="Estado" Style="{StaticResource FilterCaption}" />
+                        <Picker SemanticProperties.Description="Filtrar por estado de lectura"
+                                ItemsSource="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.StatusOptions, x:DataType=views:LibraryPage}"
+                                SelectedIndex="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.SelectedStatusIndex, Mode=TwoWay, x:DataType=views:LibraryPage}" />
+                    </VerticalStackLayout>
+                </Grid>
+                </Grid>
+                <VerticalStackLayout x:Name="CompactFilterPanel"
+                                     IsVisible="{Binding ShowCompactFilterPanel}" Spacing="6">
+                    <Label Text="Formato" Style="{StaticResource FilterCaption}" />
+                    <Picker SemanticProperties.Description="Filtrar por formato"
+                            ItemsSource="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.FormatOptions, x:DataType=views:LibraryPage}"
+                            SelectedIndex="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.SelectedFormatIndex, Mode=TwoWay, x:DataType=views:LibraryPage}" />
+                    <Label Text="Estado" Style="{StaticResource FilterCaption}" />
+                    <Picker SemanticProperties.Description="Filtrar por estado de lectura"
+                            ItemsSource="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.StatusOptions, x:DataType=views:LibraryPage}"
+                            SelectedIndex="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.SelectedStatusIndex, Mode=TwoWay, x:DataType=views:LibraryPage}" />
+                </VerticalStackLayout>
+                <Button x:Name="ClearFiltersButton" Text="Limpiar filtros"
+                        Command="{Binding ClearFiltersCommand}"
+                        IsVisible="{Binding HasActiveFilters}" HorizontalOptions="Start" />
+                <Label Text="{Binding ActiveFiltersSummary}"
+                       IsVisible="{Binding HasActiveFilters}"
+                       TextColor="{StaticResource TextSecondary}" LineBreakMode="WordWrap" />
+            </VerticalStackLayout>
+        </Border>
+
+        <CollectionView x:Name="LibraryCollection" Grid.Row="1"
+                        IsVisible="{Binding IsLibrarySelected}"
+                        ItemsSource="{Binding DisplayItems}"
+                        SizeChanged="OnLibraryCollectionSizeChanged"
+                        Scrolled="OnLibraryScrolled"
+                        SelectionMode="None">
+            <CollectionView.Resources>
+                <DataTemplate x:Key="CompactIconTemplate" x:DataType="models:LibraryDisplayItem">
+                    <Border Style="{StaticResource DocumentCard}" Padding="7" HeightRequest="112">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.OpenItemCommand, x:DataType=views:LibraryPage}"
+                                                  CommandParameter="{Binding .}" />
+                        </Border.GestureRecognizers>
+                        <VerticalStackLayout Spacing="4">
+                            <Grid HeightRequest="72">
+                                <Image Source="{Binding Cover1}" Aspect="AspectFit" />
+                                <Label Text="{Binding BadgeText}" FontSize="10" TextColor="{StaticResource TextSecondary}"
+                                       HorizontalOptions="Start" VerticalOptions="Start" />
+                                <Button Text="⋯" IsVisible="{Binding IsSingleBook}" Clicked="OnBookActionsClicked"
+                                        HorizontalOptions="End" VerticalOptions="End" Padding="0" FontSize="16"
+                                        WidthRequest="32" HeightRequest="32" MinimumWidthRequest="32" MinimumHeightRequest="32" />
+                            </Grid>
+                            <Label Text="{Binding Title}" FontSize="11" MaxLines="1" LineBreakMode="TailTruncation"
+                                   HorizontalTextAlignment="Center" TextColor="{StaticResource TextPrimary}" />
+                        </VerticalStackLayout>
+                    </Border>
+                </DataTemplate>
+                <DataTemplate x:Key="ListItemTemplate" x:DataType="models:LibraryDisplayItem">
+                    <Border Style="{StaticResource DocumentCard}" Padding="8,5" HeightRequest="54">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.OpenItemCommand, x:DataType=views:LibraryPage}"
+                                                  CommandParameter="{Binding .}" />
+                        </Border.GestureRecognizers>
+                        <Grid ColumnDefinitions="36,*,Auto,Auto" ColumnSpacing="10">
+                            <Image Source="{Binding Cover1}" WidthRequest="32" HeightRequest="40" Aspect="AspectFit" />
+                            <Label Grid.Column="1" Text="{Binding Title}" VerticalOptions="Center" MaxLines="1"
+                                   LineBreakMode="TailTruncation" TextColor="{StaticResource TextPrimary}" />
+                            <Label Grid.Column="2" Text="{Binding BadgeText}" VerticalOptions="Center" FontSize="11"
+                                   TextColor="{StaticResource TextSecondary}" />
+                            <Button Grid.Column="3" Text="⋯" IsVisible="{Binding IsSingleBook}" Clicked="OnBookActionsClicked"
+                                    Padding="0" WidthRequest="36" HeightRequest="36" />
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+                <DataTemplate x:Key="DetailsItemTemplate" x:DataType="models:LibraryDisplayItem">
+                    <Border Style="{StaticResource DocumentCard}" Padding="10,6" HeightRequest="64">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.OpenItemCommand, x:DataType=views:LibraryPage}"
+                                                  CommandParameter="{Binding .}" />
+                        </Border.GestureRecognizers>
+                        <Grid ColumnDefinitions="40,2*,Auto,*,Auto" ColumnSpacing="10">
+                            <Image Source="{Binding Cover1}" WidthRequest="36" HeightRequest="48" Aspect="AspectFit" />
+                            <Label Grid.Column="1" Text="{Binding Title}" VerticalOptions="Center" MaxLines="1"
+                                   LineBreakMode="TailTruncation" TextColor="{StaticResource TextPrimary}" />
+                            <Label Grid.Column="2" Text="{Binding BadgeText}" VerticalOptions="Center" FontSize="11"
+                                   TextColor="{StaticResource TextSecondary}" />
+                            <Label Grid.Column="3" Text="{Binding SubtitleText}" VerticalOptions="Center" MaxLines="1"
+                                   LineBreakMode="TailTruncation" FontSize="11" TextColor="{StaticResource TextSecondary}" />
+                            <Button Grid.Column="4" Text="⋯" IsVisible="{Binding IsSingleBook}" Clicked="OnBookActionsClicked"
+                                    Padding="0" WidthRequest="36" HeightRequest="36" />
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+                <DataTemplate x:Key="ContentItemTemplate" x:DataType="models:LibraryDisplayItem">
+                    <Border Style="{StaticResource DocumentCard}" Padding="10" HeightRequest="104">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.OpenItemCommand, x:DataType=views:LibraryPage}"
+                                                  CommandParameter="{Binding .}" />
+                        </Border.GestureRecognizers>
+                        <Grid ColumnDefinitions="68,*,Auto" ColumnSpacing="12">
+                            <Image Source="{Binding Cover1}" WidthRequest="64" HeightRequest="80" Aspect="AspectFit" />
+                            <VerticalStackLayout Grid.Column="1" Spacing="3" VerticalOptions="Center">
+                                <Label Text="{Binding Title}" FontAttributes="Bold" MaxLines="1" LineBreakMode="TailTruncation"
+                                       TextColor="{StaticResource TextPrimary}" />
+                                <Label Text="{Binding SubtitleText}" FontSize="12" TextColor="{StaticResource TextSecondary}" />
+                                <Label Text="{Binding TagsText}" IsVisible="{Binding HasTags}" FontSize="11"
+                                       MaxLines="1" LineBreakMode="TailTruncation" TextColor="{StaticResource NeonPurpleBright}" />
+                            </VerticalStackLayout>
+                            <Button Grid.Column="2" Text="Acciones" IsVisible="{Binding IsSingleBook}"
+                                    Clicked="OnBookActionsClicked" VerticalOptions="Center" />
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.Resources>
+            <CollectionView.Header>
+                <VerticalStackLayout Spacing="14" Padding="0,0,0,14">
+                    <Border x:Name="LibraryToolbarBorder"
+                            Style="{StaticResource SectionPanel}"
+                            BackgroundColor="{StaticResource Surface1}"
+                            Stroke="{StaticResource SubtleBorder}"
+                            StrokeThickness="1"
+                            StrokeShape="RoundRectangle 22"
+                            Padding="18,16">
+                        <Grid x:Name="LibraryToolbarGrid" ColumnDefinitions="*,Auto,Auto,Auto"
+                              RowDefinitions="Auto,Auto,Auto" ColumnSpacing="8" RowSpacing="0">
+                            <Label x:Name="LibraryToolbarTitle" Text="Tu biblioteca" Style="{StaticResource SectionTitleLabel}"
+                                   VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                            <Button x:Name="AddHeaderButton" Grid.Column="1" Text="Añadir" Style="{StaticResource PrimaryNeonButton}"
+                                    Clicked="OnAddClicked" />
+                            <Button x:Name="RefreshLibraryButton" Grid.Column="2" Text="Actualizar"
+                                    IsEnabled="{Binding IsNotBusy}" Clicked="OnRefreshLibraryClicked" />
+                            <Button x:Name="ManagementHeaderButton" Grid.Column="3" Text="Gestión"
+                                    Clicked="OnManagementClicked" />
+                        </Grid>
+                    </Border>
+
+                    <Border IsVisible="{Binding IsImporting}"
+                            Style="{StaticResource SectionPanel}"
+                            BackgroundColor="{StaticResource Surface1}"
+                            Stroke="{StaticResource SubtleBorder}"
+                            StrokeShape="RoundRectangle 16" Padding="12">
+                        <VerticalStackLayout Spacing="6">
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                <Label Text="{Binding ImportProgressText}" MaxLines="1"
+                                       LineBreakMode="TailTruncation" VerticalOptions="Center" />
+                                <Button Grid.Column="1" Text="Detalles" Clicked="OnManagementClicked" />
+                            </Grid>
+                            <ProgressBar Progress="{Binding ImportFraction}"
+                                         ProgressColor="{StaticResource NeonPurpleBright}" />
+                            <Button Text="Cancelar escaneo" Command="{Binding CancelImportCommand}"
+                                    HorizontalOptions="Start" />
+                        </VerticalStackLayout>
+                    </Border>
+
+
                     <!-- Barra de navegación dentro de una serie/saga -->
                     <Border x:Name="LibraryBreadcrumbBorder"
                             IsVisible="{Binding IsInsideGroup}"
+                            Style="{StaticResource SectionPanel}"
                             BackgroundColor="{StaticResource Surface1}"
                             Stroke="{StaticResource SubtleBorder}"
                             StrokeThickness="1"
@@ -193,8 +294,9 @@
                             Padding="12,9">
                         <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
                             <Button Grid.Column="0"
-                                    Text="← Biblioteca"
+                                    Text="← Volver"
                                     Style="{StaticResource HudButton}"
+                                    SemanticProperties.Description="Volver a la biblioteca"
                                     Command="{Binding ExitGroupCommand}" />
                             <Label Grid.Column="1"
                                    Text="{Binding ActiveGroupTitle}"
@@ -207,11 +309,29 @@
                         </Grid>
                     </Border>
 
-                    <Grid ColumnDefinitions="*,Auto" Margin="2,0">
+                    <Grid ColumnDefinitions="*,Auto" Margin="2,0" ColumnSpacing="8">
                         <Label Grid.Column="0" Text="COLECCIÓN" Style="{StaticResource EyebrowLabel}" VerticalOptions="Center" />
-                        <Label Grid.Column="1" Text="CBZ · CBR · PDF"
-                               TextColor="{StaticResource TextMuted}"
-                               FontSize="11" VerticalOptions="Center" />
+                        <Picker x:Name="LibraryViewPicker" Grid.Column="1" Title="Vista"
+                                WidthRequest="180" SemanticProperties.Description="Modo de vista de la biblioteca"
+                                SelectedIndexChanged="OnLibraryViewChanged">
+                            <Picker.Items>
+                                <x:String>Iconos muy grandes</x:String>
+                                <x:String>Iconos grandes</x:String>
+                                <x:String>Iconos medianos</x:String>
+                                <x:String>Iconos pequeños</x:String>
+                                <x:String>Lista</x:String>
+                                <x:String>Detalles</x:String>
+                                <x:String>Iconos</x:String>
+                                <x:String>Contenido</x:String>
+                            </Picker.Items>
+                        </Picker>
+                    </Grid>
+
+                    <Grid x:Name="DetailsColumnHeader" IsVisible="False" Padding="10,0"
+                          ColumnDefinitions="40,2*,Auto,*,Auto" ColumnSpacing="10">
+                        <Label Grid.Column="1" Text="Nombre" Style="{StaticResource FilterCaption}" />
+                        <Label Grid.Column="2" Text="Tipo" Style="{StaticResource FilterCaption}" />
+                        <Label Grid.Column="3" Text="Estado / progreso" Style="{StaticResource FilterCaption}" />
                     </Grid>
 
                 </VerticalStackLayout>
@@ -258,11 +378,7 @@
 
             <CollectionView.ItemTemplate>
                 <DataTemplate x:DataType="models:LibraryDisplayItem">
-                    <Border Padding="9"
-                            BackgroundColor="{StaticResource Surface1}"
-                            Stroke="{StaticResource SubtleBorder}"
-                            StrokeThickness="1"
-                            StrokeShape="RoundRectangle 20">
+                    <Border Style="{StaticResource DocumentCard}" Padding="7">
                         <Border.Triggers>
                             <DataTrigger TargetType="Border" Binding="{Binding IsGroup}" Value="True">
                                 <Setter Property="Stroke" Value="{StaticResource NeonPurpleDeep}" />
@@ -275,7 +391,7 @@
                                 CommandParameter="{Binding .}" />
                         </Border.GestureRecognizers>
 
-                        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="6">
+                        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="4">
                             <Border Grid.Row="0"
                                     HeightRequest="{Binding CoverHeight}"
                                     BackgroundColor="{StaticResource BgCanvas}"
@@ -291,7 +407,7 @@
                                     <!-- Portada individual -->
                                     <Image IsVisible="{Binding IsSingleBook}"
                                            Source="{Binding Cover1}"
-                                           Aspect="AspectFill" />
+                                           Aspect="AspectFit" />
 
                                     <!-- Mosaico 2x2 de las primeras 4 portadas del grupo -->
                                     <Grid IsVisible="{Binding IsGroup}"
@@ -351,8 +467,8 @@
                                    TextColor="{StaticResource TextPrimary}"
                                    FontFamily="OpenSansSemibold"
                                    FontAttributes="Bold"
-                                   FontSize="15"
-                                   Margin="3,5,3,0"
+                                   FontSize="14"
+                                   Margin="3,3,3,0"
                                    LineBreakMode="TailTruncation"
                                    MaxLines="2" />
 
@@ -372,9 +488,36 @@
                                    LineBreakMode="TailTruncation" />
                             <Label Grid.Row="4" Text="{Binding CoverStateText}"
                                    IsVisible="{Binding HasCoverError}" FontSize="11"
-                                   TextColor="{StaticResource TextSecondary}" />
-                            <Button Grid.Row="5" Text="Acciones" IsVisible="{Binding IsSingleBook}"
-                                    Clicked="OnBookActionsClicked" />
+                                   TextColor="{StaticResource TextSecondary}"
+                                   LineBreakMode="WordWrap" />
+                            <Grid Grid.Row="5" ColumnDefinitions="*,*" ColumnSpacing="6"
+                                  IsVisible="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.UseHorizontalBookActions, x:DataType=views:LibraryPage}">
+                                <Grid.Triggers>
+                                    <DataTrigger TargetType="Grid" Binding="{Binding IsGroup}" Value="True">
+                                        <Setter Property="IsVisible" Value="False" />
+                                    </DataTrigger>
+                                </Grid.Triggers>
+                                <Button Text="Leer" Style="{StaticResource PrimaryNeonButton}" Padding="6,6" FontSize="12"
+                                        Command="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.OpenBookCommand, x:DataType=views:LibraryPage}"
+                                        CommandParameter="{Binding Book}" />
+                                <Button Grid.Column="1" Text="Acciones" Padding="6,6" FontSize="12"
+                                        Clicked="OnBookActionsClicked" />
+                            </Grid>
+                            <VerticalStackLayout Grid.Row="5" Spacing="6"
+                                                 IsVisible="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.UseStackedBookActions, x:DataType=views:LibraryPage}">
+                                <VerticalStackLayout.Triggers>
+                                    <DataTrigger TargetType="VerticalStackLayout" Binding="{Binding IsGroup}" Value="True">
+                                        <Setter Property="IsVisible" Value="False" />
+                                    </DataTrigger>
+                                </VerticalStackLayout.Triggers>
+                                <Button Text="Leer" Style="{StaticResource PrimaryNeonButton}"
+                                        Command="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.OpenBookCommand, x:DataType=views:LibraryPage}"
+                                        CommandParameter="{Binding Book}" />
+                                <Button Text="Acciones" Clicked="OnBookActionsClicked" />
+                            </VerticalStackLayout>
+                            <Button Grid.Row="5" Text="Abrir serie" IsVisible="{Binding IsGroup}"
+                                    Command="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.OpenItemCommand, x:DataType=views:LibraryPage}"
+                                    CommandParameter="{Binding .}" />
                         </Grid>
                     </Border>
                 </DataTemplate>
@@ -383,7 +526,8 @@
 
         <!-- Pie de estado -->
         <Border x:Name="LibraryFooterBorder"
-                Grid.Row="1"
+                Grid.Row="2"
+                Style="{StaticResource SectionPanel}"
                 BackgroundColor="{StaticResource Surface1}"
                 Stroke="{StaticResource SubtleBorder}"
                 StrokeThickness="1"
@@ -392,7 +536,49 @@
             <Label Text="{Binding StatusMessage}"
                    TextColor="{StaticResource TextSecondary}"
                    FontSize="12"
-                   LineBreakMode="TailTruncation" />
+                   MaxLines="2" LineBreakMode="WordWrap" />
+        </Border>
+        </Grid>
+
+        <Grid x:Name="BottomNavigation" Grid.Row="1" Grid.ColumnSpan="2"
+              ColumnDefinitions="*,*" ColumnSpacing="8">
+            <Button Text="Inicio" Command="{Binding ShowHomeCommand}">
+                <Button.Triggers>
+                    <DataTrigger TargetType="Button" Binding="{Binding IsHomeSelected}" Value="True">
+                        <Setter Property="BackgroundColor" Value="{StaticResource NeonPurpleDeep}" />
+                    </DataTrigger>
+                </Button.Triggers>
+            </Button>
+            <Button Grid.Column="1" Text="Biblioteca" Command="{Binding ShowLibraryCommand}">
+                <Button.Triggers>
+                    <DataTrigger TargetType="Button" Binding="{Binding IsLibrarySelected}" Value="True">
+                        <Setter Property="BackgroundColor" Value="{StaticResource NeonPurpleDeep}" />
+                    </DataTrigger>
+                </Button.Triggers>
+            </Button>
+        </Grid>
+
+        <Grid x:Name="StartupLoadingOverlay" Grid.RowSpan="2" Grid.ColumnSpan="2"
+              BackgroundColor="{StaticResource BgCanvas}">
+            <VerticalStackLayout Spacing="16" HorizontalOptions="Center" VerticalOptions="Center">
+                <Label Text="NEBULA READER" Style="{StaticResource SectionTitleLabel}"
+                       HorizontalTextAlignment="Center" />
+                <ActivityIndicator IsRunning="True" Color="{StaticResource NeonPurpleBright}"
+                                   HorizontalOptions="Center" />
+                <Label x:Name="StartupLoadingStatus" Text="Cargando biblioteca..."
+                       TextColor="{StaticResource TextSecondary}" HorizontalTextAlignment="Center" />
+            </VerticalStackLayout>
+        </Grid>
+
+        <Border x:Name="LibrarySyncNotification" Grid.RowSpan="2" Grid.ColumnSpan="2"
+                IsVisible="False" InputTransparent="True"
+                HorizontalOptions="Center" VerticalOptions="End"
+                MaximumWidthRequest="520" Margin="16,0,16,24" Padding="16,12"
+                BackgroundColor="{StaticResource Surface3}"
+                Stroke="{StaticResource NeonBorder}" StrokeThickness="1"
+                StrokeShape="RoundRectangle 14">
+            <Label x:Name="LibrarySyncNotificationText" TextColor="{StaticResource TextPrimary}"
+                   HorizontalTextAlignment="Center" LineBreakMode="WordWrap" />
         </Border>
     </Grid>
 </ContentPage>

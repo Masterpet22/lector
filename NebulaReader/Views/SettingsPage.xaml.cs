@@ -7,10 +7,19 @@ namespace NebulaReader.Views;
 /// </summary>
 public partial class SettingsPage : ContentPage
 {
+    public SettingsViewModel ViewModel { get; }
+
     public SettingsPage(SettingsViewModel viewModel)
     {
+        ViewModel = viewModel;
         InitializeComponent();
         BindingContext = viewModel;
+    }
+
+    protected override void OnAppearing()
+    {
+        base.OnAppearing();
+        ViewModel.ReloadImportedFolders();
     }
 
     protected override void OnSizeAllocated(double width, double height)
@@ -21,9 +30,13 @@ public partial class SettingsPage : ContentPage
             return;
         }
 
-        SettingsContainer.WidthRequest = Math.Min(760.0, Math.Max(260.0, width - 8.0));
-        SettingsContainer.Padding = height < 500
-            ? new Thickness(14, 10)
-            : new Thickness(20, 18);
+        var compact = width < 480 || height < 500;
+        SettingsContainer.WidthRequest = Math.Min(680.0, Math.Max(0.0, width - 16.0));
+        SettingsContainer.Padding = compact ? new Thickness(10, 10) : new Thickness(20, 18);
+        var panelPadding = compact ? new Thickness(14) : new Thickness(20);
+        AppearancePanel.Padding = panelPadding;
+        LayoutPanel.Padding = panelPadding;
+        WindowPanel.Padding = panelPadding;
+        ImportedFoldersPanel.Padding = panelPadding;
     }
 }

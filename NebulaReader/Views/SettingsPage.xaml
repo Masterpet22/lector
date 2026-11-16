@@ -2,7 +2,10 @@
 <ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
              xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
              xmlns:vm="clr-namespace:NebulaReader.ViewModels"
+             xmlns:models="clr-namespace:NebulaReader.Models"
+             xmlns:views="clr-namespace:NebulaReader.Views"
              x:Class="NebulaReader.Views.SettingsPage"
+             x:Name="SettingsRootPage"
              x:DataType="vm:SettingsViewModel"
              BackgroundColor="{StaticResource BgCanvas}"
              Title="{Binding Title}">
@@ -15,16 +18,14 @@
 
             <VerticalStackLayout Spacing="4" Margin="2,4,2,8">
                 <Label Text="PREFERENCIAS" Style="{StaticResource EyebrowLabel}" />
-                <Label Text="Hazlo tuyo" Style="{StaticResource SectionTitleLabel}" FontSize="28" />
-                <Label Text="Personaliza la lectura para cada historia."
+                <Label Text="Configuración" Style="{StaticResource SectionTitleLabel}" FontSize="26" />
+                <Label Text="Valores generales para libros sin ajustes propios."
                        TextColor="{StaticResource TextSecondary}"
-                       FontSize="13" />
+                       FontSize="13" LineBreakMode="WordWrap" />
             </VerticalStackLayout>
 
             <!-- Sección: Apariencia y lectura -->
-            <Border BackgroundColor="{StaticResource Surface1}"
-                    Stroke="{StaticResource SubtleBorder}"
-                    StrokeThickness="1"
+            <Border x:Name="AppearancePanel" Style="{StaticResource SectionPanel}"
                     StrokeShape="RoundRectangle 20"
                     Padding="20">
                 <VerticalStackLayout Spacing="16">
@@ -39,7 +40,8 @@
                                TextColor="{StaticResource TextPrimary}"
                                LineBreakMode="WordWrap"
                                VerticalOptions="Center" />
-                        <Switch Grid.Column="1" IsToggled="{Binding NightReadingModeEnabled}" />
+                        <Switch Grid.Column="1" IsToggled="{Binding NightReadingModeEnabled}"
+                                SemanticProperties.Description="Modo lectura nocturna" />
                     </Grid>
 
                     <BoxView HeightRequest="1" BackgroundColor="{StaticResource SubtleBorder}" />
@@ -49,7 +51,8 @@
                                TextColor="{StaticResource TextPrimary}"
                                LineBreakMode="WordWrap"
                                VerticalOptions="Center" />
-                        <Switch Grid.Column="1" IsToggled="{Binding SepiaFilterEnabled}" />
+                        <Switch Grid.Column="1" IsToggled="{Binding SepiaFilterEnabled}"
+                                SemanticProperties.Description="Filtro visual sepia" />
                     </Grid>
 
                     <BoxView HeightRequest="1" BackgroundColor="{StaticResource SubtleBorder}" />
@@ -62,15 +65,14 @@
                                TextColor="{StaticResource TextPrimary}"
                                LineBreakMode="WordWrap"
                                VerticalOptions="Center" />
-                        <Switch Grid.Column="2" IsToggled="{Binding RightToLeftMangaMode}" />
+                        <Switch Grid.Column="2" IsToggled="{Binding RightToLeftMangaMode}"
+                                SemanticProperties.Description="Lectura derecha a izquierda, manga" />
                     </Grid>
                 </VerticalStackLayout>
             </Border>
 
             <!-- Sección: Disposición y ajuste -->
-            <Border BackgroundColor="{StaticResource Surface1}"
-                    Stroke="{StaticResource SubtleBorder}"
-                    StrokeThickness="1"
+            <Border x:Name="LayoutPanel" Style="{StaticResource SectionPanel}"
                     StrokeShape="RoundRectangle 20"
                     Padding="20">
                 <VerticalStackLayout Spacing="18">
@@ -95,6 +97,7 @@
                                        Aspect="AspectFit" VerticalOptions="Center" />
                                 <Picker Grid.Column="1"
                                         ItemsSource="{Binding LayoutModeOptions}"
+                                        SemanticProperties.Description="Modo de vista general"
                                         SelectedIndex="{Binding SelectedLayoutModeIndex}" />
                             </Grid>
                         </Border>
@@ -110,6 +113,7 @@
                                 StrokeShape="RoundRectangle 14"
                                 Padding="12,3">
                             <Picker ItemsSource="{Binding PageFitModeOptions}"
+                                    SemanticProperties.Description="Ajuste de página general"
                                     SelectedIndex="{Binding SelectedPageFitModeIndex}" />
                         </Border>
                     </VerticalStackLayout>
@@ -117,9 +121,7 @@
             </Border>
 
             <!-- Sección: Ventana -->
-            <Border BackgroundColor="{StaticResource Surface1}"
-                    Stroke="{StaticResource SubtleBorder}"
-                    StrokeThickness="1"
+            <Border x:Name="WindowPanel" Style="{StaticResource SectionPanel}"
                     StrokeShape="RoundRectangle 20"
                     Padding="20">
                 <VerticalStackLayout Spacing="16">
@@ -134,8 +136,47 @@
                                TextColor="{StaticResource TextPrimary}"
                                LineBreakMode="WordWrap"
                                VerticalOptions="Center" />
-                        <Switch Grid.Column="1" IsToggled="{Binding IsFullScreen}" />
+                        <Switch Grid.Column="1" IsToggled="{Binding IsFullScreen}"
+                                SemanticProperties.Description="Pantalla completa" />
                     </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <Border x:Name="ImportedFoldersPanel" Style="{StaticResource SectionPanel}"
+                    StrokeShape="RoundRectangle 20" Padding="20">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="CARPETAS IMPORTADAS"
+                           TextColor="{StaticResource NeonPurpleBright}"
+                           FontFamily="OpenSansSemibold" FontSize="12" CharacterSpacing="1.4" />
+                    <Label Text="Las carpetas escaneadas se guardan aquí para que puedas identificarlas después."
+                           TextColor="{StaticResource TextSecondary}" FontSize="13" LineBreakMode="WordWrap" />
+                    <Label Text="Todavía no has importado ninguna carpeta."
+                           IsVisible="{Binding HasNoImportedFolders}"
+                           TextColor="{StaticResource TextMuted}" FontSize="13" />
+                    <VerticalStackLayout Spacing="8" BindableLayout.ItemsSource="{Binding ImportedFolders}">
+                        <BindableLayout.ItemTemplate>
+                            <DataTemplate x:DataType="models:ImportedFolderEntry">
+                                <Border BackgroundColor="{StaticResource Surface2}"
+                                        Stroke="{StaticResource SubtleBorder}"
+                                        StrokeThickness="1" StrokeShape="RoundRectangle 12" Padding="12,8">
+                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                        <VerticalStackLayout Spacing="2" VerticalOptions="Center">
+                                            <Label Text="{Binding DisplayName}" FontAttributes="Bold"
+                                                   TextColor="{StaticResource TextPrimary}" LineBreakMode="TailTruncation" />
+                                            <Label Text="{Binding PathOrUri}" FontSize="11"
+                                                   TextColor="{StaticResource TextSecondary}" LineBreakMode="MiddleTruncation" />
+                                        </VerticalStackLayout>
+                                        <Button Grid.Column="1" Text="Quitar"
+                                                SemanticProperties.Description="Quitar carpeta del registro"
+                                                Command="{Binding Source={x:Reference SettingsRootPage}, Path=ViewModel.RemoveImportedFolderCommand, x:DataType=views:SettingsPage}"
+                                                CommandParameter="{Binding PathOrUri}" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </BindableLayout.ItemTemplate>
+                    </VerticalStackLayout>
+                    <Label Text="Quitar una carpeta de esta lista no elimina los documentos de la biblioteca."
+                           TextColor="{StaticResource TextMuted}" FontSize="11" LineBreakMode="WordWrap" />
                 </VerticalStackLayout>
             </Border>
 

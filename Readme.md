@@ -50,19 +50,19 @@ La publicación indicada abajo es autónoma para Windows x64 e incluye .NET y Wi
 
 ## Primeros pasos
 
-1. Pulsa **Abrir archivo** para importar y abrir un CBZ, CBR o PDF, o **Escanear carpeta** para añadir una colección.
+1. Pulsa **Añadir** y elige **Abrir archivo** para importar y abrir un CBZ, CBR o PDF, o **Escanear carpeta** para añadir una colección.
 2. En Android, concede acceso al archivo o a la carpeta seleccionada cuando lo solicite el selector del sistema.
-3. Busca por título, serie o etiqueta y combina los selectores de formato y estado para encontrar documentos. **Limpiar filtros** restablece los tres criterios; los grupos de series muestran solo los libros coincidentes.
-4. Selecciona una portada de la biblioteca para leer. Si aparece un grupo de serie, ábrelo para ver sus documentos. En **Continuar leyendo**, pulsa **Continuar** para abrir una lectura pendiente desde la página guardada; esta sección muestra las lecturas de toda la biblioteca, independientemente de los filtros.
-5. Usa **Anterior**, **Siguiente** o la barra de progreso para navegar por el documento.
-   En la barra superior, **Guardar marcador** o **Quitar marcador** cambia la marca de la página actual. **Marcadores** muestra las páginas guardadas y **Miniaturas** abre una cuadrícula; toca una página para ir directamente a ella. El punto indica la página actual y la estrella indica una página marcada. **← Volver** cierra la vista de navegación.
-   Los controles de vista, ajuste, dirección y filtro guardan los cambios para el libro abierto. La barra indica **Ajustes de este libro** cuando existe una personalización; **Restablecer ajustes** la elimina y aplica los valores generales. Un libro sin personalización sigue los cambios posteriores de **Configuración**.
-6. En **Configuración**, elige la disposición, el ajuste de página, la dirección de lectura y los filtros visuales.
+3. En **Biblioteca**, busca por título, serie o etiqueta y combina los filtros de formato y estado. En una pantalla estrecha, pulsa **Filtrar** para mostrarlos; en una ventana amplia aparecen en el panel lateral. La pantalla enumera los criterios activos y **Limpiar filtros** los restablece. Los grupos de series muestran solo los libros coincidentes.
+4. En **Biblioteca**, pulsa **Leer** en un documento o selecciona su portada. Si aparece un grupo de serie, pulsa **Abrir serie** para ver sus documentos; también puedes seleccionarlo con el teclado. En **Inicio**, pulsa **Continuar** para retomar una lectura desde la página guardada. Las lecturas recientes pasan a nuevas filas según el ancho disponible y son independientes de los filtros de Biblioteca.
+5. Usa **Anterior**, **Siguiente** o la barra de progreso para navegar. El botón **Guardar marcador** o **Quitar marcador** cambia la marca de la página actual. En modo manga, los botones indican la acción correspondiente a cada lado.
+   Pulsa **Ir a página** y cambia entre **Marcadores** y **Miniaturas**; toca una página para abrirla. El punto indica la página actual y la estrella una página marcada. **← Volver** cierra el panel.
+   **Opciones de lectura** reúne disposición, ajuste, dirección, filtro, rotación, pantalla completa y restablecimiento. Los cambios se guardan para el libro abierto; el panel indica si usa valores generales o una personalización. Al restablecer, vuelve a aplicar los valores generales. En Android, toca el centro de la página para mostrar u ocultar los controles; en Windows aparecen al mover el ratón. Se ocultan tras unos segundos de inactividad.
+6. En **Gestión → Configuración**, elige los valores generales de disposición, ajuste de página, dirección de lectura y filtros visuales para los libros sin ajustes propios.
 7. Al volver del lector, se actualiza la biblioteca. Los documentos completados dejan de aparecer en **Continuar leyendo**. Si todavía no se conoce el total de páginas, se indica **Total desconocido** y se oculta el porcentaje.
 8. Pulsa **Acciones** en un documento para editar su título o serie. **Marcar como leído** guarda la última página como progreso y requiere conocer el total; **Marcar como no leído** vuelve a la página 1. **Quitar de la biblioteca** elimina la entrada y su progreso, pero conserva el archivo original.
 9. Si se movió un archivo o se perdió el permiso, usa **Volver a localizar / Conceder acceso** y elige el documento mediante el selector. Se conservan sus datos de lectura. La aplicación rechaza una ruta ya importada y comprueba el formato, el número de páginas y, cuando existe, la huella de la primera página. Si falla una portada, el estado aparece en la tarjeta y **Reintentar portada** vuelve a generarla.
-10. Durante **Escanear carpeta**, observa el avance de indexación y las portadas pendientes. **Cancelar escaneo** conserva lo ya añadido. Al terminar, revisa el resumen y usa **Reintentar fallidos** si hay archivos con error.
-11. Pulsa **Exportar datos** para guardar un respaldo JSON. En otro dispositivo, pulsa **Importar respaldo** y después asocia cada documento pendiente desde **Acciones → Volver a localizar / Conceder acceso**. El respaldo contiene datos de lectura, pero no los archivos CBZ, CBR o PDF originales: cópialos también al destino.
+10. Durante **Escanear carpeta**, Biblioteca muestra el avance en una franja compacta. Pulsa **Detalles** para abrir **Gestión**, donde puedes ver las portadas pendientes y cancelar el escaneo. Al terminar, revisa allí el resumen y usa **Reintentar fallidos** si hay archivos con error. **Cancelar escaneo** conserva lo ya añadido.
+11. En **Gestión**, pulsa **Exportar datos** para guardar un respaldo JSON. En otro dispositivo, pulsa **Importar respaldo** y después asocia cada documento pendiente desde **Acciones → Volver a localizar / Conceder acceso**. El respaldo contiene datos de lectura, pero no los archivos CBZ, CBR o PDF originales: cópialos también al destino.
 
 ### Combinación de respaldos
 
@@ -80,7 +80,7 @@ El formato actual es `nebula-reader-data` versión 1. La importación valida tod
 | `Ctrl` + rueda | Acercar o alejar la página. |
 | Clic y arrastre | Mover la imagen ampliada o la lectura vertical. |
 | `F11` | Activar o desactivar la pantalla completa. |
-| `Esc` | Salir de pantalla completa; si ya está en ventana, volver a la biblioteca. |
+| `Esc` | Cerrar un panel abierto; de otro modo, salir de pantalla completa o volver a la biblioteca. |
 
 En Android, utiliza los gestos táctiles del visor para ampliar y desplazar la página.
 

@@ -1,221 +1,112 @@
-﻿# Plan de mejoras de NebulaReader
+# Plan de desarrollo de la interfaz de NebulaReader
 
-Este plan organiza las próximas mejoras del lector CBZ, CBR y PDF para Android y Windows. La prioridad es facilitar la búsqueda de documentos, retomar la lectura y recuperar el acceso a los archivos sin perder el progreso.
+## Objetivo y punto de partida
 
-Las Entregas 1, 2, 3, 4 y 5 están implementadas; las validaciones manuales indicadas siguen pendientes. Las funciones actuales y las instrucciones de instalación y compilación se describen en [Readme.md](Readme.md).
+Organizar la aplicación para que sea fácil retomar una lectura, encontrar un documento y leerlo tanto en Android como en Windows. La interfaz debe adaptarse al espacio disponible: una ventana estrecha de Windows necesita una presentación compacta y una tableta Android puede aprovechar una distribución amplia.
 
-## Base actual
+La búsqueda, los filtros, la agrupación de series, «Continuar leyendo», la importación, los respaldos, los marcadores y las preferencias por documento ya funcionan. Este plan reorganiza su presentación sin cambiar el significado de los datos ni el comportamiento de lectura. La pantalla principal se encuentra en [LibraryPage.xaml](NebulaReader/Views/LibraryPage.xaml), su adaptación actual en [LibraryPage.xaml.cs](NebulaReader/Views/LibraryPage.xaml.cs), el visor en [ReaderPage.xaml](NebulaReader/Views/ReaderPage.xaml) y la navegación inicial en [AppShell.xaml](NebulaReader/AppShell.xaml).
 
-La aplicación utiliza .NET 10 y .NET MAUI, con arquitectura MVVM, CommunityToolkit.Mvvm, SkiaSharp, SharpCompress y SQLite. Ya dispone de biblioteca con portadas, agrupación de series, progreso local, lectura individual y doble, desplazamiento vertical, modo manga, filtros visuales y controles de zoom.
+## Estructura propuesta
 
-Las siguientes entregas amplían esta base. Los criterios de aceptación deben comprobarse antes de marcar una tarea como terminada.
-
-## Prioridades
-
-| Prioridad | Mejora | Beneficio |
+| Área | Contenido principal | Acciones secundarias |
 | --- | --- | --- |
-| Alta | Búsqueda y filtros | Encontrar documentos por título, serie, etiqueta, formato o estado. |
-| Alta | Continuar leyendo | Retomar rápidamente los documentos abiertos recientemente. |
-| Alta | Administración de biblioteca | Quitar entradas, cambiar su estado y corregir metadatos. |
-| Alta | Recuperación de archivos inaccesibles | Restaurar rutas o permisos conservando el progreso. |
-| Media | Marcadores y miniaturas | Guardar páginas y navegar visualmente por el documento. |
-| Media | Preferencias por documento | Recordar la configuración adecuada para cada lectura. |
-| Media | Importación con progreso y cancelación | Controlar el escaneo de colecciones grandes y conocer sus errores. |
-| Media | Exportación e importación de datos | Respaldar y recuperar progreso, marcadores y preferencias. |
+| Inicio | Lecturas recientes con progreso y acceso a la colección | Ninguna acción administrativa en el bloque principal |
+| Biblioteca | Búsqueda, filtros, series y documentos | Añadir archivo, escanear carpeta y acciones de cada documento |
+| Gestión | Estado de importación, fallos, reintentos y respaldos | Explicación de qué datos incluye el respaldo |
+| Configuración | Preferencias generales de lectura y ventana | Valores predeterminados para documentos sin personalización |
+| Lector | Página, progreso y navegación | Opciones de lectura, marcadores y miniaturas |
 
-## Entrega 1: Buscar y continuar la lectura
+«Inicio» y «Biblioteca» son destinos de navegación. «Añadir» y «Filtrar» son acciones dentro de Biblioteca. Gestión y Configuración quedan accesibles desde un menú secundario; no necesitan competir con las lecturas recientes ni con las portadas.
 
-### Búsqueda y filtros
+En Android compacto, usar una barra inferior para Inicio y Biblioteca. En pantallas amplias y Windows, usar un panel lateral para esos destinos y el acceso a Gestión y Configuración. La navegación debe responder al ancho de la ventana, no únicamente al tipo de dispositivo. El lector mantiene una ruta clara para volver a la biblioteca y puede ocupar toda la pantalla durante la lectura.
 
-- [x] Añadir búsqueda por título, serie y etiquetas.
-- [x] Permitir filtrar por CBZ, CBR y PDF.
-- [x] Permitir filtrar por estado: no leído, leyendo y completado.
-- [x] Combinar búsqueda y filtros con la agrupación de series existente.
-- [x] Ofrecer una acción para limpiar los filtros y un mensaje cuando no haya resultados.
+## Entrega 1: Simplificar la biblioteca
 
-**Criterios de aceptación:** la búsqueda encuentra documentos sin distinguir mayúsculas y minúsculas; los filtros se pueden combinar y limpiar; abrir un resultado mantiene el documento y su progreso correctos. Las series muestran únicamente los documentos que cumplen los criterios activos.
+**Prioridad: alta.**
 
-### Sección «Continuar leyendo»
+- [x] Sustituir la cabecera extensa por un título compacto, búsqueda visible y acción principal **Añadir**.
+- [x] Agrupar **Abrir archivo** y **Escanear carpeta** dentro de Añadir, conservando ambos flujos actuales.
+- [x] Mover exportación, importación de respaldo y sus explicaciones a Gestión.
+- [x] Mostrar el progreso de un escaneo activo en una franja compacta con acceso a su detalle; conservar cancelación, resumen de fallos y reintento en Gestión.
+- [x] Mantener «Continuar leyendo» como primer bloque de contenido de la pantalla principal, antes de la búsqueda y la colección. Su destino independiente se añadirá en la Entrega 2.
+- [x] Mantener las acciones por documento junto a cada tarjeta; distinguir visualmente abrir el libro de administrar su entrada.
 
-- [x] Mostrar los documentos en lectura, ordenados por fecha de última apertura.
-- [x] Incluir portada, página actual, total de páginas y porcentaje cuando el total sea conocido.
-- [x] Añadir una acción directa para continuar cada documento.
-- [x] Actualizar la sección al volver del lector.
+**Criterios de aceptación:** en un teléfono vertical se ve al menos el comienzo de las portadas o las lecturas recientes sin atravesar bloques administrativos; abrir un archivo y escanear una carpeta siguen disponibles en dos pasos como máximo desde Biblioteca; un escaneo activo muestra su estado y puede cancelarse; exportar e importar respaldos siguen accesibles y explican que no incluyen los documentos originales.
 
-**Criterios de aceptación:** abrir un documento desde esta sección restaura la página guardada; el orden refleja la última lectura; un documento completado deja de aparecer entre las lecturas pendientes. Si todavía no se conoce el total de páginas, no se muestra un porcentaje engañoso.
+**Archivos de partida:** [LibraryPage.xaml](NebulaReader/Views/LibraryPage.xaml), [LibraryPage.xaml.cs](NebulaReader/Views/LibraryPage.xaml.cs) y [LibraryViewModel.cs](NebulaReader/ViewModels/LibraryViewModel.cs).
 
-**Punto de partida:** [BookItem.cs](NebulaReader/Models/BookItem.cs) ya almacena la fecha de última lectura, el estado y el progreso. La presentación de la biblioteca se gestiona en [LibraryViewModel.cs](NebulaReader/ViewModels/LibraryViewModel.cs) y [LibraryPage.xaml](NebulaReader/Views/LibraryPage.xaml).
+**Estado de la implementación:** la biblioteca muestra Añadir y Gestión en una cabecera compacta. Gestión reutiliza el estado de la biblioteca para mostrar el detalle del escaneo, sus fallos, los respaldos y el acceso a Configuración. Las tarjetas individuales distinguen **Leer** de **Acciones**. Las compilaciones Debug de Windows y Android terminaron sin advertencias ni errores y pasaron las 32 pruebas automatizadas.
 
-**Implementación:** las consultas se centralizan en [LibraryBrowseService.cs](NebulaReader/Services/LibraryBrowseService.cs). Se conserva la identidad de las series aunque un filtro deje un solo volumen, y las tarjetas usan el libro original para restaurar el progreso. «Continuar leyendo» es independiente de los filtros. El lector guarda también las aperturas sin cambio de página y el botón Atrás utiliza la salida que persiste el progreso antes de volver a la biblioteca. Las actualizaciones de portadas y metadatos no sobrescriben el progreso guardado.
+**Validación visual pendiente:** comprobar en un teléfono Android vertical y horizontal que se ven las lecturas recientes o el comienzo de la colección, abrir ambos tipos de importación desde Añadir y confirmar el avance y la cancelación de un escaneo real. Repetir los flujos en Windows con ventana estrecha. El canal de control visual de Windows devolvió `Computer Use native pipe is unavailable` durante esta entrega.
 
-**Validación automatizada:** [LibraryBrowseTests.cs](NebulaReader.Tests/LibraryBrowseTests.cs) cubre búsqueda, filtros, agrupación, lecturas recientes y presentación del progreso. [LibraryPersistenceTests.cs](NebulaReader.Tests/LibraryPersistenceTests.cs) comprueba la persistencia SQLite y que los documentos completados salen de las lecturas pendientes.
+## Entrega 2: Navegación y búsqueda adaptables
 
-**Resultado de comprobación inicial:** 26 pruebas aprobadas en Release; compilaciones de Windows x64 en Release y Android ARM64 en Debug correctas. En esa comprobación Windows mostró cuatro advertencias de optimización de bindings XAML; Android Debug terminó sin advertencias ni errores.
+**Prioridad: alta.**
 
-**Validación manual pendiente:** completar las comprobaciones de búsqueda, navegación dentro de series, botón Continuar y retorno del lector en Windows y Android físico, incluidas pantallas pequeñas. El servicio de control de aplicaciones de Windows no estuvo disponible para realizar la comprobación visual. Las comprobaciones de filtros en Android descritas a continuación sí se realizaron.
+- [x] Incorporar los destinos Inicio y Biblioteca a la navegación principal, conservando la ubicación del usuario al volver del lector.
+- [x] Presentar búsqueda y filtros de formato y estado en una fila compacta cuando quepan; en ancho reducido, abrir los filtros en un panel con indicador de criterios activos y acción **Limpiar**.
+- [x] En ventanas amplias, mostrar los filtros en una columna lateral y la colección en el área principal.
+- [x] Calcular columnas de portadas según el ancho real del área de contenido, incluyendo el espacio ocupado por el panel lateral.
+- [x] Conservar la identidad de las series y el resultado de la búsqueda al entrar y salir de un grupo.
+- [x] Comprobar en un dispositivo Android que los selectores nativos conservan su origen de datos al cambiar de filtros y de vista.
 
-### Corrección del cierre de los filtros en Android
+**Criterios de aceptación:** la búsqueda, los filtros combinados y **Limpiar** producen los mismos resultados actuales; se distingue qué filtros están activos; una ventana de Windows reducida cambia a una distribución compacta sin cortar controles; al redimensionar o rotar se preservan búsqueda, selección y posición de navegación; ninguna tarjeta queda bajo el panel lateral.
 
-**Error reproducido:** `ArgumentOutOfRangeException` en `Microsoft.Maui.Controls.Picker.UpdateSelectedItem`. En el teléfono se reprodujo seleccionando CBZ, después «Leyendo» sin coincidencias y finalmente «No leído», que volvía a mostrar libros.
+**Archivos de partida:** [AppShell.xaml](NebulaReader/AppShell.xaml), [LibraryPage.xaml](NebulaReader/Views/LibraryPage.xaml), [LibraryPage.xaml.cs](NebulaReader/Views/LibraryPage.xaml.cs) y [LibraryBrowseService.cs](NebulaReader/Services/LibraryBrowseService.cs).
 
-**Causa:** los filtros estaban enlazados al contexto heredado de la cabecera de `CollectionView`. Al reemplazar los resultados y pasar de una vista vacía a una con documentos, el reciclado de la cabecera podía retirar ese contexto y vaciar las opciones mientras el selector nativo todavía procesaba el índice elegido. El control intentaba consultar una posición de una lista que ya no estaba disponible.
+**Estado de la implementación:** Inicio y Biblioteca comparten el mismo `LibraryViewModel` dentro de la pantalla principal, para conservar búsqueda, filtros, serie activa y destino al volver del lector. La navegación aparece abajo en ancho reducido y a la izquierda en ventanas amplias. Los filtros usan el panel lateral, una fila horizontal o un panel plegable según el ancho; sus enlaces apuntan a la página para mantener estables las opciones durante el reciclado de la cabecera. La cuadrícula resta el ancho del panel antes de calcular las columnas y recuerda el primer elemento visible al cambiar de destino o volver del lector. Pasaron las 32 pruebas automatizadas; Windows y Android compilaron en Debug.
 
-**Corrección:** en [LibraryPage.xaml](NebulaReader/Views/LibraryPage.xaml), los enlaces de `ItemsSource` y `SelectedIndex` de ambos filtros usan explícitamente `LibraryRootPage.ViewModel`. Esta propiedad tipada se asigna antes de inicializar el XAML. Así se conservan las opciones y la selección durante el reciclado de la cabecera, sin capturar ni silenciar la excepción.
+**Validación Android realizada:** instalada la APK Release en un teléfono físico. Se comprobó Inicio, el paso a Biblioteca, la apertura del panel y los selectores nativos, la secuencia CBZ → Leyendo → No leído → Limpiar con resultados vacíos y la conservación del filtro CBZ al pasar por Inicio y volver. No hubo cierre de la aplicación y los selectores conservaron sus opciones.
 
-**Verificación del 14 de noviembre de 2026:**
+**Ajuste adaptable posterior:** las columnas de Biblioteca se calculan con el ancho medido del contenido y reservan espacio para el desplazamiento vertical. Inicio distribuye las lecturas recientes en varias filas; la cabecera, la búsqueda y las acciones de las tarjetas cambian de posición cuando el ancho se reduce. Las miniaturas y los controles del lector también reajustan sus columnas y filas al redimensionar. Se añadieron pruebas para comprobar que las columnas y tarjetas recientes caben dentro de anchos de 200 a 2000 DIP.
 
-- [x] Generar la APK Android ARM64 en Release e instalarla en un Moto G Stylus 5G.
-- [x] Con un CBZ de prueba en lectura, alternar «Completado» sin coincidencias y «Leyendo» con un resultado.
-- [x] Alternar «No leído» sin coincidencias y «Leyendo» con un resultado.
-- [x] Alternar CBR y PDF sin coincidencias con CBZ con un resultado.
-- [x] Comprobar que el selector conserva el texto de la opción elegida después de cada transición.
-- [x] Comprobar que «Limpiar filtros» restablece formato y estado, y recupera los resultados tras una búsqueda sin coincidencias.
-- [x] Confirmar que el proceso de la aplicación permanece activo, sin reinicios ni nuevas excepciones en el buffer de cierres de logcat.
-- [x] Volver a ejecutar las 26 pruebas automatizadas, todas aprobadas.
-- [x] Compilar Windows x64 en Release sin errores. En esta primera comprobación hubo ocho advertencias de optimización de bindings XAML, resueltas posteriormente como se describe a continuación.
+**Densidad de la colección:** las tarjetas usan columnas mínimas de 200 DIP, menos separación y portadas de hasta 180 DIP de alto. Las acciones se mantienen en una fila cuando caben y se apilan solo en ventanas muy estrechas; las lecturas recientes se limitan a 300 DIP de ancho por tarjeta.
 
-La APK corregida se encuentra en `releases/android/com.masterpet.nebulareader-Signed.apk`. El registro de la aplicación durante la verificación se guardó en `releases/logs/nebulareader-picker-corregido-20261114.log`. Estas salidas locales están excluidas de Git. Se utilizó un cómic de prueba porque la biblioteca aparecía vacía al iniciar la verificación de la nueva instalación.
+**Validación manual pendiente:** probar la transición de resultados vacíos a libros visibles con una biblioteca no vacía, la rotación y el retorno desde el lector; revisar Windows con ventanas estrecha, mediana y maximizada. El teléfono usado en la comprobación tenía la biblioteca vacía y el canal de control visual de Windows sigue sin conectarse.
 
-### Corrección de las advertencias XAML
+## Entrega 3: Controles del lector por frecuencia de uso
 
-- [x] Activar `MauiEnableXamlCBindingWithSourceCompilation` en [NebulaReader.csproj](NebulaReader/NebulaReader.csproj).
-- [x] Exponer el ViewModel tipado e inicializarlo antes de `InitializeComponent` en [LibraryPage.xaml.cs](NebulaReader/Views/LibraryPage.xaml.cs).
-- [x] Indicar el tipo de la página en cada binding con `Source` y mantener el tipo `LibraryDisplayItem` para los parámetros de las tarjetas, eliminando los `x:DataType` nulos.
-- [x] Compilar Windows x64 en Release y Android ARM64 en Debug con **cero advertencias y cero errores**, sin suprimir los avisos con `NoWarn`.
+**Prioridad: alta.**
 
-Si VS Code conserva diagnósticos de una compilación anterior, actualizar el panel ejecutando **Developer: Reload Window** desde la paleta de comandos. La solución de código sigue las instrucciones de [enlaces compilados de .NET MAUI](https://learn.microsoft.com/dotnet/maui/fundamentals/data-binding/compiled-bindings?view=net-maui-10.0#compile-bindings-that-define-the-source-property).
+- [x] Dejar en la interfaz inmediata **Volver**, página actual, anterior/siguiente, progreso y marcador.
+- [x] Reunir disposición, ajuste de página, dirección de lectura, filtro visual y restablecimiento en **Opciones de lectura**. Mostrar claramente si se editan ajustes de este libro o valores generales.
+- [x] Unificar **Marcadores** y **Miniaturas** en un panel **Ir a página** con dos vistas internas.
+- [x] En Android, mostrar los controles al tocar la página y ocultarlos durante la lectura; mantener zonas táctiles suficientes y evitar que tapen demasiado contenido.
+- [x] En Windows, revelar controles al mover el ratón y permitir un panel lateral de opciones que pueda cerrarse; conservar teclado, rueda, arrastre y F11.
+- [x] Mantener la navegación coherente con la dirección manga y con los modos de página individual, doble y desplazamiento continuo.
 
-## Entrega 2: Administrar y recuperar la biblioteca
+**Criterios de aceptación:** la página sigue siendo el elemento dominante en teléfono y escritorio; las acciones frecuentes no requieren recorrer una barra horizontal; todas las preferencias actuales siguen disponibles y se guardan por libro; los marcadores y las miniaturas abren la página correcta; la lectura sigue siendo operable con tacto, ratón y teclado.
 
-### Administración por documento
+**Archivos de partida:** [ReaderPage.xaml](NebulaReader/Views/ReaderPage.xaml), [ReaderPage.xaml.cs](NebulaReader/Views/ReaderPage.xaml.cs) y [ReaderViewModel.cs](NebulaReader/ViewModels/ReaderViewModel.cs).
 
-- [x] Incorporar un menú de acciones en cada libro.
-- [x] Permitir quitar una entrada de la biblioteca conservando el archivo original.
-- [x] Permitir marcar como leído o no leído, con reglas coherentes para el progreso.
-- [x] Permitir corregir el título y la serie.
-- [x] Conservar las correcciones manuales durante posteriores extracciones de metadatos.
+**Estado de la implementación:** el HUD muestra Volver, Ir a página, Opciones de lectura, progreso, navegación y marcador sin desplazamiento horizontal. Ir a página ofrece Marcadores y Miniaturas; Opciones de lectura ocupa un panel lateral cerrable y distingue los ajustes del libro de los valores generales. Los controles se ocultan tras cinco segundos de inactividad; el toque central y el movimiento del ratón los muestran de nuevo. Los botones de navegación indican la acción de cada lado en modo manga. Pasaron las 32 pruebas automatizadas y Android y Windows compilaron sin advertencias.
 
-**Criterios de aceptación:** las modificaciones persisten al reiniciar; quitar una entrada no elimina el archivo; los cambios actualizan los filtros y las agrupaciones. La interfaz deja claro qué ocurre con el progreso al cambiar el estado.
+**Validación manual pendiente:** comprobar en un documento real la selección de marcadores y miniaturas, las tres disposiciones y la dirección manga en Android y Windows, además de la ocupación del HUD en teléfono horizontal y ventana estrecha. No había un dispositivo Android conectado durante esta entrega.
 
-### Recuperación de archivos inaccesibles
+## Entrega 4: Coherencia visual y accesibilidad
 
-- [x] Distinguir entre archivo ausente, permiso perdido y documento dañado.
-- [x] Ofrecer «Volver a localizar» para un archivo movido.
-- [x] Ofrecer «Conceder acceso» cuando falten permisos, especialmente en Android.
-- [x] Conservar la identidad del libro, su progreso y sus metadatos al actualizar la ubicación.
-- [x] Comprobar que el archivo elegido corresponde al documento esperado y evitar entradas duplicadas.
+**Prioridad: media.**
 
-**Criterios de aceptación:** mover un documento y volver a localizarlo permite continuar la lectura; recuperar permisos no crea un libro nuevo; cancelar la recuperación conserva los datos existentes.
+- [x] Definir componentes reutilizables para cabeceras, botones de acción, filtros, tarjetas y paneles.
+- [x] Mantener nombres y ubicación consistentes para **Añadir**, **Filtrar**, **Ir a página**, **Opciones de lectura** y **Volver**.
+- [x] Revisar jerarquía tipográfica, contraste, estados de foco y selección, y áreas táctiles en las dos plataformas.
+- [x] Evitar que la información dependa solo de color o iconos: mostrar texto para progreso, filtros activos, errores de importación y estado de acceso a un archivo.
+- [x] Ajustar Configuración para que sus grupos sean fáciles de recorrer en teléfono y no se estiren excesivamente en ventanas grandes.
 
-### Errores y reintentos de portadas
+**Criterios de aceptación:** cada acción tiene una etiqueta comprensible; el foco es visible al navegar con teclado; los controles importantes son utilizables con toque; texto ampliado y ventanas estrechas no producen solapamientos ni recortes.
 
-- [x] Registrar los errores de generación de portadas con contexto suficiente para diagnosticarlos.
-- [x] Mostrar un estado comprensible en los libros cuya portada no pudo generarse.
-- [x] Ofrecer una acción «Reintentar».
-- [x] Mantener operativa la biblioteca aunque falle un archivo.
+**Archivos de partida:** [Styles.xaml](NebulaReader/Resources/Styles/Styles.xaml), [Colors.xaml](NebulaReader/Resources/Styles/Colors.xaml) y [SettingsPage.xaml](NebulaReader/Views/SettingsPage.xaml).
 
-**Punto de partida:** [LibraryService.cs](NebulaReader/Services/LibraryService.cs) silencia algunos errores durante la generación de portadas. El comportamiento debe permitir diagnosticar y recuperar estos fallos sin interrumpir los demás documentos.
+**Estado de la implementación:** los estilos compartidos reúnen paneles, tarjetas, títulos, filtros y botones. Los botones, selectores y la búsqueda muestran un estado de foco; se elevó el contraste del texto atenuado. Biblioteca muestra los criterios activos en texto, conserva el estado en un pie de hasta dos líneas y ofrece **Abrir serie** como botón accesible por teclado. Configuración distingue los valores generales, limita su ancho y reduce márgenes en ventanas estrechas; Gestión usa el mismo límite. En el lector, las acciones superiores pasan a dos filas en ancho compacto para mantener sus nombres completos. Pasaron las 32 pruebas automatizadas; Android compiló sin advertencias y Windows con una advertencia `NU1801` por falta de acceso a NuGet.
 
-**Implementación:** las acciones de cada tarjeta se guardan en SQLite sin modificar el archivo original. Marcar como leído requiere un total conocido y sitúa el progreso en la última página; marcar como no leído lo reinicia en la primera. El selector Android conserva el permiso de lectura del documento elegido. La recuperación rechaza rutas duplicadas, compara formato y total de páginas, y compara la huella de la primera página para los libros que ya la tengan. Los libros anteriores sin huella se comprueban mediante formato y total conocido. La portada se invalida al cambiar la ubicación; los errores quedan registrados y se muestran con una acción para reintentar.
+**Validación visual pendiente:** revisar foco de teclado, texto ampliado, lectores de pantalla y áreas táctiles en Windows y Android, además de la rotación y las ventanas estrechas con documentos reales. El canal de control visual de Windows devolvió `Computer Use native pipe is unavailable` y no había un dispositivo Android conectado durante la verificación.
 
-**Validación manual pendiente:** mover un archivo, revocar el permiso Android, seleccionar un documento incorrecto y reintentar una portada en Windows y Android físico. Confirmar visualmente el menú, los filtros y la agrupación tras editar metadatos.
+## Verificación por entrega
 
-## Entrega 3: Marcadores y navegación visual
+1. Revisar Android en teléfono vertical y horizontal, y en tableta o emulador amplio. Revisar Windows con ventana estrecha, mediana y maximizada.
+2. Recorrer estos flujos completos: continuar lectura; buscar y filtrar; abrir una serie; importar archivo y carpeta; cancelar y reintentar escaneo; exportar e importar respaldo; abrir marcadores y miniaturas; cambiar y restablecer preferencias por libro.
+3. Comprobar rotación y redimensionamiento durante búsqueda, escaneo y lectura, sin pérdida de estado ni saltos inesperados.
+4. Ejecutar `dotnet test NebulaReader.Tests/NebulaReader.Tests.csproj` y compilar Android y Windows. Añadir pruebas automatizadas solo donde la reorganización introduzca lógica nueva de navegación o estado; validar la distribución visual en dispositivos reales.
+5. Actualizar [Readme.md](Readme.md) al finalizar cada entrega para que las instrucciones coincidan con los nombres y rutas visibles en la aplicación.
 
-### Marcadores
-
-- [x] Persistir los marcadores asociados a cada documento.
-- [x] Añadir acciones para guardar y quitar el marcador de la página actual.
-- [x] Mostrar una lista de páginas marcadas y permitir abrirlas directamente.
-- [x] Preservar los marcadores al actualizar el progreso o recuperar una ruta.
-
-**Punto de partida:** [ReadingProgress.cs](NebulaReader/Models/ReadingProgress.cs) declara `BookmarkedPages`, pero [LibraryDatabase.cs](NebulaReader/Services/LibraryDatabase.cs) no persiste esa lista. Es necesario completar el almacenamiento y la interfaz.
-
-**Criterios de aceptación:** los marcadores sobreviven al reinicio, no se duplican y abren la página correspondiente. La actualización de la base de datos conserva la biblioteca y el progreso existentes.
-
-### Cuadrícula de miniaturas
-
-- [x] Añadir una vista de miniaturas con número de página.
-- [x] Señalar la página actual y las páginas marcadas.
-- [x] Generar miniaturas bajo demanda y limitar su consumo de memoria.
-- [x] Cancelar las cargas pendientes al cerrar la vista o cambiar de documento.
-
-**Criterios de aceptación:** seleccionar una miniatura abre la página correcta; recorrer un documento extenso no mantiene todas sus imágenes decodificadas en memoria; cerrar la cuadrícula libera el trabajo y los recursos que ya no se necesitan.
-
-**Implementación:** una tabla `BookBookmarks` se crea al abrir la base existente y guarda páginas por identidad de documento; actualizar el progreso o la ruta no toca las marcas. Al quitar un libro se eliminan sus marcadores. El visor ofrece guardar o quitar la marca actual, abrir la lista y seleccionar una página. La cuadrícula virtualizada solicita miniaturas al mostrar cada celda, decodifica a un máximo de 320 píxeles y limita a dos las generaciones simultáneas. Al cerrar la vista o cambiar de libro se cancelan las solicitudes y se liberan los elementos de la cuadrícula.
-
-**Validación automatizada:** la prueba de migración y persistencia comprueba marcas únicas, reapertura de SQLite, progreso, cambio de ruta y eliminación del libro. La suite completa cuenta con 29 pruebas aprobadas. Windows x64 y Android ARM64 compilan en Release con cero advertencias y cero errores.
-
-**Verificación visual Android del 14 de noviembre de 2026:** en un Moto G Stylus 5G se instaló la APK Release y se abrió el CBZ de prueba de tres páginas. Se comprobó que guardar y quitar un marcador actualiza el botón y la lista, que la cuadrícula muestra las tres miniaturas con indicadores de página actual y marcada, y que tocar la miniatura 3 abre la página 3. Los marcadores de las páginas 1 y 3 sobrevivieron al cierre del lector y al reinicio completo del proceso; el progreso volvió a la página guardada. La app permaneció activa y no aparecieron cierres nuevos durante esta sesión. Las capturas están en `releases/logs/android-visual-*.png` (carpeta local excluida de Git).
-
-**Validación manual pendiente:** comprobar la lista y la cuadrícula en Windows y en Android con CBR y PDF, incluyendo un documento extenso, cambios rápidos de libro y cierre durante una carga de miniaturas. Medir el consumo de memoria en esos casos. El control visual de Windows no pudo conectarse: el servicio nativo devolvió `Computer Use native pipe is unavailable` incluso después de reiniciar la sesión e intentar un segundo acceso.
-
-## Entrega 4: Preferencias por documento
-
-- [x] Guardar por libro el modo de vista, el ajuste, la dirección de lectura y el filtro visual.
-- [x] Usar las preferencias generales como valores iniciales para documentos sin personalización.
-- [x] Permitir restablecer un documento a los valores generales.
-- [x] Mantener las preferencias al volver a localizar el archivo.
-
-**Criterios de aceptación:** un manga conserva la lectura invertida y un PDF conserva el ajuste al ancho sin afectar a otros libros. Las preferencias sobreviven al reinicio y el restablecimiento elimina la personalización del documento.
-
-**Implementación:** la tabla `BookReaderPreferences` guarda una configuración completa por identidad de libro. Si no existe una fila, el visor toma los valores generales y sigue sus cambios. La primera modificación desde el visor guarda los cuatro valores actuales para ese documento sin modificar los ajustes generales. **Restablecer ajustes** elimina la fila y vuelve a aplicar los valores generales. El cambio de ruta conserva la misma identidad y sus preferencias; quitar el libro elimina también su configuración.
-
-**Validación automatizada:** la prueba de migración comprueba que una biblioteca existente abre sin personalizaciones, que manga y PDF guardan valores independientes, que los cambios sobreviven a la reapertura y a la reubicación, y que restablecer un libro no afecta al otro ni al progreso. Las 30 pruebas de la suite pasan. Windows x64 compiló en Release sin advertencias ni errores; la APK Android ARM64 se publicó correctamente.
-
-**Validación visual pendiente:** confirmar los cuatro controles y el restablecimiento en Windows y Android físico, incluidos cambios de valores generales y reapertura de ambos libros. La APK se instaló en el Moto G Stylus 5G, pero el teléfono cambió a otra aplicación durante la prueba; se detuvo la interacción ADB para no interferir con su uso. El acceso visual automatizado a Windows sigue sin estar disponible por el error del canal nativo de Computer Use.
-
-## Entrega 5: Importación controlada y respaldo
-
-### Importación con progreso y cancelación
-
-- [x] Mostrar archivos procesados y total cuando se conozca.
-- [x] Separar el progreso de indexación del trabajo pendiente de portadas.
-- [x] Permitir cancelar el escaneo sin borrar los documentos ya importados.
-- [x] Continuar con el resto de la colección si falla un archivo.
-- [x] Presentar un resumen de documentos añadidos, existentes y fallidos.
-
-**Criterios de aceptación:** la interfaz sigue respondiendo durante el escaneo; cancelar detiene el trabajo pendiente; repetir una importación no duplica entradas; los fallos se pueden identificar y reintentar.
-
-### Exportación e importación de datos
-
-- [x] Definir un formato de respaldo versionado.
-- [x] Exportar progreso, marcadores, metadatos corregidos y preferencias.
-- [x] Validar el respaldo antes de modificar los datos locales.
-- [x] Definir cómo combinar datos existentes y resolver conflictos.
-- [x] Permitir asociar los documentos con sus ubicaciones en el equipo de destino.
-- [x] Explicar que el respaldo de datos no incluye los archivos CBZ, CBR o PDF originales.
-
-**Criterios de aceptación:** una exportación seguida de una importación restaura los datos de lectura; un respaldo inválido no daña la biblioteca; las rutas de otro dispositivo se pueden recuperar sin perder el progreso.
-
-**Implementación:** el escaneo enumera los archivos antes de indexarlos y presenta procesados/total, recuentos y portadas pendientes por separado. Cada archivo se procesa de forma aislada; los fallos se muestran con ruta y causa, y pueden reintentarse. Cancelar detiene el siguiente archivo y conserva los anteriores. El respaldo JSON usa el esquema `nebula-reader-data`, versión 1. Contiene progreso, marcadores, título y serie corregidos, etiquetas, preferencias por documento y ajustes generales del lector. Se valida completo antes de una transacción de importación. En una coincidencia por ID se conserva la ruta local, gana el progreso con fecha de lectura más reciente (el local en empate), se conservan las correcciones manuales locales, se unen los marcadores y solo se toman las preferencias del respaldo si no existen preferencias locales. Los ajustes generales del respaldo se aplican al importar. Las entradas nuevas quedan pendientes de asociación con el archivo original desde **Acciones → Volver a localizar / Conceder acceso**.
-
-**Validación automatizada:** 32 pruebas superadas. Las pruebas nuevas comprueban el escaneo con fallo, duplicado y cancelación; también el ciclo exportar/importar, la restauración de ajustes generales, la conservación de ruta y progreso local, la unión de marcadores y el rechazo de un respaldo inválido sin alterar la biblioteca.
-
-**Compilaciones y comprobación visual:** publicadas la APK Android ARM64 y la versión autónoma Windows x64, con EXE y ZIP en `releases/`. La APK se instaló en el Moto G Stylus 5G y se comprobó visualmente la barra de importación y respaldo. Una exportación y su posterior importación de una biblioteca vacía finalizaron con mensajes correctos. Queda pendiente probar el flujo con una colección real grande y revisar visualmente Windows: el canal nativo de Computer Use sigue sin conectarse.
-
-## Validación antes de distribuir
-
-Estas comprobaciones acompañan las entregas y deben completarse antes de una distribución amplia.
-
-- [ ] Validar compilaciones Release en Windows y en un dispositivo Android físico.
-- [ ] Comprobar apertura, cierre y reapertura de documentos con restauración del progreso.
-- [ ] Probar cambios de orientación, zoom, modos de lectura y retorno desde segundo plano.
-- [ ] Probar archivos corruptos, rutas movidas y permisos revocados.
-- [ ] Medir tiempo de apertura, respuesta al cambiar de página y consumo máximo de memoria con documentos reales grandes, incluidos archivos superiores a 500 MB y PDF de más de 300 páginas.
-- [ ] Verificar bibliotecas grandes, escaneos repetidos y cancelación de importaciones.
-- [ ] Añadir pruebas automatizadas para filtros, persistencia de marcadores, recuperación de rutas e importación de respaldos a medida que se implementen.
-- [ ] Configurar y conservar de forma segura una firma Android propia para distribuir actualizaciones.
-- [ ] Actualizar [Readme.md](Readme.md) con las funciones efectivamente terminadas y los pasos de instalación vigentes.
-
-La suite actual en [NebulaReader.Tests/](NebulaReader.Tests/) cubre partes del núcleo y escenarios de estrés. Debe complementarse con las pruebas de integración y de uso real anteriores.
-
-## Orden recomendado
-
-1. Búsqueda, filtros y «Continuar leyendo».
-2. Administración de biblioteca, recuperación de archivos y reintento de portadas.
-3. Marcadores y navegación mediante miniaturas.
-4. Preferencias por documento.
-5. Importación con progreso y respaldo de datos.
-
-Cada entrega se considera terminada cuando cumple sus criterios de aceptación, pasa las comprobaciones pertinentes y su comportamiento queda documentado.
+Una entrega se marca como completada cuando cumple sus criterios de aceptación en ambas plataformas y sus flujos existentes siguen funcionando.

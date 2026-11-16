@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:NebulaReader.ViewModels"
+             xmlns:models="clr-namespace:NebulaReader.Models"
+             x:Class="NebulaReader.Views.ManagementPage"
+             x:DataType="vm:LibraryViewModel"
+             Title="Gestión"
+             Shell.NavBarIsVisible="False"
+             BackgroundColor="{StaticResource BgCanvas}">
+    <ScrollView>
+        <VerticalStackLayout x:Name="ManagementContainer" Padding="18,16" Spacing="16"
+                             HorizontalOptions="Center">
+            <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                <Button Text="← Volver" Clicked="OnBackClicked" />
+                <Label Grid.Column="1" Text="Gestión" Style="{StaticResource SectionTitleLabel}"
+                       VerticalOptions="Center" />
+            </Grid>
+
+            <Border Style="{StaticResource SectionPanel}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="IMPORTACIÓN" Style="{StaticResource EyebrowLabel}" />
+                    <Label Text="{Binding ImportProgressText}" IsVisible="{Binding HasImportReport}"
+                           LineBreakMode="WordWrap" />
+                    <ProgressBar Progress="{Binding ImportFraction}" IsVisible="{Binding IsImporting}" />
+                    <Label Text="{Binding PendingCoverText}" TextColor="{StaticResource TextSecondary}" />
+                    <Button Text="Cancelar escaneo" IsVisible="{Binding IsImporting}"
+                            Command="{Binding CancelImportCommand}" HorizontalOptions="Start" />
+                    <Label Text="{Binding ImportSummary}" IsVisible="{Binding HasImportReport}"
+                           LineBreakMode="WordWrap" />
+                    <Label Text="Archivos con errores" Style="{StaticResource FilterCaption}"
+                           IsVisible="{Binding HasImportFailures}" />
+                    <CollectionView ItemsSource="{Binding ImportFailures}"
+                                    IsVisible="{Binding HasImportFailures}"
+                                    HeightRequest="160" SelectionMode="None">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="models:ImportFailure">
+                                <VerticalStackLayout Padding="4" Spacing="2">
+                                    <Label Text="{Binding FilePath}" FontSize="11"
+                                           LineBreakMode="MiddleTruncation" />
+                                    <Label Text="{Binding Error}" FontSize="11"
+                                           TextColor="{StaticResource TextSecondary}" />
+                                </VerticalStackLayout>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                    <Button Text="Reintentar fallidos" IsVisible="{Binding HasImportFailures}"
+                            Command="{Binding RetryFailedImportsCommand}" HorizontalOptions="Start" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Border Style="{StaticResource SectionPanel}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="RESPALDOS" Style="{StaticResource EyebrowLabel}" />
+                    <Label Text="El respaldo guarda progreso, marcadores y ajustes. No incluye los archivos CBZ, CBR o PDF originales."
+                           TextColor="{StaticResource TextSecondary}" LineBreakMode="WordWrap" />
+                    <Button Text="Exportar datos" Command="{Binding ExportBackupCommand}" />
+                    <Button Text="Importar respaldo" Command="{Binding ImportBackupCommand}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Border Style="{StaticResource SectionPanel}">
+                <VerticalStackLayout Spacing="10">
+                    <Label Text="APLICACIÓN" Style="{StaticResource EyebrowLabel}" />
+                    <Button Text="Configuración" Command="{Binding OpenSettingsCommand}" />
+                    <Button Text="{Binding FullScreenButtonLabel}" Command="{Binding ToggleFullScreenCommand}" />
+                </VerticalStackLayout>
+            </Border>
+
+            <ActivityIndicator IsRunning="{Binding IsBusy}" IsVisible="{Binding IsBusy}" />
+            <Label Text="{Binding StatusMessage}" TextColor="{StaticResource TextSecondary}"
+                   LineBreakMode="WordWrap" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

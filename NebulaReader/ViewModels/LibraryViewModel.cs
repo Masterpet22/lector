@@ -14,6 +14,8 @@ public partial class LibraryViewModel : BaseViewModel
     private readonly ILibraryService _libraryService;
     private readonly IFilePickerService _filePickerService;
     private readonly ILibraryBackupService _backupService;
+    private readonly IImportedFolderStore _importedFolderStore;
+    private readonly LibrarySyncService _librarySyncService;
     private readonly IFullScreenService _fullScreenService;
     private CancellationTokenSource? _importCts;
     private int _importRunId;
@@ -58,9 +60,67 @@ public partial class LibraryViewModel : BaseViewModel
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasContinueReading))]
+    [NotifyPropertyChangedFor(nameof(HasNoContinueReading))]
     public partial ObservableCollection<LibraryDisplayItem> ContinueReadingItems { get; set; } = new();
 
     public bool HasContinueReading => ContinueReadingItems.Count > 0;
+    public bool HasNoContinueReading => !HasContinueReading;
+
+    [ObservableProperty]
+    public partial double RecentCardWidth { get; set; } = 282;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(UseHorizontalBookActions))]
+    public partial bool UseStackedBookActions { get; set; }
+
+    public bool UseHorizontalBookActions => !UseStackedBookActions;
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsLibrarySelected))]
+    public partial bool IsHomeSelected { get; set; } = true;
+
+    public bool IsLibrarySelected => !IsHomeSelected;
+
+    partial void OnIsHomeSelectedChanged(bool value) =>
+        Title = value ? "Inicio - Nebula Reader" : "Biblioteca - Nebula Reader";
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowCompactFilterPanel))]
+    public partial bool IsFilterPanelExpanded { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowCompactFilterPanel))]
+    public partial bool UseCompactFilters { get; set; } = true;
+
+    public bool ShowCompactFilterPanel => UseCompactFilters && IsFilterPanelExpanded;
+
+    public string FilterButtonLabel => ActiveFilterCount > 0
+        ? $"Filtrar ({ActiveFilterCount})" : "Filtrar";
+    public int ActiveFilterCount => (string.IsNullOrWhiteSpace(SearchText) ? 0 : 1) +
+        (SelectedFormatIndex > 0 ? 1 : 0) + (SelectedStatusIndex > 0 ? 1 : 0);
+    public string ActiveFiltersSummary
+    {
+        get
+        {
+            var criteria = new List<string>();
+            if (!string.IsNullOrWhiteSpace(SearchText)) criteria.Add($"Búsqueda: {SearchText.Trim()}");
+            if (SelectedFormatIndex > 0 && SelectedFormatIndex < FormatOptions.Count)
+                criteria.Add($"Formato: {FormatOptions[SelectedFormatIndex]}");
+            if (SelectedStatusIndex > 0 && SelectedStatusIndex < StatusOptions.Count)
+                criteria.Add($"Estado: {StatusOptions[SelectedStatusIndex]}");
+            return criteria.Count == 0 ? "Sin filtros activos" : $"Filtros activos · {string.Join(" · ", criteria)}";
+        }
+    }
+
+    [RelayCommand]
+    private void ShowHome() => IsHomeSelected = true;
+
+    [RelayCommand]
+    private void ShowLibrary() => IsHomeSelected = false;
+
+    [RelayCommand]
+    private void ToggleFilterPanel() => IsFilterPanelExpanded = !IsFilterPanelExpanded;
+
     public IReadOnlyList<string> FormatOptions { get; } = ["Todos los formatos", "CBZ", "CBR", "PDF"];
     public IReadOnlyList<string> StatusOptions { get; } = ["Todos los estados", "No leído", "Leyendo", "Completado"];
 
@@ -78,7 +138,7 @@ public partial class LibraryViewModel : BaseViewModel
     public string EmptyTitle => HasActiveFilters ? "No hay resultados" : "Tu biblioteca está vacía";
     public string EmptyMessage => HasActiveFilters
         ? "Prueba otra búsqueda o limpia los filtros para ver tus documentos."
-        : "Pulsa 'Abrir archivo' o 'Escanear carpeta' para importar cómics o PDF.";
+        : "Pulsa Añadir para importar un cómic o PDF, o escanear una carpeta.";
     private int _matchingBookCount;
     private bool _clearingFilters;
 
@@ -90,6 +150,9 @@ public partial class LibraryViewModel : BaseViewModel
     {
         if (_clearingFilters) return;
         OnPropertyChanged(nameof(HasActiveFilters));
+        OnPropertyChanged(nameof(ActiveFilterCount));
+        OnPropertyChanged(nameof(FilterButtonLabel));
+        OnPropertyChanged(nameof(ActiveFiltersSummary));
         OnPropertyChanged(nameof(EmptyTitle));
         OnPropertyChanged(nameof(EmptyMessage));
         RebuildDisplayItems();
@@ -138,24 +201,28 @@ public partial class LibraryViewModel : BaseViewModel
     }
 
     [ObservableProperty]
-    public partial string StatusMessage { get; set; } = "Biblioteca lista. Abre un archivo o escanea una carpeta.";
+    public partial string StatusMessage { get; set; } = "Biblioteca lista. Pulsa Añadir para incorporar documentos.";
 
     public LibraryViewModel(
         ILibraryService libraryService,
         IFilePickerService filePickerService,
         ILibraryBackupService backupService,
+        IImportedFolderStore importedFolderStore,
+        LibrarySyncService librarySyncService,
         IFullScreenService fullScreenService)
     {
         _libraryService = libraryService;
         _filePickerService = filePickerService;
         _backupService = backupService;
+        _importedFolderStore = importedFolderStore;
+        _librarySyncService = librarySyncService;
         _fullScreenService = fullScreenService;
         _libraryService.BookUpdated += OnBookUpdated;
         _libraryService.PendingCoverCountChanged += OnPendingCoverCountChanged;
         PendingCoverCount = _libraryService.PendingCoverCount;
         _fullScreenService.FullScreenChanged += OnFullScreenChanged;
         IsFullScreen = _fullScreenService.IsFullScreen;
-        Title = "Biblioteca - Nebula Reader";
+        Title = "Inicio - Nebula Reader";
     }
 
     private void OnFullScreenChanged(object? sender, bool enabled)
@@ -230,6 +297,49 @@ public partial class LibraryViewModel : BaseViewModel
         }
     }
 
+    public async Task SynchronizeLibraryAsync()
+    {
+        if (IsBusy) return;
+        IsBusy = true;
+        IsImporting = true;
+        HasImportReport = true;
+        ImportSummary = string.Empty;
+        ImportProcessed = 0;
+        ImportTotal = 0;
+        ImportProgressText = "Revisando carpetas guardadas...";
+        _importCts = new CancellationTokenSource();
+        try
+        {
+            var progress = new Progress<FolderImportProgress>(p =>
+            {
+                ImportProcessed = p.Processed;
+                ImportTotal = p.Total;
+                ImportProgressText = $"Importando nuevos: {p.Processed}/{p.Total} · fallidos {p.Failed}";
+            });
+            var result = await _librarySyncService.RunAsync(progress, _importCts.Token);
+            await RefreshBooksAsync();
+            ImportSummary = result.Cancelled
+                ? "Revisión cancelada."
+                : $"Biblioteca revisada: {result.Added} nuevos, {result.Removed} quitados, {result.Unchanged} sin cambios.";
+            if (result.UnavailableFolders > 0)
+                ImportSummary += $" {result.UnavailableFolders} carpeta(s) no disponibles; sus documentos se conservaron.";
+            if (result.Failed > 0)
+                ImportSummary += $" {result.Failed} archivo(s) no se pudieron importar.";
+            UpdateStatusSummary();
+        }
+        catch (Exception ex)
+        {
+            ImportSummary = $"No se pudo revisar la biblioteca: {ex.Message}";
+        }
+        finally
+        {
+            IsImporting = false;
+            IsBusy = false;
+            _importCts.Dispose();
+            _importCts = null;
+        }
+    }
+
     [RelayCommand]
     private async Task OpenFileAsync()
     {
@@ -278,7 +388,8 @@ public partial class LibraryViewModel : BaseViewModel
                 return;
             }
 
-            await RunImportAsync((progress, ct) => _libraryService.ImportFolderAsync(folderPathOrUri, progress, ct));
+            var result = await RunImportAsync((progress, ct) => _libraryService.ImportFolderAsync(folderPathOrUri, progress, ct));
+            if (!result.Cancelled) _importedFolderStore.Add(folderPathOrUri);
         }
         catch (Exception ex)
         {
@@ -311,7 +422,7 @@ public partial class LibraryViewModel : BaseViewModel
         finally { IsBusy = false; }
     }
 
-    private async Task RunImportAsync(Func<IProgress<FolderImportProgress>, CancellationToken, Task<FolderImportResult>> run)
+    private async Task<FolderImportResult> RunImportAsync(Func<IProgress<FolderImportProgress>, CancellationToken, Task<FolderImportResult>> run)
     {
         _importCts = new CancellationTokenSource();
         var runId = ++_importRunId;
@@ -340,6 +451,7 @@ public partial class LibraryViewModel : BaseViewModel
             ImportTotal = result.Total;
             ImportSummary = $"{(result.Cancelled ? "Cancelado" : "Terminado")}: {result.Added} añadidos, {result.Existing} existentes, {result.Failed} fallidos.";
             StatusMessage = ImportSummary;
+            return result;
         }
         finally
         {

@@ -189,13 +189,13 @@ public partial class FilePickerService
             {
                 if (!Directory.Exists(folderPathOrUri))
                 {
-                    return Array.Empty<string>();
+                    throw new DirectoryNotFoundException($"La carpeta no está disponible: {folderPathOrUri}");
                 }
 
                 return Directory
                     .EnumerateFiles(folderPathOrUri, "*.*", new EnumerationOptions
                     {
-                        IgnoreInaccessible = true,
+                        IgnoreInaccessible = false,
                         RecurseSubdirectories = true
                     })
                     .Where(path => IsSupportedBookFileName(Path.GetFileName(path)))
@@ -207,13 +207,13 @@ public partial class FilePickerService
             var resolver = AppContext.Context.ContentResolver;
             if (treeUri == null || resolver == null)
             {
-                return Array.Empty<string>();
+                throw new IOException("No se pudo acceder al proveedor de documentos.");
             }
 
             var rootDocId = DocumentsContract.GetTreeDocumentId(treeUri);
             if (string.IsNullOrWhiteSpace(rootDocId))
             {
-                return Array.Empty<string>();
+                throw new IOException("No se pudo identificar la carpeta seleccionada.");
             }
 
             var results = new List<string>();
@@ -232,10 +232,10 @@ public partial class FilePickerService
                 ct.ThrowIfCancellationRequested();
                 var currentDocId = pendingFolders.Dequeue();
                 var childrenUri = DocumentsContract.BuildChildDocumentsUriUsingTree(treeUri, currentDocId);
-                if (childrenUri == null) continue;
+                if (childrenUri == null) throw new IOException("No se pudo recorrer una subcarpeta.");
 
                 using var cursor = resolver.Query(childrenUri, projection, null, null, null);
-                if (cursor == null) continue;
+                if (cursor == null) throw new IOException("No se pudo leer una subcarpeta.");
 
                 var idIdx = cursor.GetColumnIndex(DocumentsContract.Document.ColumnDocumentId);
                 var nameIdx = cursor.GetColumnIndex(DocumentsContract.Document.ColumnDisplayName);

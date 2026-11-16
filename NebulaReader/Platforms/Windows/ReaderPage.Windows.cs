@@ -14,6 +14,7 @@ public partial class ReaderPage
     private UIElement? _attachedNativeElement;
     private UIElement? _attachedWindowRoot;
     private bool _vsyncRunning;
+    private DateTime _lastHudRevealUtc;
 
     private partial void AttachPlatformInput(View surfaceView)
     {
@@ -31,6 +32,7 @@ public partial class ReaderPage
         {
             _attachedWindowRoot = rootElement;
             rootElement.PreviewKeyDown += OnWindowPreviewKeyDown;
+            rootElement.PointerMoved += OnWindowPointerMoved;
         }
     }
 
@@ -51,6 +53,7 @@ public partial class ReaderPage
         if (_attachedWindowRoot != null)
         {
             _attachedWindowRoot.PreviewKeyDown -= OnWindowPreviewKeyDown;
+            _attachedWindowRoot.PointerMoved -= OnWindowPointerMoved;
             _attachedWindowRoot = null;
         }
     }
@@ -79,6 +82,15 @@ public partial class ReaderPage
     {
         var vm = ViewModel;
         if (vm == null) return;
+        if (vm.IsReadingOptionsVisible)
+        {
+            if (e.Key == VirtualKey.Escape)
+            {
+                vm.CloseReadingOptionsCommand.Execute(null);
+                e.Handled = true;
+            }
+            return;
+        }
         if (vm.IsNavigationOverlayVisible)
         {
             if (e.Key == VirtualKey.Escape)
@@ -173,6 +185,13 @@ public partial class ReaderPage
         }
     }
 
+    private void OnWindowPointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if ((DateTime.UtcNow - _lastHudRevealUtc).TotalMilliseconds < 300) return;
+        _lastHudRevealUtc = DateTime.UtcNow;
+        RevealHud();
+    }
+
     private Microsoft.UI.Xaml.Window? GetNativeWindow()
     {
         return (this.Window?.Handler?.PlatformView ?? Microsoft.Maui.Controls.Application.Current?.Windows.FirstOrDefault()?.Handler?.PlatformView) as Microsoft.UI.Xaml.Window;
@@ -245,6 +264,7 @@ public partial class ReaderPage
 
     private void OnNativePointerMoved(object sender, PointerRoutedEventArgs e)
     {
+        OnWindowPointerMoved(sender, e);
         if (!_isPointerDragging || sender is not UIElement element) return;
 
         var point = e.GetCurrentPoint(element);

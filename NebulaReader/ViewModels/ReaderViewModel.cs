@@ -63,7 +63,7 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     [ObservableProperty]
     public partial bool IsBookPreferencesReady { get; set; }
 
-    public string PreferencesScopeLabel => HasBookPreferences ? "Ajustes de este libro" : "Ajustes generales";
+    public string PreferencesScopeLabel => HasBookPreferences ? "Ajustes de este libro" : "Valores generales en uso";
 
     [ObservableProperty]
     public partial bool IsThumbnailGridVisible { get; set; }
@@ -73,6 +73,9 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
 
     [ObservableProperty]
     public partial bool IsNavigationOverlayVisible { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsReadingOptionsVisible { get; set; }
 
     [ObservableProperty]
     public partial bool IsCurrentPageBookmarked { get; set; }
@@ -106,9 +109,13 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(ReadingDirectionIcon))]
+    [NotifyPropertyChangedFor(nameof(PreviousVisualLabel))]
+    [NotifyPropertyChangedFor(nameof(NextVisualLabel))]
     public partial bool IsRightToLeftManga { get; set; }
 
     [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(PreviousVisualLabel))]
+    [NotifyPropertyChangedFor(nameof(NextVisualLabel))]
     public partial bool IsContinuousVertical { get; set; }
 
     [ObservableProperty]
@@ -137,6 +144,8 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     public bool CanScrubPages => TotalPages > 1;
     public string RotationLockLabel => IsRotationLocked ? "Rot. Fija" : "Rot. Libre";
     public string DirectionModeLabel => IsRightToLeftManga ? "Manga (D→I)" : "Cómic (I→D)";
+    public string PreviousVisualLabel => IsRightToLeftManga && !IsContinuousVertical ? "Siguiente" : "Anterior";
+    public string NextVisualLabel => IsRightToLeftManga && !IsContinuousVertical ? "Anterior" : "Siguiente";
     public string ReadingDirectionIcon => IsRightToLeftManga ? "reading_manga.png" : "reading_comic.png";
     public string LayoutModeIcon => LayoutMode switch
     {
@@ -196,6 +205,7 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
         if (query.TryGetValue("Book", out var value) && value is BookItem book)
         {
             CloseNavigationOverlay();
+            CloseReadingOptions();
             _bookmarkedPages.Clear();
             _lastNavigationPage = 0;
             RefreshBookmarkItems();
@@ -439,6 +449,20 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     }
 
     [RelayCommand]
+    private void ShowReadingOptions()
+    {
+        CloseNavigationOverlay();
+        IsReadingOptionsVisible = true;
+        IsHudVisible = true;
+    }
+
+    [RelayCommand]
+    private void CloseReadingOptions()
+    {
+        IsReadingOptionsVisible = false;
+    }
+
+    [RelayCommand]
     private void ToggleRotationLock()
     {
         var next = !IsRotationLocked;
@@ -521,6 +545,7 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     [RelayCommand]
     private async Task CloseReaderAsync()
     {
+        CloseReadingOptions();
         await CloseNavigationOverlayAsync();
         _persistDebounceCts?.Cancel();
         _persistDebounceCts?.Dispose();
@@ -1243,6 +1268,7 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     [RelayCommand]
     private void ShowBookmarks()
     {
+        CloseReadingOptions();
         CloseNavigationOverlay();
         IsBookmarkListVisible = true;
         IsNavigationOverlayVisible = true;
@@ -1252,6 +1278,7 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     private void ShowThumbnails()
     {
         if (CurrentBook == null || _bookSource == null || TotalPages <= 0) return;
+        CloseReadingOptions();
         CloseNavigationOverlay();
         var source = _bookSource;
         var session = new CancellationTokenSource();

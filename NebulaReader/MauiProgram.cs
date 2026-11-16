@@ -43,6 +43,8 @@ public static class MauiProgram
         builder.Services.AddSingleton<ILibraryService, LibraryService>();
         builder.Services.AddSingleton<ILibraryBackupService, LibraryBackupService>();
         builder.Services.AddSingleton<IFilePickerService, FilePickerService>();
+        builder.Services.AddSingleton<IImportedFolderStore, ImportedFolderStore>();
+        builder.Services.AddSingleton<LibrarySyncService>();
         builder.Services.AddSingleton<IPageCacheService, PageCacheService>();
         builder.Services.AddSingleton<IReaderSettingsService, ReaderSettingsService>();
         builder.Services.AddSingleton<IOrientationService, OrientationService>();

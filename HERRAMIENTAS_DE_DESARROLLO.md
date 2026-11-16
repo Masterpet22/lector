@@ -65,6 +65,12 @@ no está instalada. Para desplegar en un dispositivo o emulador conectado:
 dotnet build NebulaReader/NebulaReader.csproj -t:Run -f net10.0-android
 ```
 
+La compilación **Debug** incluye los ensamblados dentro de la APK para que
+también pueda instalarse directamente con `adb install -r` y abrirse sin el
+despliegue adicional de Visual Studio. Por eso su APK ocupa más espacio. La
+publicación **Release** sigue siendo la opción para distribuir o probar el
+rendimiento final.
+
 ## Para publicar
 
 Se requiere además un certificado/keystore de firma Android y su configuración
