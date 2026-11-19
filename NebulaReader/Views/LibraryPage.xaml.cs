@@ -15,7 +15,8 @@ public partial class LibraryPage : ContentPage
     private bool _restoringLibraryPosition;
     private bool _initialLoadStarted;
     private int _notificationVersion;
-    private DataTemplate? _cardTemplate;
+    private bool _showingCardRows = true;
+    private int _cardColumns = 1;
 
     public LibraryViewModel ViewModel { get; }
 
@@ -23,7 +24,6 @@ public partial class LibraryPage : ContentPage
     {
         ViewModel = viewModel;
         InitializeComponent();
-        _cardTemplate = LibraryCollection.ItemTemplate as DataTemplate;
         LibraryViewPicker.SelectedIndex = Math.Clamp(Preferences.Default.Get(LibraryViewPreferenceKey, 2), 0, 7);
         BindingContext = ViewModel;
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
@@ -70,7 +70,7 @@ public partial class LibraryPage : ContentPage
     private void OnLibraryCollectionSizeChanged(object? sender, EventArgs e)
     {
         if (LibraryCollection.Width > 0)
-            UpdateContentLayout(GetVisibleContentWidth(Width));
+            UpdateContentLayout(Math.Min(GetVisibleContentWidth(Width), LibraryCollection.Width));
     }
 
     private void OnHomeScrollSizeChanged(object? sender, EventArgs e)
@@ -97,7 +97,7 @@ public partial class LibraryPage : ContentPage
 
     private void UpdateAdaptiveLayout(double width, double height)
     {
-        if (width <= 0 || height <= 0 || LibraryGridLayout == null)
+        if (width <= 0 || height <= 0 || LibraryCollection == null)
         {
             return;
         }
@@ -212,7 +212,7 @@ public partial class LibraryPage : ContentPage
 
     private void UpdateContentLayout(double contentWidth)
     {
-        if (contentWidth <= 0 || LibraryGridLayout == null) return;
+        if (contentWidth <= 0 || LibraryCollection == null) return;
 
         var mode = Math.Max(0, LibraryViewPicker.SelectedIndex);
         DetailsColumnHeader.IsVisible = mode == 5;
@@ -220,51 +220,61 @@ public partial class LibraryPage : ContentPage
         var isCompactIcon = mode is 3 or 6;
         var templateKey = mode switch
         {
-            3 or 6 => "CompactIconTemplate",
+            <= 2 => "CardRowTemplate",
+            3 or 6 => "CompactRowTemplate",
             4 => "ListItemTemplate",
             5 => "DetailsItemTemplate",
             7 => "ContentItemTemplate",
-            _ => null
+            _ => "CardRowTemplate"
         };
-        var template = templateKey is null ? _cardTemplate : LibraryCollection.Resources[templateKey] as DataTemplate;
+        var template = LibraryCollection.Resources[templateKey] as DataTemplate;
         if (template != null && !ReferenceEquals(LibraryCollection.ItemTemplate, template))
             LibraryCollection.ItemTemplate = template;
 
-        // Reservar unos DIP para el scrollbar y medir con el ancho real del área central.
-        var hSpacing = Height < 520 ? 7.0 : 10.0;
-        var gridWidth = Math.Max(0, contentWidth - 8);
-        var minimumItemWidth = mode switch
+        var showRows = isCard || isCompactIcon;
+        if (_showingCardRows != showRows)
         {
-            0 => 320.0,
-            1 => 260.0,
-            2 => 200.0,
-            3 => 120.0,
-            6 => 96.0,
-            _ => gridWidth
+            _showingCardRows = showRows;
+            LibraryCollection.SetBinding(ItemsView.ItemsSourceProperty,
+                new Binding(showRows ? nameof(LibraryViewModel.DisplayRows) : nameof(LibraryViewModel.DisplayItems)));
+        }
+
+        // Las filas son virtualizadas; cada tarjeta tiene un ancho acotado y queda alineada a la izquierda.
+        const double hSpacing = 10;
+        var gridWidth = Math.Max(0, Math.Min(contentWidth, LibraryCollection.Width > 0
+            ? LibraryCollection.Width : contentWidth) - 8);
+        var (minimumItemWidth, maximumItemWidth) = mode switch
+        {
+            0 => (240.0, 280.0),
+            1 => (210.0, 240.0),
+            2 => (180.0, 210.0),
+            3 => (120.0, 160.0),
+            6 => (96.0, 136.0),
+            _ => (gridWidth, gridWidth)
         };
-        var targetSpan = isCard || isCompactIcon
-            ? ResponsiveLayout.GetColumnCount(gridWidth, minimumItemWidth, hSpacing, 12)
-            : 1;
-
-        if (LibraryCollection.ItemsLayout is GridItemsLayout currentLayout && currentLayout.Span != targetSpan)
+        var metrics = ResponsiveLayout.GetCardGridMetrics(gridWidth, minimumItemWidth,
+            maximumItemWidth, hSpacing);
+#if DEBUG
+        System.Diagnostics.Debug.WriteLine($"Biblioteca: vista={mode}, ancho={gridWidth:F0} DIP, " +
+            $"columnas={metrics.Columns}, tarjeta={metrics.CardWidth:F0} DIP");
+#endif
+        ViewModel.CardWidth = Math.Floor(metrics.CardWidth);
+        var columnsChanged = showRows && _cardColumns != metrics.Columns;
+        if (columnsChanged)
         {
-            // WinUI necesita un nuevo ItemsLayout para distribuir de nuevo las tarjetas al reducir la ventana.
-            LibraryCollection.ItemsLayout = new GridItemsLayout(targetSpan, ItemsLayoutOrientation.Vertical)
-            {
-                HorizontalItemSpacing = hSpacing,
-                VerticalItemSpacing = hSpacing
-            };
-            if (ViewModel.IsLibrarySelected) RestoreLibraryPosition();
+            _firstVisibleLibraryItem = _firstVisibleLibraryItem * _cardColumns / metrics.Columns;
+            _cardColumns = metrics.Columns;
+            _restoringLibraryPosition = true;
         }
+        ViewModel.UpdateCardColumns(showRows ? metrics.Columns : 1);
+        if (columnsChanged && ViewModel.IsLibrarySelected)
+            RestoreLibraryPosition();
 
-        if (LibraryCollection.ItemsLayout is GridItemsLayout gridLayout)
-        {
-            gridLayout.HorizontalItemSpacing = hSpacing;
-            gridLayout.VerticalItemSpacing = hSpacing;
-        }
+        if (LibraryCollection.ItemsLayout is LinearItemsLayout linearLayout)
+            linearLayout.ItemSpacing = hSpacing;
 
         // Las tarjetas mantienen sus acciones; las vistas compactas abren al tocar el elemento.
-        var approxColWidth = Math.Max(110.0, (gridWidth - ((targetSpan - 1) * hSpacing)) / targetSpan);
+        var approxColWidth = metrics.CardWidth;
         ViewModel.UseStackedBookActions = approxColWidth < 190;
         var desiredCoverHeight = mode switch
         {
@@ -284,7 +294,7 @@ public partial class LibraryPage : ContentPage
 
     private void OnLibraryViewChanged(object sender, EventArgs e)
     {
-        if (LibraryViewPicker.SelectedIndex < 0 || LibraryGridLayout == null) return;
+        if (LibraryViewPicker.SelectedIndex < 0 || LibraryCollection == null) return;
         Preferences.Default.Set(LibraryViewPreferenceKey, LibraryViewPicker.SelectedIndex);
         _firstVisibleLibraryItem = 0;
         UpdateContentLayout(GetVisibleContentWidth(Width));
@@ -313,6 +323,7 @@ public partial class LibraryPage : ContentPage
         else if (e.PropertyName == nameof(LibraryViewModel.IsHomeSelected))
         {
             _restoringLibraryPosition = true;
+            Dispatcher.Dispatch(() => UpdateContentLayout(GetVisibleContentWidth(Width)));
             RestoreLibraryPosition();
         }
     }
@@ -326,16 +337,18 @@ public partial class LibraryPage : ContentPage
     private void RestoreLibraryPosition()
     {
         if (!ViewModel.IsLibrarySelected) return;
-        if (ViewModel.DisplayItems.Count == 0)
+        var itemCount = _showingCardRows ? ViewModel.DisplayRows.Count : ViewModel.DisplayItems.Count;
+        if (itemCount == 0)
         {
             _restoringLibraryPosition = false;
             return;
         }
 
-        var index = Math.Min(_firstVisibleLibraryItem, ViewModel.DisplayItems.Count - 1);
+        var index = Math.Min(_firstVisibleLibraryItem, itemCount - 1);
         Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(80), () =>
         {
-            if (ViewModel.IsLibrarySelected && ViewModel.DisplayItems.Count > index)
+            var visibleCount = _showingCardRows ? ViewModel.DisplayRows.Count : ViewModel.DisplayItems.Count;
+            if (ViewModel.IsLibrarySelected && visibleCount > index)
                 LibraryCollection.ScrollTo(index, position: ScrollToPosition.Start, animate: false);
 
             Dispatcher.DispatchDelayed(TimeSpan.FromMilliseconds(120), () =>

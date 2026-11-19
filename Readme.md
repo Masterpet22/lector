@@ -8,6 +8,7 @@ Lector de cómics y documentos **CBZ, CBR y PDF** para **Android y Windows**, de
 - Escaneo de carpetas con progreso, cancelación, resumen de archivos añadidos, existentes y fallidos, y reintento de fallos. Las portadas pendientes se muestran por separado.
 - Exportación e importación de respaldos JSON versionados con progreso, marcadores, metadatos corregidos, preferencias por documento y ajustes generales.
 - Biblioteca con portadas, progreso de lectura y agrupación de series a partir de metadatos y títulos.
+- Vistas de iconos con tarjetas de ancho limitado y filas adaptables; las portadas se muestran completas y los títulos largos se abrevian con puntos suspensivos.
 - Búsqueda por título, serie o etiqueta, con filtros combinables por formato y estado de lectura.
 - Sección «Continuar leyendo» con lecturas recientes, página guardada y porcentaje cuando se conoce el total.
 - Acciones por documento para corregir título y serie, cambiar el estado, quitar la entrada, recuperar el acceso y reintentar una portada fallida.

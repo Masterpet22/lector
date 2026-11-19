@@ -77,7 +77,7 @@
                                                 <Grid>
                                                     <Label Text="{Binding BadgeText}" HorizontalOptions="Center"
                                                            VerticalOptions="Center" TextColor="{StaticResource TextMuted}" />
-                                                    <Image Source="{Binding Cover1}" Aspect="AspectFill" />
+                                                    <Image Source="{Binding Cover1}" Aspect="AspectFit" />
                                                 </Grid>
                                             </Border>
                                             <VerticalStackLayout Grid.Column="1" Spacing="5" VerticalOptions="Center">
@@ -160,69 +160,82 @@
 
         <CollectionView x:Name="LibraryCollection" Grid.Row="1"
                         IsVisible="{Binding IsLibrarySelected}"
-                        ItemsSource="{Binding DisplayItems}"
+                        ItemsSource="{Binding DisplayRows}"
+                        ItemSizingStrategy="MeasureAllItems"
                         SizeChanged="OnLibraryCollectionSizeChanged"
                         Scrolled="OnLibraryScrolled"
                         SelectionMode="None">
             <CollectionView.Resources>
                 <DataTemplate x:Key="CompactIconTemplate" x:DataType="models:LibraryDisplayItem">
-                    <Border Style="{StaticResource DocumentCard}" Padding="7" HeightRequest="112">
+                    <Border Style="{StaticResource DocumentCard}" Padding="7" MinimumHeightRequest="145"
+                            WidthRequest="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.CardWidth, x:DataType=views:LibraryPage}">
                         <Border.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.OpenItemCommand, x:DataType=views:LibraryPage}"
                                                   CommandParameter="{Binding .}" />
                         </Border.GestureRecognizers>
                         <VerticalStackLayout Spacing="4">
-                            <Grid HeightRequest="72">
-                                <Image Source="{Binding Cover1}" Aspect="AspectFit" />
+                            <Image Source="{Binding Cover1}" Aspect="AspectFit" HeightRequest="72" />
+                            <Grid ColumnDefinitions="*,Auto" HeightRequest="32">
                                 <Label Text="{Binding BadgeText}" FontSize="10" TextColor="{StaticResource TextSecondary}"
-                                       HorizontalOptions="Start" VerticalOptions="Start" />
-                                <Button Text="⋯" IsVisible="{Binding IsSingleBook}" Clicked="OnBookActionsClicked"
-                                        HorizontalOptions="End" VerticalOptions="End" Padding="0" FontSize="16"
+                                       VerticalOptions="Center" LineBreakMode="TailTruncation" />
+                                <Button Grid.Column="1" Text="⋯" IsVisible="{Binding IsSingleBook}" Clicked="OnBookActionsClicked"
+                                        Padding="0" FontSize="16"
                                         WidthRequest="32" HeightRequest="32" MinimumWidthRequest="32" MinimumHeightRequest="32" />
                             </Grid>
-                            <Label Text="{Binding Title}" FontSize="11" MaxLines="1" LineBreakMode="TailTruncation"
-                                   HorizontalTextAlignment="Center" TextColor="{StaticResource TextPrimary}" />
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="3">
+                                <Label Text="{Binding DisplayTitle}" FontSize="11" MaxLines="1" LineBreakMode="TailTruncation"
+                                       TextColor="{StaticResource TextPrimary}" />
+                                <Label Grid.Column="1" Text="{Binding TitleNumber}" IsVisible="{Binding HasTitleNumber}"
+                                       FontSize="10" Padding="3,0" BackgroundColor="{StaticResource Surface2}"
+                                       TextColor="{StaticResource NeonPurpleBright}" />
+                            </Grid>
                         </VerticalStackLayout>
                     </Border>
                 </DataTemplate>
                 <DataTemplate x:Key="ListItemTemplate" x:DataType="models:LibraryDisplayItem">
-                    <Border Style="{StaticResource DocumentCard}" Padding="8,5" HeightRequest="54">
+                    <Border Style="{StaticResource DocumentCard}" Padding="8,5" MinimumHeightRequest="54">
                         <Border.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.OpenItemCommand, x:DataType=views:LibraryPage}"
                                                   CommandParameter="{Binding .}" />
                         </Border.GestureRecognizers>
-                        <Grid ColumnDefinitions="36,*,Auto,Auto" ColumnSpacing="10">
+                        <Grid ColumnDefinitions="36,*,Auto,Auto,Auto" ColumnSpacing="8">
                             <Image Source="{Binding Cover1}" WidthRequest="32" HeightRequest="40" Aspect="AspectFit" />
-                            <Label Grid.Column="1" Text="{Binding Title}" VerticalOptions="Center" MaxLines="1"
+                            <Label Grid.Column="1" Text="{Binding DisplayTitle}" VerticalOptions="Center" MaxLines="1"
                                    LineBreakMode="TailTruncation" TextColor="{StaticResource TextPrimary}" />
-                            <Label Grid.Column="2" Text="{Binding BadgeText}" VerticalOptions="Center" FontSize="11"
+                            <Label Grid.Column="2" Text="{Binding TitleNumber}" IsVisible="{Binding HasTitleNumber}"
+                                   VerticalOptions="Center" FontSize="11" Padding="4,2" BackgroundColor="{StaticResource Surface2}"
+                                   TextColor="{StaticResource NeonPurpleBright}" />
+                            <Label Grid.Column="3" Text="{Binding BadgeText}" VerticalOptions="Center" FontSize="11"
                                    TextColor="{StaticResource TextSecondary}" />
-                            <Button Grid.Column="3" Text="⋯" IsVisible="{Binding IsSingleBook}" Clicked="OnBookActionsClicked"
-                                    Padding="0" WidthRequest="36" HeightRequest="36" />
-                        </Grid>
-                    </Border>
-                </DataTemplate>
-                <DataTemplate x:Key="DetailsItemTemplate" x:DataType="models:LibraryDisplayItem">
-                    <Border Style="{StaticResource DocumentCard}" Padding="10,6" HeightRequest="64">
-                        <Border.GestureRecognizers>
-                            <TapGestureRecognizer Command="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.OpenItemCommand, x:DataType=views:LibraryPage}"
-                                                  CommandParameter="{Binding .}" />
-                        </Border.GestureRecognizers>
-                        <Grid ColumnDefinitions="40,2*,Auto,*,Auto" ColumnSpacing="10">
-                            <Image Source="{Binding Cover1}" WidthRequest="36" HeightRequest="48" Aspect="AspectFit" />
-                            <Label Grid.Column="1" Text="{Binding Title}" VerticalOptions="Center" MaxLines="1"
-                                   LineBreakMode="TailTruncation" TextColor="{StaticResource TextPrimary}" />
-                            <Label Grid.Column="2" Text="{Binding BadgeText}" VerticalOptions="Center" FontSize="11"
-                                   TextColor="{StaticResource TextSecondary}" />
-                            <Label Grid.Column="3" Text="{Binding SubtitleText}" VerticalOptions="Center" MaxLines="1"
-                                   LineBreakMode="TailTruncation" FontSize="11" TextColor="{StaticResource TextSecondary}" />
                             <Button Grid.Column="4" Text="⋯" IsVisible="{Binding IsSingleBook}" Clicked="OnBookActionsClicked"
                                     Padding="0" WidthRequest="36" HeightRequest="36" />
                         </Grid>
                     </Border>
                 </DataTemplate>
+                <DataTemplate x:Key="DetailsItemTemplate" x:DataType="models:LibraryDisplayItem">
+                    <Border Style="{StaticResource DocumentCard}" Padding="10,6" MinimumHeightRequest="64">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.OpenItemCommand, x:DataType=views:LibraryPage}"
+                                                  CommandParameter="{Binding .}" />
+                        </Border.GestureRecognizers>
+                        <Grid ColumnDefinitions="40,2*,Auto,Auto,*,Auto" ColumnSpacing="8">
+                            <Image Source="{Binding Cover1}" WidthRequest="36" HeightRequest="48" Aspect="AspectFit" />
+                            <Label Grid.Column="1" Text="{Binding DisplayTitle}" VerticalOptions="Center" MaxLines="1"
+                                   LineBreakMode="TailTruncation" TextColor="{StaticResource TextPrimary}" />
+                            <Label Grid.Column="2" Text="{Binding TitleNumber}" IsVisible="{Binding HasTitleNumber}"
+                                   VerticalOptions="Center" FontSize="11" Padding="4,2" BackgroundColor="{StaticResource Surface2}"
+                                   TextColor="{StaticResource NeonPurpleBright}" />
+                            <Label Grid.Column="3" Text="{Binding BadgeText}" VerticalOptions="Center" FontSize="11"
+                                   TextColor="{StaticResource TextSecondary}" />
+                            <Label Grid.Column="4" Text="{Binding SubtitleText}" VerticalOptions="Center" MaxLines="1"
+                                   LineBreakMode="TailTruncation" FontSize="11" TextColor="{StaticResource TextSecondary}" />
+                            <Button Grid.Column="5" Text="⋯" IsVisible="{Binding IsSingleBook}" Clicked="OnBookActionsClicked"
+                                    Padding="0" WidthRequest="36" HeightRequest="36" />
+                        </Grid>
+                    </Border>
+                </DataTemplate>
                 <DataTemplate x:Key="ContentItemTemplate" x:DataType="models:LibraryDisplayItem">
-                    <Border Style="{StaticResource DocumentCard}" Padding="10" HeightRequest="104">
+                    <Border Style="{StaticResource DocumentCard}" Padding="10" MinimumHeightRequest="104">
                         <Border.GestureRecognizers>
                             <TapGestureRecognizer Command="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.OpenItemCommand, x:DataType=views:LibraryPage}"
                                                   CommandParameter="{Binding .}" />
@@ -230,8 +243,13 @@
                         <Grid ColumnDefinitions="68,*,Auto" ColumnSpacing="12">
                             <Image Source="{Binding Cover1}" WidthRequest="64" HeightRequest="80" Aspect="AspectFit" />
                             <VerticalStackLayout Grid.Column="1" Spacing="3" VerticalOptions="Center">
-                                <Label Text="{Binding Title}" FontAttributes="Bold" MaxLines="1" LineBreakMode="TailTruncation"
-                                       TextColor="{StaticResource TextPrimary}" />
+                                <Grid ColumnDefinitions="*,Auto" ColumnSpacing="4">
+                                    <Label Text="{Binding DisplayTitle}" FontAttributes="Bold" MaxLines="1" LineBreakMode="TailTruncation"
+                                           TextColor="{StaticResource TextPrimary}" />
+                                    <Label Grid.Column="1" Text="{Binding TitleNumber}" IsVisible="{Binding HasTitleNumber}"
+                                           FontSize="11" Padding="4,2" BackgroundColor="{StaticResource Surface2}"
+                                           TextColor="{StaticResource NeonPurpleBright}" />
+                                </Grid>
                                 <Label Text="{Binding SubtitleText}" FontSize="12" TextColor="{StaticResource TextSecondary}" />
                                 <Label Text="{Binding TagsText}" IsVisible="{Binding HasTags}" FontSize="11"
                                        MaxLines="1" LineBreakMode="TailTruncation" TextColor="{StaticResource NeonPurpleBright}" />
@@ -240,6 +258,159 @@
                                     Clicked="OnBookActionsClicked" VerticalOptions="Center" />
                         </Grid>
                     </Border>
+                </DataTemplate>
+                <DataTemplate x:Key="DocumentCardTemplate" x:DataType="models:LibraryDisplayItem">
+                    <Border Style="{StaticResource DocumentCard}" Padding="7"
+                            WidthRequest="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.CardWidth, x:DataType=views:LibraryPage}">
+                        <Border.Triggers>
+                            <DataTrigger TargetType="Border" Binding="{Binding IsGroup}" Value="True">
+                                <Setter Property="Stroke" Value="{StaticResource NeonPurpleDeep}" />
+                                <Setter Property="StrokeThickness" Value="1" />
+                            </DataTrigger>
+                        </Border.Triggers>
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer
+                                Command="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.OpenItemCommand, x:DataType=views:LibraryPage}"
+                                CommandParameter="{Binding .}" />
+                        </Border.GestureRecognizers>
+
+                        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="4">
+                            <Border Grid.Row="0"
+                                    HeightRequest="{Binding CoverHeight}"
+                                    BackgroundColor="{StaticResource BgCanvas}"
+                                    StrokeThickness="0"
+                                    StrokeShape="RoundRectangle 14">
+                                <Grid>
+                                    <Label Text="{Binding BadgeText}"
+                                           HorizontalOptions="Center"
+                                           VerticalOptions="Center"
+                                           TextColor="{StaticResource TextMuted}"
+                                           FontAttributes="Bold" />
+
+                                    <!-- Portada individual -->
+                                    <Image IsVisible="{Binding IsSingleBook}"
+                                           Source="{Binding Cover1}"
+                                           Aspect="AspectFit" />
+
+                                    <!-- Distribuir solo las portadas disponibles, sin celdas vacías. -->
+                                    <Grid IsVisible="{Binding IsGroup}">
+                                        <Image IsVisible="{Binding HasOneCover}" Source="{Binding Cover1}" Aspect="AspectFit" />
+                                        <Grid IsVisible="{Binding HasTwoCovers}" ColumnDefinitions="*,*" ColumnSpacing="2">
+                                            <Image Source="{Binding Cover1}" BackgroundColor="{StaticResource Surface2}" Aspect="AspectFit" />
+                                            <Image Grid.Column="1" Source="{Binding Cover2}" BackgroundColor="{StaticResource Surface2}" Aspect="AspectFit" />
+                                        </Grid>
+                                        <Grid IsVisible="{Binding HasThreeCovers}" RowDefinitions="*,*" ColumnDefinitions="*,*"
+                                              RowSpacing="2" ColumnSpacing="2">
+                                            <Image Source="{Binding Cover1}" BackgroundColor="{StaticResource Surface2}" Aspect="AspectFit" />
+                                            <Image Grid.Column="1" Source="{Binding Cover2}" BackgroundColor="{StaticResource Surface2}" Aspect="AspectFit" />
+                                            <Image Grid.Row="1" Grid.ColumnSpan="2" Source="{Binding Cover3}"
+                                                   BackgroundColor="{StaticResource Surface2}" Aspect="AspectFit" />
+                                        </Grid>
+                                        <Grid IsVisible="{Binding HasFourCovers}" RowDefinitions="*,*" ColumnDefinitions="*,*"
+                                              RowSpacing="2" ColumnSpacing="2">
+                                            <Image Source="{Binding Cover1}" BackgroundColor="{StaticResource Surface2}" Aspect="AspectFit" />
+                                            <Image Grid.Column="1" Source="{Binding Cover2}" BackgroundColor="{StaticResource Surface2}" Aspect="AspectFit" />
+                                            <Image Grid.Row="1" Source="{Binding Cover3}" BackgroundColor="{StaticResource Surface2}" Aspect="AspectFit" />
+                                            <Image Grid.Row="1" Grid.Column="1" Source="{Binding Cover4}"
+                                                   BackgroundColor="{StaticResource Surface2}" Aspect="AspectFit" />
+                                        </Grid>
+                                    </Grid>
+
+                                </Grid>
+                            </Border>
+
+                            <Grid Grid.Row="1" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="4" Margin="3,3,3,0">
+                                <Label Text="{Binding DisplayTitle}"
+                                       TextColor="{StaticResource TextPrimary}"
+                                       FontFamily="OpenSansSemibold"
+                                       FontAttributes="Bold"
+                                       FontSize="14"
+                                       LineBreakMode="TailTruncation"
+                                       MaxLines="1" />
+                                <Border Grid.Column="1" IsVisible="{Binding HasTitleNumber}"
+                                        VerticalOptions="Start" Padding="5,2" StrokeThickness="1"
+                                        Stroke="{StaticResource NeonPurpleDeep}"
+                                        StrokeShape="RoundRectangle 8" BackgroundColor="{StaticResource Surface2}">
+                                    <Label Text="{Binding TitleNumber}" FontSize="10"
+                                           TextColor="{StaticResource NeonPurpleBright}" />
+                                </Border>
+                                <Border Grid.Column="2" HorizontalOptions="End" VerticalOptions="Start"
+                                        Padding="7,3" StrokeThickness="1"
+                                        Stroke="{StaticResource SubtleBorder}"
+                                        StrokeShape="RoundRectangle 10"
+                                        BackgroundColor="#D90E0B1A">
+                                    <Border.Triggers>
+                                        <DataTrigger TargetType="Border" Binding="{Binding IsGroup}" Value="True">
+                                            <Setter Property="BackgroundColor" Value="#D97C3AED" />
+                                            <Setter Property="Stroke" Value="{StaticResource NeonPurpleBright}" />
+                                        </DataTrigger>
+                                    </Border.Triggers>
+                                    <Label Text="{Binding BadgeText}"
+                                           TextColor="{StaticResource White}"
+                                           FontFamily="OpenSansSemibold"
+                                           FontSize="10"
+                                           FontAttributes="Bold" />
+                                </Border>
+                            </Grid>
+
+                            <Label Grid.Row="2"
+                                   Text="{Binding SubtitleText}"
+                                   TextColor="{StaticResource TextSecondary}"
+                                   FontSize="12"
+                                   Margin="3,0"
+                                   LineBreakMode="TailTruncation" />
+
+                            <Label Grid.Row="3"
+                                   IsVisible="{Binding HasTags}"
+                                   Text="{Binding TagsText}"
+                                   FontSize="11"
+                                   Margin="3,0"
+                                   TextColor="{StaticResource NeonPurpleBright}"
+                                   LineBreakMode="TailTruncation" />
+                            <Label Grid.Row="4" Text="{Binding CoverStateText}"
+                                   IsVisible="{Binding HasCoverError}" FontSize="11"
+                                   TextColor="{StaticResource TextSecondary}"
+                                   LineBreakMode="WordWrap" />
+                            <Grid Grid.Row="5" ColumnDefinitions="*,*" ColumnSpacing="6"
+                                  IsVisible="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.UseHorizontalBookActions, x:DataType=views:LibraryPage}">
+                                <Grid.Triggers>
+                                    <DataTrigger TargetType="Grid" Binding="{Binding IsGroup}" Value="True">
+                                        <Setter Property="IsVisible" Value="False" />
+                                    </DataTrigger>
+                                </Grid.Triggers>
+                                <Button Text="Leer" Style="{StaticResource PrimaryNeonButton}" Padding="6,6" FontSize="12"
+                                        Command="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.OpenBookCommand, x:DataType=views:LibraryPage}"
+                                        CommandParameter="{Binding Book}" />
+                                <Button Grid.Column="1" Text="Acciones" Padding="6,6" FontSize="12"
+                                        Clicked="OnBookActionsClicked" />
+                            </Grid>
+                            <VerticalStackLayout Grid.Row="5" Spacing="6"
+                                                 IsVisible="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.UseStackedBookActions, x:DataType=views:LibraryPage}">
+                                <VerticalStackLayout.Triggers>
+                                    <DataTrigger TargetType="VerticalStackLayout" Binding="{Binding IsGroup}" Value="True">
+                                        <Setter Property="IsVisible" Value="False" />
+                                    </DataTrigger>
+                                </VerticalStackLayout.Triggers>
+                                <Button Text="Leer" Style="{StaticResource PrimaryNeonButton}"
+                                        Command="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.OpenBookCommand, x:DataType=views:LibraryPage}"
+                                        CommandParameter="{Binding Book}" />
+                                <Button Text="Acciones" Clicked="OnBookActionsClicked" />
+                            </VerticalStackLayout>
+                            <Button Grid.Row="5" Text="Abrir serie" IsVisible="{Binding IsGroup}"
+                                    Command="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.OpenItemCommand, x:DataType=views:LibraryPage}"
+                                    CommandParameter="{Binding .}" />
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+                <DataTemplate x:Key="CardRowTemplate" x:DataType="models:LibraryDisplayRow">
+                    <HorizontalStackLayout BindableLayout.ItemsSource="{Binding Items}"
+                                           BindableLayout.ItemTemplate="{StaticResource DocumentCardTemplate}"
+                                           Spacing="10" />
+                </DataTemplate>
+                <DataTemplate x:Key="CompactRowTemplate" x:DataType="models:LibraryDisplayRow">
+                    <HorizontalStackLayout BindableLayout.ItemsSource="{Binding Items}"
+                                           BindableLayout.ItemTemplate="{StaticResource CompactIconTemplate}"
+                                           Spacing="10" />
                 </DataTemplate>
             </CollectionView.Resources>
             <CollectionView.Header>
@@ -328,21 +499,18 @@
                     </Grid>
 
                     <Grid x:Name="DetailsColumnHeader" IsVisible="False" Padding="10,0"
-                          ColumnDefinitions="40,2*,Auto,*,Auto" ColumnSpacing="10">
+                          ColumnDefinitions="40,2*,Auto,Auto,*,Auto" ColumnSpacing="8">
                         <Label Grid.Column="1" Text="Nombre" Style="{StaticResource FilterCaption}" />
-                        <Label Grid.Column="2" Text="Tipo" Style="{StaticResource FilterCaption}" />
-                        <Label Grid.Column="3" Text="Estado / progreso" Style="{StaticResource FilterCaption}" />
+                        <Label Grid.Column="2" Text="N.º" Style="{StaticResource FilterCaption}" />
+                        <Label Grid.Column="3" Text="Tipo" Style="{StaticResource FilterCaption}" />
+                        <Label Grid.Column="4" Text="Estado / progreso" Style="{StaticResource FilterCaption}" />
                     </Grid>
 
                 </VerticalStackLayout>
             </CollectionView.Header>
 
             <CollectionView.ItemsLayout>
-                <GridItemsLayout x:Name="LibraryGridLayout"
-                                 Orientation="Vertical"
-                                 Span="2"
-                                 HorizontalItemSpacing="12"
-                                 VerticalItemSpacing="12" />
+                <LinearItemsLayout Orientation="Vertical" ItemSpacing="10" />
             </CollectionView.ItemsLayout>
 
             <CollectionView.EmptyView>
@@ -377,149 +545,10 @@
             </CollectionView.EmptyView>
 
             <CollectionView.ItemTemplate>
-                <DataTemplate x:DataType="models:LibraryDisplayItem">
-                    <Border Style="{StaticResource DocumentCard}" Padding="7">
-                        <Border.Triggers>
-                            <DataTrigger TargetType="Border" Binding="{Binding IsGroup}" Value="True">
-                                <Setter Property="Stroke" Value="{StaticResource NeonPurpleDeep}" />
-                                <Setter Property="StrokeThickness" Value="1" />
-                            </DataTrigger>
-                        </Border.Triggers>
-                        <Border.GestureRecognizers>
-                            <TapGestureRecognizer
-                                Command="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.OpenItemCommand, x:DataType=views:LibraryPage}"
-                                CommandParameter="{Binding .}" />
-                        </Border.GestureRecognizers>
-
-                        <Grid RowDefinitions="Auto,Auto,Auto,Auto,Auto,Auto" RowSpacing="4">
-                            <Border Grid.Row="0"
-                                    HeightRequest="{Binding CoverHeight}"
-                                    BackgroundColor="{StaticResource BgCanvas}"
-                                    StrokeThickness="0"
-                                    StrokeShape="RoundRectangle 14">
-                                <Grid>
-                                    <Label Text="{Binding BadgeText}"
-                                           HorizontalOptions="Center"
-                                           VerticalOptions="Center"
-                                           TextColor="{StaticResource TextMuted}"
-                                           FontAttributes="Bold" />
-
-                                    <!-- Portada individual -->
-                                    <Image IsVisible="{Binding IsSingleBook}"
-                                           Source="{Binding Cover1}"
-                                           Aspect="AspectFit" />
-
-                                    <!-- Mosaico 2x2 de las primeras 4 portadas del grupo -->
-                                    <Grid IsVisible="{Binding IsGroup}"
-                                          RowDefinitions="*,*"
-                                          ColumnDefinitions="*,*"
-                                          RowSpacing="2"
-                                          ColumnSpacing="2"
-                                          BackgroundColor="{StaticResource BgCanvas}">
-                                        <Border Grid.Row="0" Grid.Column="0"
-                                                BackgroundColor="{StaticResource Surface2}"
-                                                StrokeThickness="0">
-                                            <Image IsVisible="{Binding HasCover1}" Source="{Binding Cover1}" Aspect="AspectFill" />
-                                        </Border>
-                                        <Border Grid.Row="0" Grid.Column="1"
-                                                BackgroundColor="{StaticResource Surface2}"
-                                                StrokeThickness="0">
-                                            <Image IsVisible="{Binding HasCover2}" Source="{Binding Cover2}" Aspect="AspectFill" />
-                                        </Border>
-                                        <Border Grid.Row="1" Grid.Column="0"
-                                                BackgroundColor="{StaticResource Surface2}"
-                                                StrokeThickness="0">
-                                            <Image IsVisible="{Binding HasCover3}" Source="{Binding Cover3}" Aspect="AspectFill" />
-                                        </Border>
-                                        <Border Grid.Row="1" Grid.Column="1"
-                                                BackgroundColor="{StaticResource Surface2}"
-                                                StrokeThickness="0">
-                                            <Image IsVisible="{Binding HasCover4}" Source="{Binding Cover4}" Aspect="AspectFill" />
-                                        </Border>
-                                    </Grid>
-
-                                    <!-- Insignia superior derecha -->
-                                    <Border HorizontalOptions="End"
-                                            VerticalOptions="Start"
-                                            Margin="6"
-                                            Padding="7,3"
-                                            StrokeThickness="1"
-                                            Stroke="{StaticResource SubtleBorder}"
-                                            StrokeShape="RoundRectangle 10"
-                                            BackgroundColor="#D90E0B1A">
-                                        <Border.Triggers>
-                                            <DataTrigger TargetType="Border" Binding="{Binding IsGroup}" Value="True">
-                                                <Setter Property="BackgroundColor" Value="#D97C3AED" />
-                                                <Setter Property="Stroke" Value="{StaticResource NeonPurpleBright}" />
-                                            </DataTrigger>
-                                        </Border.Triggers>
-                                        <Label Text="{Binding BadgeText}"
-                                               TextColor="{StaticResource White}"
-                                               FontFamily="OpenSansSemibold"
-                                               FontSize="10"
-                                               FontAttributes="Bold" />
-                                    </Border>
-                                </Grid>
-                            </Border>
-
-                            <Label Grid.Row="1"
-                                   Text="{Binding Title}"
-                                   TextColor="{StaticResource TextPrimary}"
-                                   FontFamily="OpenSansSemibold"
-                                   FontAttributes="Bold"
-                                   FontSize="14"
-                                   Margin="3,3,3,0"
-                                   LineBreakMode="TailTruncation"
-                                   MaxLines="2" />
-
-                            <Label Grid.Row="2"
-                                   Text="{Binding SubtitleText}"
-                                   TextColor="{StaticResource TextSecondary}"
-                                   FontSize="12"
-                                   Margin="3,0"
-                                   LineBreakMode="TailTruncation" />
-
-                            <Label Grid.Row="3"
-                                   IsVisible="{Binding HasTags}"
-                                   Text="{Binding TagsText}"
-                                   FontSize="11"
-                                   Margin="3,0"
-                                   TextColor="{StaticResource NeonPurpleBright}"
-                                   LineBreakMode="TailTruncation" />
-                            <Label Grid.Row="4" Text="{Binding CoverStateText}"
-                                   IsVisible="{Binding HasCoverError}" FontSize="11"
-                                   TextColor="{StaticResource TextSecondary}"
-                                   LineBreakMode="WordWrap" />
-                            <Grid Grid.Row="5" ColumnDefinitions="*,*" ColumnSpacing="6"
-                                  IsVisible="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.UseHorizontalBookActions, x:DataType=views:LibraryPage}">
-                                <Grid.Triggers>
-                                    <DataTrigger TargetType="Grid" Binding="{Binding IsGroup}" Value="True">
-                                        <Setter Property="IsVisible" Value="False" />
-                                    </DataTrigger>
-                                </Grid.Triggers>
-                                <Button Text="Leer" Style="{StaticResource PrimaryNeonButton}" Padding="6,6" FontSize="12"
-                                        Command="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.OpenBookCommand, x:DataType=views:LibraryPage}"
-                                        CommandParameter="{Binding Book}" />
-                                <Button Grid.Column="1" Text="Acciones" Padding="6,6" FontSize="12"
-                                        Clicked="OnBookActionsClicked" />
-                            </Grid>
-                            <VerticalStackLayout Grid.Row="5" Spacing="6"
-                                                 IsVisible="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.UseStackedBookActions, x:DataType=views:LibraryPage}">
-                                <VerticalStackLayout.Triggers>
-                                    <DataTrigger TargetType="VerticalStackLayout" Binding="{Binding IsGroup}" Value="True">
-                                        <Setter Property="IsVisible" Value="False" />
-                                    </DataTrigger>
-                                </VerticalStackLayout.Triggers>
-                                <Button Text="Leer" Style="{StaticResource PrimaryNeonButton}"
-                                        Command="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.OpenBookCommand, x:DataType=views:LibraryPage}"
-                                        CommandParameter="{Binding Book}" />
-                                <Button Text="Acciones" Clicked="OnBookActionsClicked" />
-                            </VerticalStackLayout>
-                            <Button Grid.Row="5" Text="Abrir serie" IsVisible="{Binding IsGroup}"
-                                    Command="{Binding Source={x:Reference LibraryRootPage}, Path=ViewModel.OpenItemCommand, x:DataType=views:LibraryPage}"
-                                    CommandParameter="{Binding .}" />
-                        </Grid>
-                    </Border>
+                <DataTemplate x:DataType="models:LibraryDisplayRow">
+                    <HorizontalStackLayout BindableLayout.ItemsSource="{Binding Items}"
+                                           BindableLayout.ItemTemplate="{StaticResource DocumentCardTemplate}"
+                                           Spacing="10" />
                 </DataTemplate>
             </CollectionView.ItemTemplate>
         </CollectionView>

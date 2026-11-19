@@ -46,6 +46,7 @@
     <Compile Include="..\NebulaReader\Services\CoverThumbnailService.cs" Link="Core\CoverThumbnailService.cs" />
     <Compile Include="..\NebulaReader\Services\NaturalSortComparer.cs" Link="Core\NaturalSortComparer.cs" />
     <Compile Include="..\NebulaReader\Services\ResponsiveLayout.cs" Link="Core\ResponsiveLayout.cs" />
+    <Compile Include="..\NebulaReader\Services\LibraryTitlePresentation.cs" Link="Core\LibraryTitlePresentation.cs" />
     <Compile Include="..\NebulaReader\Services\LibrarySyncScope.cs" Link="Core\LibrarySyncScope.cs" />
     <Compile Include="..\NebulaReader\Services\BookMetadataExtractor.cs" Link="Core\BookMetadataExtractor.cs" />
     <Compile Include="..\NebulaReader\Services\CbzBookSource.cs" Link="Core\CbzBookSource.cs" />

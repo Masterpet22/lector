@@ -5,6 +5,28 @@ public static class ResponsiveLayout
 {
     public const double RecentCardRightInset = 24;
 
+    public readonly record struct CardGridMetrics(int Columns, double CardWidth);
+
+    public static CardGridMetrics GetCardGridMetrics(double availableWidth, double minimumCardWidth,
+        double maximumCardWidth, double spacing, int maximumColumns = 12)
+    {
+        if (!double.IsFinite(availableWidth) || availableWidth <= 0)
+            return new CardGridMetrics(1, 0);
+
+        var columns = GetColumnCount(availableWidth, minimumCardWidth, spacing, maximumColumns);
+        var cellWidth = Math.Max(0, (availableWidth - (columns - 1) * spacing) / columns);
+        // En un teléfono con una sola columna se usa el ancho disponible para conservar las acciones.
+        var cardWidth = columns == 1 && availableWidth <= 420
+            ? cellWidth
+            : Math.Min(maximumCardWidth, cellWidth);
+        return new CardGridMetrics(columns, cardWidth);
+    }
+
+    public static IReadOnlyList<IReadOnlyList<T>> GroupIntoRows<T>(IEnumerable<T> items, int columns) =>
+        items.Chunk(Math.Max(1, columns))
+            .Select(row => (IReadOnlyList<T>)row)
+            .ToList();
+
     public static double GetVisibleWidth(double availableWidth, params double[] measuredWidths)
     {
         if (!double.IsFinite(availableWidth) || availableWidth <= 0) return 0;

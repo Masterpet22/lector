@@ -15,7 +15,21 @@ public sealed partial class LibraryDisplayItem : ObservableObject
     public bool IsGroup { get; init; }
     public bool IsSingleBook => !IsGroup;
 
-    public string Title { get; init; } = string.Empty;
+    private string _title = string.Empty;
+    private (string Name, string? Number) _titleParts = (string.Empty, null);
+
+    public string Title
+    {
+        get => _title;
+        init
+        {
+            _title = value ?? string.Empty;
+            _titleParts = LibraryTitlePresentation.Split(_title);
+        }
+    }
+    public string DisplayTitle => _titleParts.Name;
+    public string? TitleNumber => _titleParts.Number;
+    public bool HasTitleNumber => TitleNumber is not null;
     public BookItem? Book { get; init; }
     public IReadOnlyList<BookItem> GroupBooks { get; init; } = Array.Empty<BookItem>();
 
@@ -38,6 +52,12 @@ public sealed partial class LibraryDisplayItem : ObservableObject
     public bool HasCover2 => !string.IsNullOrWhiteSpace(Cover2);
     public bool HasCover3 => !string.IsNullOrWhiteSpace(Cover3);
     public bool HasCover4 => !string.IsNullOrWhiteSpace(Cover4);
+    public int CoverCount => (HasCover1 ? 1 : 0) + (HasCover2 ? 1 : 0) +
+        (HasCover3 ? 1 : 0) + (HasCover4 ? 1 : 0);
+    public bool HasOneCover => CoverCount == 1;
+    public bool HasTwoCovers => CoverCount == 2;
+    public bool HasThreeCovers => CoverCount == 3;
+    public bool HasFourCovers => CoverCount == 4;
 
     public static LibraryDisplayItem FromSingleBook(BookItem book, IReadOnlyList<string>? displayTags = null, double coverHeight = 200)
     {
@@ -75,6 +95,7 @@ public sealed partial class LibraryDisplayItem : ObservableObject
     {
         var covers = books
             .Select(b => b.CoverThumbnailPath)
+            .Where(path => !string.IsNullOrWhiteSpace(path))
             .Take(4)
             .ToList();
 
@@ -100,4 +121,7 @@ public sealed partial class LibraryDisplayItem : ObservableObject
         };
     }
 }
+
+/// <summary>Una fila virtualizada de tarjetas con ancho independiente del número de resultados.</summary>
+public sealed record LibraryDisplayRow(IReadOnlyList<LibraryDisplayItem> Items);
 

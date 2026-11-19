@@ -4,5 +4,16 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:maui="using:Microsoft.Maui"
     xmlns:local="using:NebulaReader.WinUI">
-
+    <maui:MauiWinUIApplication.Resources>
+        <!-- Barras de desplazamiento de WinUI: riel oscuro y pulgar morado. -->
+        <SolidColorBrush x:Key="ScrollBarThumbFill" Color="#B026FF" />
+        <SolidColorBrush x:Key="ScrollBarThumbFillPointerOver" Color="#D884FF" />
+        <SolidColorBrush x:Key="ScrollBarThumbFillPressed" Color="#7C3AED" />
+        <SolidColorBrush x:Key="ScrollBarThumbBackground" Color="#B026FF" />
+        <SolidColorBrush x:Key="ScrollBarPanningThumbBackground" Color="#B026FF" />
+        <SolidColorBrush x:Key="ScrollBarTrackFill" Color="#12101E" />
+        <SolidColorBrush x:Key="ScrollBarTrackFillPointerOver" Color="#1C1830" />
+        <SolidColorBrush x:Key="ScrollBarTrackStroke" Color="#2A2346" />
+        <SolidColorBrush x:Key="ScrollBarTrackStrokePointerOver" Color="#2A2346" />
+    </maui:MauiWinUIApplication.Resources>
 </maui:MauiWinUIApplication>

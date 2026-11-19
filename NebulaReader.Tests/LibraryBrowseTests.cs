@@ -45,6 +45,47 @@ public class LibraryBrowseTests
         Assert.Equal(8, matching.CurrentPage);
     }
 
+    [Fact]
+    public void GroupMosaicUsesAvailableCoversWithoutEmptySlots()
+    {
+        var books = new[]
+        {
+            new BookItem { CoverThumbnailPath = "one.jpg" },
+            new BookItem(),
+            new BookItem { CoverThumbnailPath = "three.jpg" },
+            new BookItem { CoverThumbnailPath = "four.jpg" }
+        };
+
+        var card = LibraryDisplayItem.FromSeriesGroup("Serie", books);
+
+        Assert.Equal(3, card.CoverCount);
+        Assert.True(card.HasThreeCovers);
+        Assert.Equal("one.jpg", card.Cover1);
+        Assert.Equal("three.jpg", card.Cover2);
+        Assert.Equal("four.jpg", card.Cover3);
+        Assert.Null(card.Cover4);
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    public void GroupMosaicAdaptsToAvailableCoverCount(int coverCount)
+    {
+        var books = Enumerable.Range(1, coverCount)
+            .Select(i => new BookItem { CoverThumbnailPath = $"{i}.jpg" })
+            .ToArray();
+
+        var card = LibraryDisplayItem.FromSeriesGroup("Serie", books);
+
+        Assert.Equal(coverCount, card.CoverCount);
+        Assert.Equal(coverCount == 1, card.HasOneCover);
+        Assert.Equal(coverCount == 2, card.HasTwoCovers);
+        Assert.Equal(coverCount == 3, card.HasThreeCovers);
+        Assert.Equal(coverCount == 4, card.HasFourCovers);
+    }
+
     [Theory]
     [InlineData(BookFormat.Cbz)]
     [InlineData(BookFormat.Cbr)]

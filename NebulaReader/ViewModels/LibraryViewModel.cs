@@ -59,6 +59,31 @@ public partial class LibraryViewModel : BaseViewModel
     public partial ObservableCollection<LibraryDisplayItem> DisplayItems { get; set; } = new();
 
     [ObservableProperty]
+    public partial ObservableCollection<LibraryDisplayRow> DisplayRows { get; set; } = new();
+
+    [ObservableProperty]
+    public partial double CardWidth { get; set; } = 200;
+
+    private int _cardColumns = 1;
+
+    partial void OnDisplayItemsChanged(ObservableCollection<LibraryDisplayItem> value) => RebuildDisplayRows();
+
+    public void UpdateCardColumns(int columns)
+    {
+        columns = Math.Max(1, columns);
+        if (_cardColumns == columns) return;
+        _cardColumns = columns;
+        RebuildDisplayRows();
+    }
+
+    private void RebuildDisplayRows()
+    {
+        DisplayRows = new ObservableCollection<LibraryDisplayRow>(
+            ResponsiveLayout.GroupIntoRows(DisplayItems, _cardColumns)
+                .Select(items => new LibraryDisplayRow(items)));
+    }
+
+    [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasContinueReading))]
     [NotifyPropertyChangedFor(nameof(HasNoContinueReading))]
     public partial ObservableCollection<LibraryDisplayItem> ContinueReadingItems { get; set; } = new();
