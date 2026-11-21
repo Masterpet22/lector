@@ -139,7 +139,7 @@ En Android, utiliza los gestos táctiles del visor para ampliar y desplazar la p
 - Para compilar Windows: un equipo Windows y el **Windows SDK** requerido por el proyecto.
 - Acceso a NuGet para restaurar dependencias.
 
-El proyecto declara Android API 21 y Windows 10, versión 1809, como mínimos de plataforma. Los destinos de compilación son `net10.0-android` y `net10.0-windows10.0.19041.0`; este último solo se agrega al compilar desde Windows. La compatibilidad de ejecución también depende de los requisitos de las bibliotecas nativas utilizadas.
+El proyecto declara Android API 24 y Windows 10, versión 1809, como mínimos de plataforma. Los destinos de compilación son `net10.0-android` y `net10.0-windows10.0.19041.0`; este último solo se agrega al compilar desde Windows. La compatibilidad de ejecución también depende de los requisitos de las bibliotecas nativas utilizadas.
 
 Consulta [Herramientas de desarrollo](HERRAMIENTAS_DE_DESARROLLO.md) para más detalles del entorno.
 

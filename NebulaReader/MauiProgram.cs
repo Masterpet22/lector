@@ -48,7 +48,7 @@ public static class MauiProgram
         builder.Services.AddSingleton(_ =>
         {
             var client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
-            client.DefaultRequestHeaders.UserAgent.ParseAdd("NebulaReader/2.0 (metadata lookup)");
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("NebulaReader/2.1 (metadata lookup)");
             return client;
         });
         builder.Services.AddSingleton<IOnlineTagService, OnlineTagService>();

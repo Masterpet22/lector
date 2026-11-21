@@ -24,8 +24,8 @@
 		<ApplicationId>app.nebulareader.mobile</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>2.0.0</ApplicationDisplayVersion>
-		<ApplicationVersion>4</ApplicationVersion>
+		<ApplicationDisplayVersion>2.1.0</ApplicationDisplayVersion>
+		<ApplicationVersion>5</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
 		<WindowsPackageType>None</WindowsPackageType>
@@ -34,13 +34,23 @@
 		<SupportedOSPlatformVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</SupportedOSPlatformVersion>
 		<TargetPlatformMinVersion Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'windows'">10.0.17763.0</TargetPlatformMinVersion>
 
-		<!-- Trimming en Release para Android -->
+		<!-- Trimming, R8 y símbolos de depuración nativos en Release para Android -->
 		<PublishTrimmed Condition="'$(Configuration)' == 'Release' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">true</PublishTrimmed>
+		<AndroidLinkTool Condition="'$(Configuration)' == 'Release' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">r8</AndroidLinkTool>
 		<UseDefaultPublishRuntimeIdentifier Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">false</UseDefaultPublishRuntimeIdentifier>
 		<RuntimeIdentifiers Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">android-arm64;android-arm;android-x86;android-x64</RuntimeIdentifiers>
 		<!-- Una APK Debug instalada directamente debe contener sus ensamblados. -->
 		<EmbedAssembliesIntoApk Condition="'$(Configuration)' == 'Debug' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">true</EmbedAssembliesIntoApk>
 	</PropertyGroup>
+
+	<Target Name="_EmbedAndroidNativeDebugSymbols" AfterTargets="_BuildLibraryImportsCache;_PrepareBuildApk" BeforeTargets="_BuildApkEmbed" Condition="'$(Configuration)' == 'Release' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' and '$(AndroidPackageFormat)' == 'aab'">
+		<ItemGroup>
+			<AndroidAppBundleMetaDataFile Condition="Exists('$(IntermediateOutputPath)app_shared_libraries\arm64-v8a\libxamarin-app.dbg.so')" Include="com.android.tools.build.debugsymbols/arm64-v8a/libxamarin-app.so.sym:$(IntermediateOutputPath)app_shared_libraries\arm64-v8a\libxamarin-app.dbg.so" />
+			<AndroidAppBundleMetaDataFile Condition="Exists('$(IntermediateOutputPath)app_shared_libraries\armeabi-v7a\libxamarin-app.dbg.so')" Include="com.android.tools.build.debugsymbols/armeabi-v7a/libxamarin-app.so.sym:$(IntermediateOutputPath)app_shared_libraries\armeabi-v7a\libxamarin-app.dbg.so" />
+			<AndroidAppBundleMetaDataFile Condition="Exists('$(IntermediateOutputPath)app_shared_libraries\x86\libxamarin-app.dbg.so')" Include="com.android.tools.build.debugsymbols/x86/libxamarin-app.so.sym:$(IntermediateOutputPath)app_shared_libraries\x86\libxamarin-app.dbg.so" />
+			<AndroidAppBundleMetaDataFile Condition="Exists('$(IntermediateOutputPath)app_shared_libraries\x86_64\libxamarin-app.dbg.so')" Include="com.android.tools.build.debugsymbols/x86_64/libxamarin-app.so.sym:$(IntermediateOutputPath)app_shared_libraries\x86_64\libxamarin-app.dbg.so" />
+		</ItemGroup>
+	</Target>
 
 	<ItemGroup>
 		<PackageReference Include="LanguageDetection.Ai" Version="1.1.0" />
