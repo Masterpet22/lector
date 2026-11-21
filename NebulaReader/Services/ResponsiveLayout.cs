@@ -4,6 +4,7 @@ namespace NebulaReader.Services;
 public static class ResponsiveLayout
 {
     public const double RecentCardRightInset = 24;
+    public const double RecentCardLeftInset = 8;
 
     public readonly record struct CardGridMetrics(int Columns, double CardWidth);
 
@@ -55,6 +56,12 @@ public static class ResponsiveLayout
         return Math.Max(0, Math.Min(maximumWidth, availableWidth / columns - trailingMargin));
     }
 
-    public static double GetRecentCardWidth(double viewportWidth) =>
-        GetWrappedCardWidth(Math.Max(0, viewportWidth - RecentCardRightInset), 250, 300, 10, 8);
+    public static CardGridMetrics GetRecentCardGridMetrics(double viewportWidth)
+    {
+        var metrics = GetCardGridMetrics(
+            Math.Max(0, viewportWidth - RecentCardLeftInset - RecentCardRightInset), 250, 300, 10, 8);
+        return metrics with { CardWidth = Math.Floor(Math.Min(300, metrics.CardWidth)) };
+    }
+
+    public static double GetRecentCardWidth(double viewportWidth) => GetRecentCardGridMetrics(viewportWidth).CardWidth;
 }

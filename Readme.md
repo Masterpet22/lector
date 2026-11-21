@@ -5,9 +5,11 @@ Lector de cómics y documentos **CBZ, CBR y PDF** para **Android y Windows**, de
 ## Funciones
 
 - Apertura de archivos individuales e importación de colecciones mediante el escaneo de carpetas.
+- Apertura de CBZ, CBR y PDF desde «Abrir con» del sistema, con recepción del documento al iniciar la aplicación o mientras está abierta.
 - Escaneo de carpetas con progreso, cancelación, resumen de archivos añadidos, existentes y fallidos, y reintento de fallos. Las portadas pendientes se muestran por separado.
 - Exportación e importación de respaldos JSON versionados con progreso, marcadores, metadatos corregidos, preferencias por documento y ajustes generales.
 - Biblioteca con portadas, progreso de lectura y agrupación de series a partir de metadatos y títulos.
+- Detección de portada en CBZ y CBR mediante `ComicInfo.xml` y nombres de imagen, con actualización de las miniaturas antiguas.
 - Vistas de iconos con tarjetas de ancho limitado y filas adaptables; las portadas se muestran completas y los títulos largos se abrevian con puntos suspensivos.
 - Búsqueda por título, serie o etiqueta, con filtros combinables por formato y estado de lectura.
 - Sección «Continuar leyendo» con lecturas recientes, página guardada y porcentaje cuando se conoce el total.
@@ -30,6 +32,42 @@ Lector de cómics y documentos **CBZ, CBR y PDF** para **Android y Windows**, de
 | CBR | Lectura del archivo RAR con SharpCompress. |
 | PDF | Renderizado mediante `PdfRenderer` en Android y `Windows.Data.Pdf` en Windows. |
 
+## Usar como lector predeterminado
+
+### Android
+
+1. Instala una compilación que incluya la integración de apertura externa.
+2. En tu gestor de archivos, selecciona un CBZ, CBR o PDF y elige **Abrir con → Nebula Reader**.
+3. Selecciona **Siempre** cuando Android ofrezca esa opción. Si ya hay otro lector asignado, cambia la asociación desde el gestor o los ajustes de aplicaciones del dispositivo.
+
+Android decide las asociaciones según el tipo que comunique el gestor de archivos; algunos identifican CBZ y CBR como ZIP y RAR. La aplicación admite sus tipos MIME habituales y los nombres con extensión cuando se reciben como archivos genéricos. No todos los proveedores comunican la misma información al selector del sistema.
+
+El documento se añade a la biblioteca y se abre en el lector. Si ya figura en la biblioteca con acceso persistente desde el mismo proveedor, se reutilizan su entrada y su progreso. Cuando se necesita conservar un documento recibido mediante `content://`, se guarda una copia en los datos privados de la aplicación para mantener el acceso después de cerrar el gestor de archivos. La copia se valida antes de sustituir otra existente, se hace por streaming y necesita espacio suficiente; el archivo original no se modifica. Volver a abrir la misma URI reutiliza la ubicación de esa copia. Las formas de URI de árbol y documento de un mismo proveedor se reconocen como el mismo documento.
+
+### Windows
+
+1. Conserva la carpeta completa de la publicación en su ubicación definitiva y abre **NebulaReader.exe**.
+2. Ve a **Gestión → Configuración → Abrir documentos** y pulsa **Registrar CBZ, CBR y PDF**.
+3. Continúa a **Aplicaciones predeterminadas** de Windows, busca **Nebula Reader** y asígnale `.cbz`, `.cbr` y `.pdf`.
+
+El registro se hace para el usuario actual, sin permisos de administrador. No sustituye automáticamente las aplicaciones predeterminadas existentes: la elección se realiza en Windows. Si mueves la carpeta de la aplicación, vuelve a registrar los formatos desde la nueva ubicación.
+
+También puedes usar **Abrir con → Elegir otra aplicación** y localizar `NebulaReader.exe`. El ejecutable recibe la ruta del documento por línea de comandos, incluidas las rutas con espacios. Las versiones empaquetadas declaran los tres formatos en su manifiesto.
+
+Las aperturas recibidas durante el arranque esperan a que la biblioteca esté lista; las peticiones se procesan de una en una. Antes de sustituir un lector activo en la misma ventana se guarda su progreso. Un archivo inexistente, sin permiso o sin páginas compatibles muestra un aviso y no bloquea las aperturas posteriores.
+
+## Detección de portadas
+
+En CBZ y CBR, la aplicación elige la miniatura de la biblioteca con esta prioridad:
+
+1. La imagen marcada como `FrontCover` en `ComicInfo.xml`, usando su índice `Image` sobre las páginas en orden natural.
+2. Una imagen cuyo nombre indique portada, como `front_cover`, `cover`, `portada` o `carátula`. Al buscar por nombre se descartan indicaciones de contraportada o portada interior, como `back-cover`, `contraportada` e `innercover`.
+3. La primera página, si no hay una indicación fiable. En PDF se utiliza la primera página renderizada.
+
+Esta selección no cambia el orden de lectura ni la página guardada. Los metadatos XML ausentes, inválidos o excesivamente grandes no impiden usar las otras opciones. No se utiliza reconocimiento visual por IA: una portada con un nombre genérico y sin metadatos no se puede identificar de forma fiable salvo que sea la primera página.
+
+Las miniaturas de la versión anterior se renuevan en segundo plano al cargar la biblioteca; las nuevas usan una ruta de caché distinta para evitar que se siga mostrando la imagen anterior. Si un documento tiene un error de portada, utiliza su acción de reintento después de recuperar el archivo o sus permisos.
+
 ## Instalación de las compilaciones locales
 
 Los siguientes archivos se generan al publicar el proyecto; la carpeta `releases/` está excluida de Git y no se incluye al clonar el repositorio.
@@ -51,10 +89,14 @@ La publicación indicada abajo es autónoma para Windows x64 e incluye .NET y Wi
 
 ## Primeros pasos
 
+Para descargar etiquetas de varios documentos, selecciónalos en **Biblioteca** y pulsa **Descargar etiquetas** en la barra de selección. Elige **Aplicar una fuente a todos** y selecciona la fuente una sola vez: se utilizará para todos los documentos seleccionados, aunque alguno falle o se omita. La fuente elegida aparece en el progreso y en el resumen final. También puedes elegir **Elegir fuente por documento** para decidirla individualmente. Si solo seleccionas un documento, se muestra directamente el selector de fuente. Todas las fuentes sirven para CBZ, CBR y PDF. Solo se ofrecen las fuentes públicas y las que tienen sus credenciales guardadas y accesibles; se actualiza la lista cada vez que se abre el selector. Se busca cada documento por separado y se revisan sus resultados antes de guardar. Al seleccionar un grupo, se procesa cada documento que contiene. Puedes omitir documentos o detener la descarga; los cambios ya guardados se conservan. Cancelar cualquiera de las elecciones iniciales no inicia la descarga ni modifica los documentos. Al finalizar se muestran los documentos guardados, omitidos, con errores y pendientes.
+
+En **Gestión → Configuración → Fuentes de etiquetas**, selecciona el idioma de las etiquetas: español (inicial), inglés, francés, portugués, italiano, alemán o japonés. La preferencia se guarda automáticamente. Al preparar las etiquetas de un documento, se priorizan las originales del idioma elegido y se traducen las restantes con [MyMemory](https://mymemory.translated.net/doc/spec.php), incluidas las etiquetas existentes del documento que se está revisando. Se eliminan duplicados y las traducciones se reutilizan durante la sesión. La detección de idioma en etiquetas breves puede ser ambigua; el resultado siempre se puede revisar y editar antes de guardarlo. Si no se puede completar la traducción, no se modifican las etiquetas de ese documento. Cambiar el idioma en Configuración no reescribe por sí solo los documentos ya guardados.
+
 1. Pulsa **Añadir** y elige **Abrir archivo** para importar y abrir un CBZ, CBR o PDF, o **Escanear carpeta** para añadir una colección.
 2. En Android, concede acceso al archivo o a la carpeta seleccionada cuando lo solicite el selector del sistema.
-3. En **Biblioteca**, busca por título, serie o etiqueta y combina los filtros de formato y estado. En una pantalla estrecha, pulsa **Filtrar** para mostrarlos; en una ventana amplia aparecen en el panel lateral. La pantalla enumera los criterios activos y **Limpiar filtros** los restablece. Los grupos de series muestran solo los libros coincidentes.
-4. En **Biblioteca**, pulsa **Leer** en un documento o selecciona su portada. Si aparece un grupo de serie, pulsa **Abrir serie** para ver sus documentos; también puedes seleccionarlo con el teclado. En **Inicio**, pulsa **Continuar** para retomar una lectura desde la página guardada. Las lecturas recientes pasan a nuevas filas según el ancho disponible y son independientes de los filtros de Biblioteca.
+3. En **Biblioteca**, busca por título, serie o etiqueta y combina los filtros de formato, estado y **Etiqueta**. Este último coincide con la etiqueta completa sin distinguir mayúsculas y permite ver documentos **Sin etiquetas**. En una pantalla estrecha, pulsa **Filtrar** para mostrar los controles; en una ventana amplia aparecen en el panel lateral. **Limpiar filtros** restablece los criterios sin cambiar la organización elegida.
+4. Usa **Organizar por** para ver **Series**, **Etiquetas** o **Documentos** sin agrupar. La elección se recuerda al reiniciar. En la vista por etiquetas, cada documento aparece en todos sus grupos correspondientes y los documentos sin clasificar tienen un grupo propio. Los filtros se aplican también dentro de cada grupo; los recuentos y las selecciones múltiples cuentan cada documento una sola vez. Pulsa **Abrir grupo** y **← Volver** para navegar, o **Leer** para abrir un documento. En **Inicio**, pulsa **Continuar** para retomar una lectura desde la página guardada. Las lecturas recientes son independientes de los filtros y de la organización de Biblioteca.
 5. Usa **Anterior**, **Siguiente** o la barra de progreso para navegar. El botón **Guardar marcador** o **Quitar marcador** cambia la marca de la página actual. En modo manga, los botones indican la acción correspondiente a cada lado.
    Pulsa **Ir a página** y cambia entre **Marcadores** y **Miniaturas**; toca una página para abrirla. El punto indica la página actual y la estrella una página marcada. **← Volver** cierra el panel.
    **Opciones de lectura** reúne disposición, ajuste, dirección, filtro, rotación, pantalla completa y restablecimiento. Los cambios se guardan para el libro abierto; el panel indica si usa valores generales o una personalización. Al restablecer, vuelve a aplicar los valores generales. En Android, toca el centro de la página para mostrar u ocultar los controles; en Windows aparecen al mover el ratón. Se ocultan tras unos segundos de inactividad.
@@ -63,11 +105,13 @@ La publicación indicada abajo es autónoma para Windows x64 e incluye .NET y Wi
 8. Pulsa **Acciones** en un documento para editar su título o serie. **Marcar como leído** guarda la última página como progreso y requiere conocer el total; **Marcar como no leído** vuelve a la página 1. **Quitar de la biblioteca** elimina la entrada y su progreso, pero conserva el archivo original.
 9. Si se movió un archivo o se perdió el permiso, usa **Volver a localizar / Conceder acceso** y elige el documento mediante el selector. Se conservan sus datos de lectura. La aplicación rechaza una ruta ya importada y comprueba el formato, el número de páginas y, cuando existe, la huella de la primera página. Si falla una portada, el estado aparece en la tarjeta y **Reintentar portada** vuelve a generarla.
 10. Durante **Escanear carpeta**, Biblioteca muestra el avance en una franja compacta. Pulsa **Detalles** para abrir **Gestión**, donde puedes ver las portadas pendientes y cancelar el escaneo. Al terminar, revisa allí el resumen y usa **Reintentar fallidos** si hay archivos con error. **Cancelar escaneo** conserva lo ya añadido.
-11. En **Gestión**, pulsa **Exportar datos** para guardar un respaldo JSON. En otro dispositivo, pulsa **Importar respaldo** y después asocia cada documento pendiente desde **Acciones → Volver a localizar / Conceder acceso**. El respaldo contiene datos de lectura, pero no los archivos CBZ, CBR o PDF originales: cópialos también al destino.
+11. En **Gestión**, pulsa **Exportar datos** para guardar un respaldo JSON. En otro dispositivo, pulsa **Importar respaldo** y después asocia cada documento pendiente desde **Acciones → Volver a localizar / Conceder acceso**. El respaldo contiene metadatos, progreso, marcadores y ajustes de lectura e idioma de etiquetas. No contiene rutas ni los archivos CBZ, CBR o PDF originales: cópialos también al destino.
+
+En **Configuración → Carpetas importadas**, **Quitar** retira de la biblioteca los documentos de esa carpeta, junto con su progreso y marcadores, sin borrar los archivos originales. Si otra carpeta registrada sigue cubriendo un documento, permanece en la biblioteca.
 
 ### Combinación de respaldos
 
-El formato actual es `nebula-reader-data` versión 1. La importación valida todo el archivo antes de modificar la biblioteca y aplica los cambios en una transacción. Si ya existe un libro con el mismo ID, conserva su ruta local; gana el progreso con fecha de lectura más reciente y, en empate, el local. Se conservan las correcciones manuales locales de título y serie, se unen los marcadores y se mantienen las preferencias por documento locales cuando existen. Los ajustes generales del respaldo se aplican al importar. Los libros nuevos aparecen pendientes de asociación con sus archivos originales.
+El formato actual es `nebula-reader-data` versión 1. La importación valida todo el archivo antes de modificar la biblioteca y aplica los cambios en una transacción. Si ya existe un libro con el mismo ID, conserva su ruta local; gana el progreso con fecha de lectura más reciente y, en empate, el local. Se conservan las correcciones manuales locales de título y serie, se unen los marcadores y se mantienen las preferencias por documento locales cuando existen. Los ajustes generales del respaldo se aplican al importar. Los libros nuevos aparecen pendientes de asociación con sus archivos originales. Los respaldos antiguos con `locationHint` se pueden importar, pero se ignora esa ruta.
 
 ### Controles en Windows
 

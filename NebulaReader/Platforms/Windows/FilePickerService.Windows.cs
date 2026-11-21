@@ -24,7 +24,24 @@ public partial class FilePickerService
         }
 
         var folder = await folderPicker.PickSingleFolderAsync().AsTask(ct);
-        return folder?.Path;
+        var path = folder?.Path;
+        folder = null;
+        folderPicker = null;
+        ReleasePickerComProxies();
+        return path;
+    }
+
+    private static void ReleasePickerComProxies()
+    {
+        // Liberar los proxies COM de pickerhost.exe mientras el bucle de mensajes STA sigue activo
+        // evita que el hilo finalizador bloquee el cierre de la aplicación al salir.
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(50).ConfigureAwait(false);
+            if (AppLifetime.IsShuttingDown) return;
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+        });
     }
 
     private partial Task<IReadOnlyList<string>> EnumerateBookFilesPlatformAsync(string folderPathOrUri, CancellationToken ct)
@@ -62,11 +79,19 @@ public partial class FilePickerService
         if (window != null)
             InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(window));
         var file = await picker.PickSaveFileAsync().AsTask(ct);
-        if (file == null) return false;
+        if (file == null)
+        {
+            picker = null;
+            ReleasePickerComProxies();
+            return false;
+        }
         using var bytes = new MemoryStream();
         if (source.CanSeek) source.Position = 0;
         await source.CopyToAsync(bytes, ct);
         await Windows.Storage.FileIO.WriteBytesAsync(file, bytes.ToArray()).AsTask(ct);
+        file = null;
+        picker = null;
+        ReleasePickerComProxies();
         return true;
     }
 }

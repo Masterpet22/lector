@@ -15,6 +15,7 @@ public sealed class CbrBookSource : IBookSource
     private readonly IReadOnlyList<IArchiveEntry> _pages;
     private readonly object _syncRoot = new();
     private bool _disposed;
+    private int? _coverPageIndex;
 
     public string Title { get; }
     public int PageCount => _pages.Count;
@@ -72,7 +73,19 @@ public sealed class CbrBookSource : IBookSource
             return Task.FromResult<Stream>(new MemoryStream());
         }
 
-        return GetPageStreamAsync(0);
+        int index;
+        lock (_syncRoot)
+        {
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            index = _coverPageIndex ??= ComicCoverDetector.FindCoverPage(
+                _pages.Select(page => page.Key ?? string.Empty).ToArray(), () => _archive.Entries
+                    .Where(entry => !entry.IsDirectory && ComicCoverDetector.IsComicInfoEntry(entry.Key) &&
+                        entry.Size <= ComicCoverDetector.MaxComicInfoBytes)
+                    .OrderBy(entry => (entry.Key ?? string.Empty).Replace('\\', '/').Count(c => c == '/'))
+                    .ThenBy(entry => entry.Key ?? string.Empty, NaturalSortComparer.Instance)
+                    .FirstOrDefault()?.OpenEntryStream());
+        }
+        return GetPageStreamAsync(index);
     }
 
     public void Dispose()

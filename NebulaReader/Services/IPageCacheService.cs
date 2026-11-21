@@ -18,4 +18,5 @@ public interface IPageCacheService
     void EvictOutsideWindow(string bookId, int centerPageIndex, int radius = 1);
     void EvictOutsideRange(string bookId, int minKeepPageIndex, int maxKeepPageIndex);
     void ClearBook(string bookId);
+    void ClearAll();
 }

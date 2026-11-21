@@ -82,6 +82,11 @@ public partial class ReaderPage
     {
         var vm = ViewModel;
         if (vm == null) return;
+        if (vm.IsReadingLocked)
+        {
+            e.Handled = true;
+            return;
+        }
         if (vm.IsReadingOptionsVisible)
         {
             if (e.Key == VirtualKey.Escape)
@@ -199,6 +204,11 @@ public partial class ReaderPage
 
     private void OnNativePointerWheelChanged(object sender, PointerRoutedEventArgs e)
     {
+        if (ViewModel?.IsReadingLocked == true)
+        {
+            e.Handled = true;
+            return;
+        }
         if (sender is not UIElement element) return;
 
         var point = e.GetCurrentPoint(element);
@@ -245,6 +255,7 @@ public partial class ReaderPage
 
     private void OnNativePointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        if (ViewModel?.IsReadingLocked == true) return;
         if (sender is not UIElement element) return;
 
         var point = e.GetCurrentPoint(element);
@@ -264,6 +275,7 @@ public partial class ReaderPage
 
     private void OnNativePointerMoved(object sender, PointerRoutedEventArgs e)
     {
+        if (ViewModel?.IsReadingLocked == true) return;
         OnWindowPointerMoved(sender, e);
         if (!_isPointerDragging || sender is not UIElement element) return;
 

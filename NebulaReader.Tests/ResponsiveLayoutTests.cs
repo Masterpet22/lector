@@ -74,11 +74,28 @@ public class ResponsiveLayoutTests
     {
         for (var width = 200.0; width <= 2000; width += 10)
         {
-            var usableWidth = width - ResponsiveLayout.RecentCardRightInset;
-            var columns = Math.Clamp((int)Math.Floor(usableWidth / 260), 1, 8);
-            var cardWidth = ResponsiveLayout.GetRecentCardWidth(width);
-            Assert.True(columns * (cardWidth + 10) + ResponsiveLayout.RecentCardRightInset <= width + 0.001);
+            var metrics = ResponsiveLayout.GetRecentCardGridMetrics(width);
+            var columns = metrics.Columns;
+            var cardWidth = metrics.CardWidth;
+            Assert.True(ResponsiveLayout.RecentCardLeftInset + columns * cardWidth + (columns - 1) * 10
+                + ResponsiveLayout.RecentCardRightInset <= width + 0.001);
             Assert.InRange(cardWidth, 0, 300);
         }
+    }
+
+    [Theory]
+    [InlineData(320, 1)]
+    [InlineData(540, 1)]
+    [InlineData(1068, 4)]
+    public void RecentCardRowsReserveBothEdgesAndFitTheViewport(double viewport, int expectedColumns)
+    {
+        var metrics = ResponsiveLayout.GetRecentCardGridMetrics(viewport);
+        var rows = ResponsiveLayout.GroupIntoRows(Enumerable.Range(1, 6), metrics.Columns);
+
+        Assert.Equal(expectedColumns, metrics.Columns);
+        Assert.Equal(Enumerable.Range(1, 6), rows.SelectMany(row => row));
+        Assert.True(ResponsiveLayout.RecentCardLeftInset > 0);
+        Assert.All(rows, row => Assert.True(ResponsiveLayout.RecentCardLeftInset + row.Count * metrics.CardWidth
+            + (row.Count - 1) * 10 + ResponsiveLayout.RecentCardRightInset <= viewport));
     }
 }

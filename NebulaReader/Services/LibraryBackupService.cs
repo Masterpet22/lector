@@ -17,11 +17,14 @@ public sealed class LibraryBackupService : ILibraryBackupService
 
     private readonly ILibraryDatabase _database;
     private readonly IReaderSettingsService? _settings;
+    private readonly IOnlineTagSettings? _onlineTagSettings;
 
-    public LibraryBackupService(ILibraryDatabase database, IReaderSettingsService? settings = null)
+    public LibraryBackupService(ILibraryDatabase database, IReaderSettingsService? settings = null,
+        IOnlineTagSettings? onlineTagSettings = null)
     {
         _database = database;
         _settings = settings;
+        _onlineTagSettings = onlineTagSettings;
     }
 
     public async Task<int> ExportAsync(Stream output, CancellationToken ct = default)
@@ -30,12 +33,13 @@ public sealed class LibraryBackupService : ILibraryBackupService
         var books = await _database.GetBooksAsync(ct).ConfigureAwait(false);
         var backup = new LibraryBackup
         {
-            GlobalPreferences = _settings == null ? null : new BackupGlobalPreferences
+            GlobalPreferences = _settings == null && _onlineTagSettings == null ? null : new BackupGlobalPreferences
             {
-                LayoutMode = _settings.LayoutMode,
-                PageFitMode = _settings.PageFitMode,
-                RightToLeftManga = _settings.RightToLeftMangaMode,
-                VisualFilter = _settings.VisualFilter
+                LayoutMode = _settings?.LayoutMode ?? ReaderLayoutMode.DoublePage,
+                PageFitMode = _settings?.PageFitMode ?? PageFitMode.FitPage,
+                RightToLeftManga = _settings?.RightToLeftMangaMode ?? false,
+                VisualFilter = _settings?.VisualFilter ?? ReaderVisualFilter.None,
+                OnlineTagLanguage = _onlineTagSettings?.Language
             }
         };
         foreach (var book in books)
@@ -45,8 +49,7 @@ public sealed class LibraryBackupService : ILibraryBackupService
             {
                 Id = book.Id,
                 Title = book.Title,
-                LocationHint = book.FilePath.StartsWith("backup://", StringComparison.OrdinalIgnoreCase)
-                    ? book.OriginalFilePath : book.FilePath,
+                FileName = BackupBook.GetFileName(book.FilePath) ?? BackupBook.GetFileName(book.OriginalFilePath),
                 Format = book.Format,
                 CurrentPage = book.CurrentPage,
                 TotalPages = book.TotalPages,
@@ -57,6 +60,7 @@ public sealed class LibraryBackupService : ILibraryBackupService
                 Tags = book.Tags,
                 TitleEditedManually = book.TitleEditedManually,
                 SeriesEditedManually = book.SeriesEditedManually,
+                TagsEditedManually = book.TagsEditedManually,
                 ContentFingerprint = book.ContentFingerprint,
                 BookmarkedPages = (await _database.GetBookmarkedPagesAsync(book.Id, ct).ConfigureAwait(false)).ToList(),
                 Preferences = await _database.GetReaderPreferencesAsync(book.Id, ct).ConfigureAwait(false)
@@ -90,6 +94,8 @@ public sealed class LibraryBackupService : ILibraryBackupService
             _settings.RightToLeftMangaMode = preferences.RightToLeftManga;
             _settings.VisualFilter = preferences.VisualFilter;
         }
+        if (backup.GlobalPreferences?.OnlineTagLanguage is { } language && _onlineTagSettings != null)
+            _onlineTagSettings.Language = language;
         return result;
     }
 
@@ -108,6 +114,8 @@ public sealed class LibraryBackupService : ILibraryBackupService
         {
             if (book == null || string.IsNullOrWhiteSpace(book.Id) || book.Id.Length > 128 ||
                 !ids.Add(book.Id) || string.IsNullOrWhiteSpace(book.Title) ||
+                (book.FileName != null && (book.FileName.Length > 255 ||
+                    book.FileName.IndexOfAny(['/', '\\', '\0']) >= 0 || string.IsNullOrWhiteSpace(book.FileName))) ||
                 book.Format is not (BookFormat.Cbz or BookFormat.Cbr or BookFormat.Pdf) ||
                 !Enum.IsDefined(book.Status) || book.CurrentPage < 1 || book.TotalPages < 0 ||
                 (book.TotalPages > 0 && book.CurrentPage > book.TotalPages) || book.BookmarkedPages == null)

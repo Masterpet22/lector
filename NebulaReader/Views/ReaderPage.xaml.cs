@@ -95,6 +95,7 @@ public partial class ReaderPage : ContentPage
     private CancellationTokenSource? _sliderTrackClickCts;
     private bool _platformInputAttached;
     private CancellationTokenSource? _hudHideCts;
+    private CancellationTokenSource? _unlockButtonHideCts;
 
     private SKSamplingOptions CurrentSampling => _isActivelyInteracting ? FastGestureSampling : HighQualitySampling;
 
@@ -145,19 +146,31 @@ public partial class ReaderPage : ContentPage
 
     private void OnViewModelPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
     {
+        if (AppLifetime.IsShuttingDown) return;
+        if (e.PropertyName == nameof(ReaderViewModel.IsReadingLocked) && ViewModel?.IsReadingLocked == true)
+        {
+            StopFlingInertia();
+            _isActivelyInteracting = false;
+        }
         if (e.PropertyName is nameof(ReaderViewModel.CurrentPageNumber)
             or nameof(ReaderViewModel.SliderMaximum)
             or nameof(ReaderViewModel.TotalPages)
             or nameof(ReaderViewModel.IsHudVisible))
         {
-            MainThread.BeginInvokeOnMainThread(SyncSliderFromViewModel);
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                if (!AppLifetime.IsShuttingDown) SyncSliderFromViewModel();
+            });
         }
 
         if (e.PropertyName is nameof(ReaderViewModel.IsHudVisible)
             or nameof(ReaderViewModel.IsReadingOptionsVisible)
             or nameof(ReaderViewModel.IsNavigationOverlayVisible))
         {
-            MainThread.BeginInvokeOnMainThread(ScheduleHudHide);
+            MainThread.BeginInvokeOnMainThread(() =>
+            {
+                if (!AppLifetime.IsShuttingDown) ScheduleHudHide();
+            });
         }
 
         if (e.PropertyName is nameof(ReaderViewModel.PageFitMode) or nameof(ReaderViewModel.LayoutMode))
@@ -184,7 +197,7 @@ public partial class ReaderPage : ContentPage
             AttachPlatformInput(_readerSurfaceView);
             _platformInputAttached = true;
         }
-        if (ViewModel is { } vm) vm.IsHudVisible = true;
+        if (ViewModel is { IsReadingLocked: false } vm) vm.IsHudVisible = true;
         ViewModel?.UpdateViewportSize(Width, Height);
         UpdateAdaptiveHudLayout(Width, Height);
         SyncSliderFromViewModel();
@@ -194,7 +207,7 @@ public partial class ReaderPage : ContentPage
 
     private void RevealHud()
     {
-        if (ViewModel is not { } vm || vm.IsNavigationOverlayVisible) return;
+        if (ViewModel is not { } vm || vm.IsNavigationOverlayVisible || vm.IsReadingLocked) return;
         vm.IsHudVisible = true;
         ScheduleHudHide();
     }
@@ -210,6 +223,45 @@ public partial class ReaderPage : ContentPage
         _ = HideHudAfterInactivityAsync(cts.Token);
     }
 
+    private void OnLockedPageTapped(object? sender, TappedEventArgs e)
+    {
+        if (ViewModel is not { IsReadingLocked: true } vm) return;
+        vm.IsUnlockButtonVisible = true;
+        ScheduleUnlockButtonHide();
+    }
+
+    private void OnUnlockButtonClicked(object? sender, EventArgs e)
+    {
+        _unlockButtonHideCts?.Cancel();
+        _unlockButtonHideCts?.Dispose();
+        _unlockButtonHideCts = null;
+        ViewModel?.UnlockReadingCommand.Execute(null);
+        ScheduleHudHide();
+    }
+
+    private void ScheduleUnlockButtonHide()
+    {
+        _unlockButtonHideCts?.Cancel();
+        _unlockButtonHideCts?.Dispose();
+        var cts = new CancellationTokenSource();
+        _unlockButtonHideCts = cts;
+        _ = HideUnlockButtonAfterInactivityAsync(cts.Token);
+    }
+
+    private async Task HideUnlockButtonAfterInactivityAsync(CancellationToken token)
+    {
+        try
+        {
+            await Task.Delay(TimeSpan.FromSeconds(3), token);
+            await MainThread.InvokeOnMainThreadAsync(() =>
+            {
+                if (!AppLifetime.IsShuttingDown && !token.IsCancellationRequested && ViewModel is { IsReadingLocked: true } vm)
+                    vm.IsUnlockButtonVisible = false;
+            });
+        }
+        catch (OperationCanceledException) { }
+    }
+
     private async Task HideHudAfterInactivityAsync(CancellationToken token)
     {
         try
@@ -217,7 +269,7 @@ public partial class ReaderPage : ContentPage
             await Task.Delay(TimeSpan.FromSeconds(5), token);
             await MainThread.InvokeOnMainThreadAsync(() =>
             {
-                if (!token.IsCancellationRequested && !_sliderDragActive && !_isActivelyInteracting
+                if (!AppLifetime.IsShuttingDown && !token.IsCancellationRequested && !_sliderDragActive && !_isActivelyInteracting
                     && ViewModel is { IsReadingOptionsVisible: false, IsNavigationOverlayVisible: false } vm)
                     vm.IsHudVisible = false;
             });
@@ -1062,6 +1114,7 @@ public partial class ReaderPage : ContentPage
 
     private void OnPinchUpdated(object? sender, PinchGestureUpdatedEventArgs e)
     {
+        if (ViewModel?.IsReadingLocked == true) return;
         if (e.Status == GestureStatus.Started)
         {
             StopFlingInertia();
@@ -1091,7 +1144,7 @@ public partial class ReaderPage : ContentPage
     private void OnPanUpdated(object? sender, PanUpdatedEventArgs e)
     {
         var vm = ViewModel;
-        if (vm == null) return;
+        if (vm == null || vm.IsReadingLocked) return;
 
         var scale = DipToPixelScale();
 
@@ -1211,6 +1264,7 @@ public partial class ReaderPage : ContentPage
     private void OnDoubleTapped(object? sender, TappedEventArgs e)
     {
         var vm = ViewModel;
+        if (vm?.IsReadingLocked == true) return;
         var canvasWidth = CanvasPixelWidth;
         var canvasHeight = CanvasPixelHeight;
         if (vm == null || canvasWidth <= 0 || canvasHeight <= 0 || _readerSurfaceView.Width <= 0) return;
@@ -1247,7 +1301,7 @@ public partial class ReaderPage : ContentPage
     private void OnSingleTapped(object? sender, TappedEventArgs e)
     {
         var vm = ViewModel;
-        if (vm == null || _readerSurfaceView.Width <= 0) return;
+        if (vm == null || vm.IsReadingLocked || _readerSurfaceView.Width <= 0) return;
 
         StopFlingInertia();
 
@@ -1406,6 +1460,7 @@ public partial class ReaderPage : ContentPage
     protected override bool OnBackButtonPressed()
     {
         if (ViewModel is not { } vm) return base.OnBackButtonPressed();
+        if (vm.IsReadingLocked) return true;
         if (vm.IsReadingOptionsVisible)
         {
             vm.CloseReadingOptionsCommand.Execute(null);
@@ -1427,8 +1482,27 @@ public partial class ReaderPage : ContentPage
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
-        ViewModel?.CloseNavigationOverlayCommand.Execute(null);
-        ViewModel?.CloseReadingOptionsCommand.Execute(null);
+        if (!AppLifetime.IsShuttingDown)
+        {
+            if (ViewModel is { IsReadingLocked: true } vm)
+                vm.UnlockReadingCommand.Execute(null);
+            ViewModel?.CloseNavigationOverlayCommand.Execute(null);
+            ViewModel?.CloseReadingOptionsCommand.Execute(null);
+        }
+        StopTransientActivities();
+    }
+
+    public void PrepareForShutdown()
+    {
+        StopTransientActivities();
+        ViewModel?.SaveProgressForShutdown();
+    }
+
+    private void StopTransientActivities()
+    {
+        _unlockButtonHideCts?.Cancel();
+        _unlockButtonHideCts?.Dispose();
+        _unlockButtonHideCts = null;
         _hudHideCts?.Cancel();
         _hudHideCts?.Dispose();
         _hudHideCts = null;

@@ -52,7 +52,7 @@
             <Border Style="{StaticResource SectionPanel}">
                 <VerticalStackLayout Spacing="10">
                     <Label Text="RESPALDOS" Style="{StaticResource EyebrowLabel}" />
-                    <Label Text="El respaldo guarda progreso, marcadores y ajustes. No incluye los archivos CBZ, CBR o PDF originales."
+                    <Label Text="El respaldo guarda nombres de archivo, metadatos, progreso, marcadores y ajustes. No incluye rutas ni archivos CBZ, CBR o PDF. Al importar, los datos se asocian por nombre cuando hay una coincidencia única; los demás documentos se pueden asociar desde Acciones."
                            TextColor="{StaticResource TextSecondary}" LineBreakMode="WordWrap" />
                     <Button Text="Exportar datos" Command="{Binding ExportBackupCommand}" />
                     <Button Text="Importar respaldo" Command="{Binding ImportBackupCommand}" />

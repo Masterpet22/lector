@@ -3,7 +3,7 @@ using NebulaReader.Models;
 namespace NebulaReader.Services;
 
 /// <summary>
-/// Almacena y notifica las preferencias del visor usando Preferences.Default.
+/// Almacena y notifica las preferencias del visor usando AppPreferences.
 /// </summary>
 public sealed class ReaderSettingsService : IReaderSettingsService
 {
@@ -25,18 +25,18 @@ public sealed class ReaderSettingsService : IReaderSettingsService
 
     public bool NightReadingModeEnabled
     {
-        get => Preferences.Default.Get(NightModeKey, false);
+        get => AppPreferences.Get(NightModeKey, false);
         set
         {
             if (NightReadingModeEnabled == value) return;
-            Preferences.Default.Set(NightModeKey, value);
+            AppPreferences.Set(NightModeKey, value);
             if (value && VisualFilter == ReaderVisualFilter.None)
             {
-                Preferences.Default.Set(VisualFilterKey, (int)ReaderVisualFilter.NightInvert);
+                AppPreferences.Set(VisualFilterKey, (int)ReaderVisualFilter.NightInvert);
             }
             else if (!value && VisualFilter == ReaderVisualFilter.NightInvert)
             {
-                Preferences.Default.Set(VisualFilterKey, (int)ReaderVisualFilter.None);
+                AppPreferences.Set(VisualFilterKey, (int)ReaderVisualFilter.None);
             }
             NotifyChanged();
         }
@@ -47,25 +47,25 @@ public sealed class ReaderSettingsService : IReaderSettingsService
         get
         {
             var defaultFilter = NightReadingModeEnabled ? ReaderVisualFilter.NightInvert : ReaderVisualFilter.None;
-            var raw = Preferences.Default.Get(VisualFilterKey, (int)defaultFilter);
+            var raw = AppPreferences.Get(VisualFilterKey, (int)defaultFilter);
             return Enum.IsDefined(typeof(ReaderVisualFilter), raw) ? (ReaderVisualFilter)raw : defaultFilter;
         }
         set
         {
             if (VisualFilter == value) return;
-            Preferences.Default.Set(VisualFilterKey, (int)value);
-            Preferences.Default.Set(NightModeKey, value != ReaderVisualFilter.None);
+            AppPreferences.Set(VisualFilterKey, (int)value);
+            AppPreferences.Set(NightModeKey, value != ReaderVisualFilter.None);
             NotifyChanged();
         }
     }
 
     public bool RightToLeftMangaMode
     {
-        get => Preferences.Default.Get(MangaRtlKey, false);
+        get => AppPreferences.Get(MangaRtlKey, false);
         set
         {
             if (RightToLeftMangaMode == value) return;
-            Preferences.Default.Set(MangaRtlKey, value);
+            AppPreferences.Set(MangaRtlKey, value);
             NotifyChanged();
         }
     }
@@ -76,25 +76,25 @@ public sealed class ReaderSettingsService : IReaderSettingsService
         set
         {
             if (ContinuousVerticalScroll == value) return;
-            Preferences.Default.Set(VerticalScrollKey, value);
+            AppPreferences.Set(VerticalScrollKey, value);
             var nextMode = value
                 ? ReaderLayoutMode.ContinuousVertical
                 : (DoublePageSpreadEnabled ? ReaderLayoutMode.DoublePage : ReaderLayoutMode.SinglePage);
-            Preferences.Default.Set(LayoutModeKey, (int)nextMode);
+            AppPreferences.Set(LayoutModeKey, (int)nextMode);
             NotifyChanged();
         }
     }
 
     public bool DoublePageSpreadEnabled
     {
-        get => Preferences.Default.Get(DoublePageKey, true);
+        get => AppPreferences.Get(DoublePageKey, true);
         set
         {
             if (DoublePageSpreadEnabled == value && LayoutMode != ReaderLayoutMode.ContinuousVertical) return;
-            Preferences.Default.Set(DoublePageKey, value);
+            AppPreferences.Set(DoublePageKey, value);
             if (!ContinuousVerticalScroll)
             {
-                Preferences.Default.Set(
+                AppPreferences.Set(
                     LayoutModeKey,
                     (int)(value ? ReaderLayoutMode.DoublePage : ReaderLayoutMode.SinglePage));
             }
@@ -106,36 +106,36 @@ public sealed class ReaderSettingsService : IReaderSettingsService
     {
         get
         {
-            if (Preferences.Default.ContainsKey(LayoutModeKey))
+            if (AppPreferences.ContainsKey(LayoutModeKey))
             {
-                var raw = Preferences.Default.Get(LayoutModeKey, (int)ReaderLayoutMode.DoublePage);
+                var raw = AppPreferences.Get(LayoutModeKey, (int)ReaderLayoutMode.DoublePage);
                 if (Enum.IsDefined(typeof(ReaderLayoutMode), raw))
                 {
                     return (ReaderLayoutMode)raw;
                 }
             }
 
-            if (Preferences.Default.Get(VerticalScrollKey, false))
+            if (AppPreferences.Get(VerticalScrollKey, false))
             {
                 return ReaderLayoutMode.ContinuousVertical;
             }
 
-            return Preferences.Default.Get(DoublePageKey, true)
+            return AppPreferences.Get(DoublePageKey, true)
                 ? ReaderLayoutMode.DoublePage
                 : ReaderLayoutMode.SinglePage;
         }
         set
         {
-            if (LayoutMode == value && Preferences.Default.ContainsKey(LayoutModeKey)) return;
-            Preferences.Default.Set(LayoutModeKey, (int)value);
-            Preferences.Default.Set(VerticalScrollKey, value == ReaderLayoutMode.ContinuousVertical);
+            if (LayoutMode == value && AppPreferences.ContainsKey(LayoutModeKey)) return;
+            AppPreferences.Set(LayoutModeKey, (int)value);
+            AppPreferences.Set(VerticalScrollKey, value == ReaderLayoutMode.ContinuousVertical);
             if (value == ReaderLayoutMode.SinglePage)
             {
-                Preferences.Default.Set(DoublePageKey, false);
+                AppPreferences.Set(DoublePageKey, false);
             }
             else if (value == ReaderLayoutMode.DoublePage)
             {
-                Preferences.Default.Set(DoublePageKey, true);
+                AppPreferences.Set(DoublePageKey, true);
             }
             NotifyChanged();
         }
@@ -145,13 +145,13 @@ public sealed class ReaderSettingsService : IReaderSettingsService
     {
         get
         {
-            var raw = Preferences.Default.Get(PageFitModeKey, (int)PageFitMode.FitPage);
+            var raw = AppPreferences.Get(PageFitModeKey, (int)PageFitMode.FitPage);
             return Enum.IsDefined(typeof(PageFitMode), raw) ? (PageFitMode)raw : PageFitMode.FitPage;
         }
         set
         {
             if (PageFitMode == value) return;
-            Preferences.Default.Set(PageFitModeKey, (int)value);
+            AppPreferences.Set(PageFitModeKey, (int)value);
             NotifyChanged();
         }
     }

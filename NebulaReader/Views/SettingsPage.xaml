@@ -4,6 +4,7 @@
              xmlns:vm="clr-namespace:NebulaReader.ViewModels"
              xmlns:models="clr-namespace:NebulaReader.Models"
              xmlns:views="clr-namespace:NebulaReader.Views"
+             xmlns:services="clr-namespace:NebulaReader.Services"
              x:Class="NebulaReader.Views.SettingsPage"
              x:Name="SettingsRootPage"
              x:DataType="vm:SettingsViewModel"
@@ -24,6 +25,19 @@
                        TextColor="{StaticResource TextSecondary}"
                        FontSize="13" LineBreakMode="WordWrap" />
             </VerticalStackLayout>
+
+            <Border Style="{StaticResource SectionPanel}" StrokeShape="RoundRectangle 20" Padding="20"
+                    IsVisible="{Binding CanRegisterFileAssociations}">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="ABRIR DOCUMENTOS" TextColor="{StaticResource NeonPurpleBright}"
+                           FontFamily="OpenSansSemibold" FontSize="12" CharacterSpacing="1.4" />
+                    <Label Text="Ofrece Nebula Reader para abrir CBZ, CBR y PDF. Después elige los formatos en Aplicaciones predeterminadas de Windows."
+                           TextColor="{StaticResource TextSecondary}" FontSize="13" LineBreakMode="WordWrap" />
+                    <Button Text="Registrar CBZ, CBR y PDF" Clicked="OnRegisterFileAssociationsClicked" />
+                    <Label Text="Conserva la aplicación en esta carpeta después del registro."
+                           TextColor="{StaticResource TextMuted}" FontSize="11" LineBreakMode="WordWrap" />
+                </VerticalStackLayout>
+            </Border>
 
             <!-- Sección: Apariencia y lectura -->
             <Border x:Name="AppearancePanel" Style="{StaticResource SectionPanel}"
@@ -143,6 +157,52 @@
                 </VerticalStackLayout>
             </Border>
 
+            <Border x:Name="OnlineTagsPanel" Style="{StaticResource SectionPanel}"
+                    StrokeShape="RoundRectangle 20" Padding="20">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="FUENTES DE ETIQUETAS" TextColor="{StaticResource NeonPurpleBright}"
+                           FontFamily="OpenSansSemibold" FontSize="12" CharacterSpacing="1.4" />
+                    <Label Text="Idioma de las etiquetas" TextColor="{StaticResource TextSecondary}" FontSize="13" />
+                    <Picker ItemsSource="{Binding TagLanguageOptions}" ItemDisplayBinding="{Binding Name, x:DataType=services:TagLanguageOption}"
+                            SelectedItem="{Binding SelectedTagLanguage, Mode=TwoWay}"
+                            SemanticProperties.Description="Idioma de las etiquetas" />
+                    <Label Text="Se priorizan las etiquetas originales del idioma elegido y se traducen las restantes con MyMemory. Se revisan antes de guardar. La traducción necesita conexión y está sujeta al límite de uso del servicio. Cambiar el idioma no modifica automáticamente los documentos guardados."
+                           TextColor="{StaticResource TextSecondary}" FontSize="13" LineBreakMode="WordWrap" />
+                    <Label Text="Al descargar etiquetas, podrás revisar el resultado antes de guardarlo. Metron, Comic Vine y Google Books requieren una clave propia. Deja un campo vacío para quitar su clave."
+                           TextColor="{StaticResource TextSecondary}" FontSize="13" LineBreakMode="WordWrap" />
+                    <Label Text="Token de Metron" TextColor="{StaticResource TextSecondary}" FontSize="13" />
+                    <Entry Text="{Binding MetronToken}" IsPassword="True" Placeholder="Token de Metron"
+                           SemanticProperties.Description="Token de Metron" />
+                    <Label Text="Clave de Comic Vine" TextColor="{StaticResource TextSecondary}" FontSize="13" />
+                    <Entry Text="{Binding ComicVineApiKey}" IsPassword="True" Placeholder="Clave de Comic Vine"
+                           SemanticProperties.Description="Clave de Comic Vine" />
+                    <Label Text="Clave de Google Books" TextColor="{StaticResource TextSecondary}" FontSize="13" />
+                    <Entry Text="{Binding GoogleBooksApiKey}" IsPassword="True" Placeholder="Clave de Google Books"
+                           SemanticProperties.Description="Clave de Google Books" />
+                    <Button Text="Guardar claves" Command="{Binding SaveOnlineKeysCommand}" HorizontalOptions="Start" />
+                    <Label Text="Todas las fuentes sirven para cualquier formato. Open Library, AniList y Crossref no necesitan clave. Las fuentes con claves pendientes de configurar no aparecen al descargar etiquetas."
+                           TextColor="{StaticResource TextMuted}" FontSize="12" LineBreakMode="WordWrap" />
+                    <Label Text="{Binding OnlineKeysStatus}" TextColor="{StaticResource TextSecondary}"
+                           FontSize="13" LineBreakMode="WordWrap" />
+                </VerticalStackLayout>
+            </Border>
+
+            <Border x:Name="CachePanel" Style="{StaticResource SectionPanel}"
+                    StrokeShape="RoundRectangle 20" Padding="20">
+                <VerticalStackLayout Spacing="12">
+                    <Label Text="CACHÉ"
+                           TextColor="{StaticResource NeonPurpleBright}"
+                           FontFamily="OpenSansSemibold" FontSize="12" CharacterSpacing="1.4" />
+                    <Label Text="Libera las páginas en memoria y borra las miniaturas guardadas."
+                           TextColor="{StaticResource TextSecondary}" FontSize="13" LineBreakMode="WordWrap" />
+                    <Button Text="Borrar caché" Command="{Binding ClearCacheCommand}"
+                            HorizontalOptions="Start"
+                            SemanticProperties.Description="Borrar caché de páginas y portadas" />
+                    <Label Text="{Binding CacheStatusMessage}"
+                           TextColor="{StaticResource TextSecondary}" FontSize="13" LineBreakMode="WordWrap" />
+                </VerticalStackLayout>
+            </Border>
+
             <Border x:Name="ImportedFoldersPanel" Style="{StaticResource SectionPanel}"
                     StrokeShape="RoundRectangle 20" Padding="20">
                 <VerticalStackLayout Spacing="12">
@@ -168,7 +228,7 @@
                                                    TextColor="{StaticResource TextSecondary}" LineBreakMode="MiddleTruncation" />
                                         </VerticalStackLayout>
                                         <Button Grid.Column="1" Text="Quitar"
-                                                SemanticProperties.Description="Quitar carpeta del registro"
+                                                SemanticProperties.Description="Quitar carpeta y sus documentos de la biblioteca"
                                                 Command="{Binding Source={x:Reference SettingsRootPage}, Path=ViewModel.RemoveImportedFolderCommand, x:DataType=views:SettingsPage}"
                                                 CommandParameter="{Binding PathOrUri}" />
                                     </Grid>
@@ -176,8 +236,10 @@
                             </DataTemplate>
                         </BindableLayout.ItemTemplate>
                     </VerticalStackLayout>
-                    <Label Text="Quitar una carpeta de esta lista no elimina los documentos de la biblioteca."
+                    <Label Text="Quitar una carpeta retira sus documentos de la biblioteca, sin borrar los archivos originales."
                            TextColor="{StaticResource TextMuted}" FontSize="11" LineBreakMode="WordWrap" />
+                    <Label Text="{Binding FolderStatusMessage}"
+                           TextColor="{StaticResource TextSecondary}" FontSize="12" LineBreakMode="WordWrap" />
                 </VerticalStackLayout>
             </Border>
 

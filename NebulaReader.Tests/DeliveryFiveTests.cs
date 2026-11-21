@@ -38,21 +38,33 @@ public class DeliveryFiveTests
                 RightToLeftMangaMode = true,
                 VisualFilter = ReaderVisualFilter.Sepia
             };
+            var sourceTagSettings = new TestOnlineTagSettings { Language = "fr" };
             using var data = new MemoryStream();
-            Assert.Equal(2, await new LibraryBackupService(source, sourceSettings).ExportAsync(data));
+            Assert.Equal(2, await new LibraryBackupService(source, sourceSettings, sourceTagSettings).ExportAsync(data));
+            var json = Encoding.UTF8.GetString(data.ToArray());
+            Assert.DoesNotContain("old/manga.cbz", json);
+            Assert.DoesNotContain("old/manual.pdf", json);
+            Assert.DoesNotContain("locationHint", json, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("\"onlineTagLanguage\": \"fr\"", json);
+            var legacyJson = json.Replace("\"title\": \"Manga corregido\"",
+                "\"title\": \"Manga corregido\", \"locationHint\": \"old/manga.cbz\"",
+                StringComparison.Ordinal);
+            Assert.NotEqual(json, legacyJson);
 
             var target = new LibraryDatabase(targetPath);
             var targetSettings = new TestReaderSettings();
-            data.Position = 0;
-            Assert.Equal(new BackupImportResult(2, 0), await new LibraryBackupService(target, targetSettings).ImportAsync(data));
+            var targetTagSettings = new TestOnlineTagSettings();
+            using var legacyData = new MemoryStream(Encoding.UTF8.GetBytes(legacyJson));
+            Assert.Equal(new BackupImportResult(2, 0), await new LibraryBackupService(target, targetSettings, targetTagSettings).ImportAsync(legacyData));
             Assert.Equal(ReaderLayoutMode.ContinuousVertical, targetSettings.LayoutMode);
             Assert.Equal(PageFitMode.FitWidth, targetSettings.PageFitMode);
             Assert.True(targetSettings.RightToLeftMangaMode);
             Assert.Equal(ReaderVisualFilter.Sepia, targetSettings.VisualFilter);
+            Assert.Equal("fr", targetTagSettings.Language);
             var restored = await target.GetBookByIdAsync(manga.Id);
             Assert.NotNull(restored);
             Assert.StartsWith("backup://", restored.FilePath);
-            Assert.Equal("old/manga.cbz", restored.OriginalFilePath);
+            Assert.Equal("manga.cbz", restored.OriginalFilePath);
             Assert.Equal(4, restored.CurrentPage);
             Assert.Equal("Manga corregido", restored.Title);
             Assert.Equal([4], await target.GetBookmarkedPagesAsync(manga.Id));
@@ -136,5 +148,12 @@ public class DeliveryFiveTests
         public bool DoublePageSpreadEnabled { get; set; }
         public ReaderLayoutMode LayoutMode { get; set; }
         public PageFitMode PageFitMode { get; set; }
+    }
+
+    private sealed class TestOnlineTagSettings : IOnlineTagSettings
+    {
+        public string Language { get; set; } = "es";
+        public Task<string?> GetCredentialAsync(OnlineTagSource source, CancellationToken ct = default) =>
+            Task.FromResult<string?>(null);
     }
 }

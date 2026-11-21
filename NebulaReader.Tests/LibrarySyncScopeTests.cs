@@ -29,6 +29,33 @@ public class LibrarySyncScopeTests
     }
 
     [Fact]
+    public void RemovingFolderKeepsBooksCoveredByAnotherRegisteredFolder()
+    {
+        var root = Path.Combine(Path.GetTempPath(), "Comics");
+        var child = Path.Combine(root, "Series");
+        var rootBook = new BookItem { FilePath = Path.Combine(root, "one.cbz") };
+        var childBook = new BookItem { FilePath = Path.Combine(child, "two.cbz") };
+        var neighborBook = new BookItem { FilePath = Path.Combine(Path.GetTempPath(), "ComicsExtra", "three.cbz") };
+        var backupBook = new BookItem { FilePath = "backup://pending" };
+
+        var removed = LibrarySyncScope.GetBooksForRemovedFolder(
+            [rootBook, childBook, neighborBook, backupBook], root, [child]);
+
+        Assert.Equal(rootBook.Id, Assert.Single(removed).Id);
+    }
+
+    [Fact]
+    public void RemovingAndroidTreeSelectsOnlyItsDocuments()
+    {
+        const string tree = "content://com.android.externalstorage.documents/tree/primary%3AComics";
+        var inTree = new BookItem { FilePath = tree + "/document/primary%3AComics%2Fone.cbz" };
+        var elsewhere = new BookItem { FilePath = "content://com.android.externalstorage.documents/tree/primary%3AOther/document/primary%3AOther%2Ftwo.cbz" };
+
+        Assert.Equal(inTree.Id, Assert.Single(LibrarySyncScope.GetBooksForRemovedFolder(
+            [inTree, elsewhere], tree, [])).Id);
+    }
+
+    [Fact]
     public void MissingBooksAreRemovedOnlyFromSuccessfullyScannedFolders()
     {
         var root = Path.Combine(Path.GetTempPath(), "Comics");

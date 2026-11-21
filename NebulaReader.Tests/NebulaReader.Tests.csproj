@@ -9,6 +9,16 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="..\NebulaReader\Services\DocumentFileTypes.cs" Link="Core\DocumentFileTypes.cs" />
+    <Compile Include="..\NebulaReader\Services\DocumentOpenQueue.cs" Link="Core\DocumentOpenQueue.cs" />
+    <Compile Include="..\NebulaReader\Services\ImportedDocumentStorage.cs" Link="Core\ImportedDocumentStorage.cs" />
+    <Compile Include="..\NebulaReader\Services\FileAssociationRegistration.cs" Link="Core\FileAssociationRegistration.cs" />
+    <Compile Include="..\NebulaReader\Services\IOnlineTagService.cs" Link="Core\IOnlineTagService.cs" />
+    <Compile Include="..\NebulaReader\Services\IOnlineTagSettings.cs" Link="Core\IOnlineTagSettings.cs" />
+    <Compile Include="..\NebulaReader\Services\OnlineTagService.cs" Link="Core\OnlineTagService.cs" />
+    <Compile Include="..\NebulaReader\Services\TagLocalizationService.cs" Link="Core\TagLocalizationService.cs" />
+    <Compile Include="..\NebulaReader\Services\TagLanguages.cs" Link="Core\TagLanguages.cs" />
+    <PackageReference Include="LanguageDetection.Ai" Version="1.1.0" />
     <Compile Include="..\NebulaReader\Models\BookBookmark.cs" Link="Core\BookBookmark.cs" />
     <Compile Include="..\NebulaReader\Models\BookReaderPreferences.cs" Link="Core\BookReaderPreferences.cs" />
     <Compile Include="..\NebulaReader\Models\ReaderLayoutMode.cs" Link="Core\ReaderLayoutMode.cs" />
@@ -47,9 +57,11 @@
     <Compile Include="..\NebulaReader\Services\NaturalSortComparer.cs" Link="Core\NaturalSortComparer.cs" />
     <Compile Include="..\NebulaReader\Services\ResponsiveLayout.cs" Link="Core\ResponsiveLayout.cs" />
     <Compile Include="..\NebulaReader\Services\LibraryTitlePresentation.cs" Link="Core\LibraryTitlePresentation.cs" />
+    <Compile Include="..\NebulaReader\Services\LibrarySelectionState.cs" Link="Core\LibrarySelectionState.cs" />
     <Compile Include="..\NebulaReader\Services\LibrarySyncScope.cs" Link="Core\LibrarySyncScope.cs" />
     <Compile Include="..\NebulaReader\Services\BookMetadataExtractor.cs" Link="Core\BookMetadataExtractor.cs" />
     <Compile Include="..\NebulaReader\Services\CbzBookSource.cs" Link="Core\CbzBookSource.cs" />
+    <Compile Include="..\NebulaReader\Services\ComicCoverDetector.cs" Link="Core\ComicCoverDetector.cs" />
     <Compile Include="..\NebulaReader\Services\CbrBookSource.cs" Link="Core\CbrBookSource.cs" />
     <Compile Include="..\NebulaReader\Services\IPageCacheService.cs" Link="Core\IPageCacheService.cs" />
     <Compile Include="..\NebulaReader\Services\PageCacheService.cs" Link="Core\PageCacheService.cs" />

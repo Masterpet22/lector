@@ -8,6 +8,42 @@ namespace NebulaReader.Tests;
 public class LibraryManagementTests
 {
     [Fact]
+    public async Task GroupSeriesEditUpdatesOnlyMembersAndRollsBackIfOneIsMissing()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"nebula_series_group_{Guid.NewGuid():N}.db3");
+        try
+        {
+            var database = new LibraryDatabase(path);
+            await database.SaveBookAsync(new BookItem { Id = "a", Title = "Volumen 1", FilePath = "a.cbz", SeriesName = "Anterior" });
+            await database.SaveBookAsync(new BookItem { Id = "b", Title = "Volumen 2", FilePath = "b.cbz", SeriesName = "Anterior" });
+            await database.SaveBookAsync(new BookItem { Id = "other", Title = "Otro", FilePath = "other.cbz", SeriesName = "Otra" });
+
+            await database.UpdateSeriesAsync(["a", "b"], "Nueva serie");
+            var books = await database.GetBooksAsync();
+            Assert.All(books.Where(book => book.Id is "a" or "b"), book =>
+            {
+                Assert.Equal("Nueva serie", book.SeriesName);
+                Assert.True(book.SeriesEditedManually);
+            });
+            Assert.Equal("Otra", books.Single(book => book.Id == "other").SeriesName);
+
+            await Assert.ThrowsAsync<InvalidOperationException>(() => database.UpdateSeriesAsync(["a", "missing"], "No aplicar"));
+            Assert.Equal("Nueva serie", (await database.GetBookByIdAsync("a"))!.SeriesName);
+
+            var metadata = (await database.GetBookByIdAsync("a"))!;
+            metadata.SeriesName = "Serie detectada";
+            await database.UpdateBookMetadataAsync(metadata);
+            Assert.Equal("Nueva serie", (await database.GetBookByIdAsync("a"))!.SeriesName);
+        }
+        finally
+        {
+            await new SQLiteAsyncConnection(path,
+                SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create | SQLiteOpenFlags.SharedCache).CloseAsync();
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public async Task ExistingDatabaseGainsManagementColumnsWithoutLosingProgress()
     {
         var path = Path.Combine(Path.GetTempPath(), $"nebula_legacy_{Guid.NewGuid():N}.db3");
@@ -24,8 +60,11 @@ public class LibraryManagementTests
             Assert.Equal("legacy", book.Id);
             Assert.Equal(12, book.CurrentPage);
             await database.UpdateDetailsAsync(book.Id, "Editado", "Serie", true, true);
+            await database.UpdateTagsAsync(book.Id, "Aventura, Manga", true);
             var reloaded = Assert.Single(await database.GetBooksAsync());
             Assert.Equal("Editado", reloaded.Title);
+            Assert.Equal("Aventura, Manga", reloaded.Tags);
+            Assert.True(reloaded.TagsEditedManually);
             Assert.Equal(12, reloaded.CurrentPage);
             await new SQLiteAsyncConnection(path,
                 SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create | SQLiteOpenFlags.SharedCache).CloseAsync();
@@ -50,12 +89,15 @@ public class LibraryManagementTests
                 Format = BookFormat.Cbz, TotalPages = 20, CurrentPage = 7, Status = ReadingStatus.Reading };
             await database.SaveBookAsync(book);
             await database.UpdateDetailsAsync(book.Id, "Corregido", "Mi serie", true, true);
+            await database.UpdateTagsAsync(book.Id, "Personalizada", true);
             book.SeriesName = "Extracción tardía";
             book.CoverThumbnailPath = "cover.jpg";
+            book.Tags = "Extracción tardía";
             await database.UpdateBookMetadataAsync(book);
             var edited = Assert.Single(await database.GetBooksAsync());
             Assert.Equal("Corregido", edited.Title);
             Assert.Equal("Mi serie", edited.SeriesName);
+            Assert.Equal("Personalizada", edited.Tags);
             Assert.Equal(7, edited.CurrentPage);
 
             await database.SetReadingStatusAsync(book.Id, ReadingStatus.Completed, 20);

@@ -28,7 +28,10 @@ public sealed record LibraryGroupBucket<T>(
     bool IsGroup,
     string DisplayName,
     IReadOnlyList<T> Items,
-    IReadOnlyList<string> CommonTags);
+    IReadOnlyList<string> CommonTags)
+{
+    public string Key { get; init; } = DisplayName;
+}
 
 /// <summary>
 /// Extrae etiquetas y nombres de serie/saga desde ComicInfo.xml (CBZ/CBR), metadatos PDF (XMP / Info)

@@ -11,7 +11,9 @@ public interface ILibraryDatabase
     Task<BookItem?> GetBookByPathAsync(string filePath, CancellationToken ct = default);
     Task SaveBookAsync(BookItem book, CancellationToken ct = default);
     Task UpdateBookMetadataAsync(BookItem book, CancellationToken ct = default);
+    Task ClearCoverCacheReferencesAsync(CancellationToken ct = default);
     Task UpdateProgressAsync(ReadingProgress progress, CancellationToken ct = default);
+    void UpdateProgressSynchronously(ReadingProgress progress) => UpdateProgressAsync(progress).GetAwaiter().GetResult();
     Task<IReadOnlyList<int>> GetBookmarkedPagesAsync(string bookId, CancellationToken ct = default);
     Task SetBookmarkAsync(string bookId, int pageNumber, bool bookmarked, CancellationToken ct = default);
     Task<BookReaderPreferences?> GetReaderPreferencesAsync(string bookId, CancellationToken ct = default);
@@ -21,6 +23,8 @@ public interface ILibraryDatabase
     Task DeleteBookAsync(string bookId, CancellationToken ct = default);
     Task<BookItem?> GetBookByIdAsync(string bookId, CancellationToken ct = default);
     Task UpdateDetailsAsync(string bookId, string title, string? series, bool titleEdited, bool seriesEdited, CancellationToken ct = default);
+    Task UpdateSeriesAsync(IReadOnlyCollection<string> bookIds, string? series, CancellationToken ct = default);
+    Task UpdateTagsAsync(string bookId, string? tags, bool editedManually, CancellationToken ct = default);
     Task SetReadingStatusAsync(string bookId, ReadingStatus status, int page, CancellationToken ct = default);
     Task RelocateBookAsync(string bookId, string filePath, CancellationToken ct = default);
     Task UpdateCoverResultAsync(string bookId, string? coverPath, int pageCount, string? error, string? expectedPath = null, CancellationToken ct = default);

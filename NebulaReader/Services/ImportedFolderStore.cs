@@ -8,7 +8,7 @@ public sealed class ImportedFolderStore : IImportedFolderStore
 
     public IReadOnlyList<string> GetFolders()
     {
-        var json = Preferences.Default.Get(PreferenceKey, "[]");
+        var json = AppPreferences.Get(PreferenceKey, "[]");
         try
         {
             return JsonSerializer.Deserialize<List<string>>(json)?
@@ -28,7 +28,7 @@ public sealed class ImportedFolderStore : IImportedFolderStore
         var folders = GetFolders().ToList();
         if (folders.Contains(pathOrUri, StringComparer.OrdinalIgnoreCase)) return;
         folders.Add(pathOrUri);
-        Preferences.Default.Set(PreferenceKey, JsonSerializer.Serialize(folders));
+        AppPreferences.Set(PreferenceKey, JsonSerializer.Serialize(folders));
     }
 
     public void Remove(string pathOrUri)
@@ -36,6 +36,6 @@ public sealed class ImportedFolderStore : IImportedFolderStore
         var folders = GetFolders()
             .Where(path => !string.Equals(path, pathOrUri, StringComparison.OrdinalIgnoreCase))
             .ToArray();
-        Preferences.Default.Set(PreferenceKey, JsonSerializer.Serialize(folders));
+        AppPreferences.Set(PreferenceKey, JsonSerializer.Serialize(folders));
     }
 }

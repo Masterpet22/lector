@@ -3,6 +3,14 @@ namespace NebulaReader.Services;
 /// <summary>Determina si un documento pertenece a una carpeta registrada.</summary>
 public static class LibrarySyncScope
 {
+    public static IReadOnlyList<NebulaReader.Models.BookItem> GetBooksForRemovedFolder(
+        IEnumerable<NebulaReader.Models.BookItem> books,
+        string removedFolder,
+        IEnumerable<string> remainingFolders) => books
+        .Where(book => Contains(removedFolder, book.FilePath))
+        .Where(book => !remainingFolders.Any(folder => Contains(folder, book.FilePath)))
+        .ToArray();
+
     public static IReadOnlyList<NebulaReader.Models.BookItem> GetMissingBooks(
         IEnumerable<NebulaReader.Models.BookItem> books,
         IReadOnlySet<string> foundPaths,

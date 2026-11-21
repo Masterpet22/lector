@@ -130,6 +130,19 @@ public class LibraryService : ILibraryService
         return _database.UpdateProgressAsync(progress, ct);
     }
 
+    public void UpdateProgressSynchronously(ReadingProgress progress)
+    {
+        ArgumentNullException.ThrowIfNull(progress);
+        _database.UpdateProgressSynchronously(progress);
+    }
+
+    public async Task ClearCoverCacheAsync(CancellationToken ct = default)
+    {
+        ct.ThrowIfCancellationRequested();
+        await Task.Run(_coverThumbnailService.ClearCache, ct).ConfigureAwait(false);
+        await _database.ClearCoverCacheReferencesAsync(ct).ConfigureAwait(false);
+    }
+
     public Task<IReadOnlyList<int>> GetBookmarkedPagesAsync(string bookId, CancellationToken ct = default) =>
         _database.GetBookmarkedPagesAsync(bookId, ct);
 
@@ -168,6 +181,29 @@ public class LibraryService : ILibraryService
         var book = await RequireBookAsync(bookId, ct).ConfigureAwait(false);
         await _database.UpdateDetailsAsync(bookId, title, string.IsNullOrWhiteSpace(series) ? null : series.Trim(),
             true, true, ct).ConfigureAwait(false);
+        return await RequireBookAsync(bookId, ct).ConfigureAwait(false);
+    }
+
+    public Task UpdateSeriesAsync(IReadOnlyCollection<string> bookIds, string? series, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(bookIds);
+        var normalized = string.IsNullOrWhiteSpace(series) ? null : series.Trim();
+        if (normalized?.Length > 255)
+            throw new ArgumentException("La serie no puede superar los 255 caracteres.", nameof(series));
+        return _database.UpdateSeriesAsync(bookIds, normalized, ct);
+    }
+
+    public async Task<BookItem> EditTagsAsync(string bookId, string? tags, CancellationToken ct = default)
+    {
+        var normalized = string.IsNullOrWhiteSpace(tags) ? null : string.Join(", ",
+            tags.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(tag => tag.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .Take(32));
+        if (normalized?.Length > 1000)
+            throw new ArgumentException("Las etiquetas no pueden superar los 1000 caracteres.", nameof(tags));
+        await RequireBookAsync(bookId, ct).ConfigureAwait(false);
+        await _database.UpdateTagsAsync(bookId, normalized, editedManually: true, ct).ConfigureAwait(false);
         return await RequireBookAsync(bookId, ct).ConfigureAwait(false);
     }
 
@@ -231,18 +267,17 @@ public class LibraryService : ILibraryService
         return Convert.ToHexString(hash);
     }
 
-    private static bool NeedsBackgroundEnrichment(BookItem book)
+    private bool NeedsBackgroundEnrichment(BookItem book)
     {
         if (book.FilePath.StartsWith("backup://", StringComparison.OrdinalIgnoreCase)) return false;
-        var missingCover = string.IsNullOrWhiteSpace(book.CoverThumbnailPath)
-            || !File.Exists(book.CoverThumbnailPath)
+        var missingCover = _coverThumbnailService.NeedsRefresh(book.Id, book.CoverThumbnailPath)
             || book.TotalPages <= 0;
         return missingCover || !book.MetadataExtracted || string.IsNullOrWhiteSpace(book.ContentFingerprint);
     }
 
     private void QueueBackgroundCoverGeneration(BookItem book)
     {
-        if (!_queuedBookIds.TryAdd(book.Id, 0))
+        if (AppLifetime.IsShuttingDown || !_queuedBookIds.TryAdd(book.Id, 0))
         {
             return;
         }
@@ -254,10 +289,10 @@ public class LibraryService : ILibraryService
             await _coverThrottle.WaitAsync().ConfigureAwait(false);
             try
             {
+                if (AppLifetime.IsShuttingDown) return;
                 var changed = false;
 
-                if (string.IsNullOrWhiteSpace(book.CoverThumbnailPath)
-                    || !File.Exists(book.CoverThumbnailPath)
+                if (_coverThumbnailService.NeedsRefresh(book.Id, book.CoverThumbnailPath)
                     || book.TotalPages <= 0)
                 {
                     var (thumbnailPath, pageCount) = await _coverThumbnailService
@@ -278,6 +313,8 @@ public class LibraryService : ILibraryService
                     }
                 }
 
+                if (AppLifetime.IsShuttingDown) return;
+
                 if (!book.MetadataExtracted)
                 {
                     var metadata = await _bookSourceFactory
@@ -292,7 +329,7 @@ public class LibraryService : ILibraryService
                     }
 
                     var formattedTags = metadata.FormattedTags;
-                    if (!string.IsNullOrWhiteSpace(formattedTags) &&
+                    if (!book.TagsEditedManually && !string.IsNullOrWhiteSpace(formattedTags) &&
                         !string.Equals(book.Tags, formattedTags, StringComparison.Ordinal))
                     {
                         book.Tags = formattedTags;
@@ -303,20 +340,25 @@ public class LibraryService : ILibraryService
                     changed = true;
                 }
 
+                if (AppLifetime.IsShuttingDown) return;
+
                 if (book.TotalPages > 0 && string.IsNullOrWhiteSpace(book.ContentFingerprint))
                 {
                     using var source = await _bookSourceFactory.CreateAsync(book.FilePath).ConfigureAwait(false);
                     var fingerprint = await FingerprintAsync(source, CancellationToken.None).ConfigureAwait(false);
+                    if (AppLifetime.IsShuttingDown) return;
                     await _database.UpdateFingerprintAsync(book.Id, fingerprint, book.FilePath).ConfigureAwait(false);
                     book.ContentFingerprint = fingerprint;
                 }
+
+                if (AppLifetime.IsShuttingDown) return;
 
                 if (changed)
                 {
                     await _database.UpdateBookMetadataAsync(book).ConfigureAwait(false);
                     await _database.UpdateCoverResultAsync(book.Id, book.CoverThumbnailPath, book.TotalPages, null, book.FilePath).ConfigureAwait(false);
                     var current = await _database.GetBookByPathAsync(book.FilePath).ConfigureAwait(false);
-                    if (current != null)
+                    if (current != null && !AppLifetime.IsShuttingDown)
                     {
                         _bookUpdatedWeakEvent.HandleEvent(this, current, nameof(BookUpdated));
                     }
@@ -326,30 +368,36 @@ public class LibraryService : ILibraryService
             }
             catch (Exception ex)
             {
+                if (AppLifetime.IsShuttingDown) return;
                 Trace.TraceError("Error al generar portada del libro {0} ({1}): {2}", book.Id, book.FilePath, ex);
                 try
                 {
                     await _database.UpdateCoverResultAsync(book.Id, book.CoverThumbnailPath, book.TotalPages, ex.Message, book.FilePath).ConfigureAwait(false);
                     var current = await _database.GetBookByIdAsync(book.Id).ConfigureAwait(false);
-                    if (current != null) _bookUpdatedWeakEvent.HandleEvent(this, current, nameof(BookUpdated));
+                    if (current != null && !AppLifetime.IsShuttingDown)
+                        _bookUpdatedWeakEvent.HandleEvent(this, current, nameof(BookUpdated));
                 }
                 catch (Exception persistError) { Trace.TraceError("Error al registrar fallo de portada {0}: {1}", book.Id, persistError); }
             }
             finally
             {
                 _queuedBookIds.TryRemove(book.Id, out _);
-                _coverCountWeakEvent.HandleEvent(this, PendingCoverCount, nameof(PendingCoverCountChanged));
+                if (!AppLifetime.IsShuttingDown)
+                    _coverCountWeakEvent.HandleEvent(this, PendingCoverCount, nameof(PendingCoverCountChanged));
                 _coverThrottle.Release();
-                try
+                if (!AppLifetime.IsShuttingDown)
                 {
-                    var current = await _database.GetBookByIdAsync(book.Id).ConfigureAwait(false);
-                    if (current != null && !string.Equals(current.FilePath, book.FilePath, StringComparison.Ordinal))
+                    try
                     {
-                        _coverThumbnailService.Invalidate(book.Id);
-                        QueueBackgroundCoverGeneration(current);
+                        var current = await _database.GetBookByIdAsync(book.Id).ConfigureAwait(false);
+                        if (current != null && !string.Equals(current.FilePath, book.FilePath, StringComparison.Ordinal))
+                        {
+                            _coverThumbnailService.Invalidate(book.Id);
+                            QueueBackgroundCoverGeneration(current);
+                        }
                     }
+                    catch (Exception ex) { Trace.TraceError("Error al refrescar portada reubicada {0}: {1}", book.Id, ex); }
                 }
-                catch (Exception ex) { Trace.TraceError("Error al refrescar portada reubicada {0}: {1}", book.Id, ex); }
             }
         });
     }

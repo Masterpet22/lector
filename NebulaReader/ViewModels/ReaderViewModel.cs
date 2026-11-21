@@ -32,6 +32,7 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     private CancellationTokenSource? _loadCts;
     private CancellationTokenSource? _preloadLoopCts;
     private CancellationTokenSource? _persistDebounceCts;
+    private Task? _persistDebounceTask;
     private readonly SemaphoreSlim _preloadSignal = new(0);
     private readonly ConcurrentDictionary<int, float> _pageAspectRatios = new();
     private readonly object _pageLoadSync = new();
@@ -103,6 +104,12 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
 
     [ObservableProperty]
     public partial bool IsHudVisible { get; set; } = true;
+
+    [ObservableProperty]
+    public partial bool IsReadingLocked { get; set; }
+
+    [ObservableProperty]
+    public partial bool IsUnlockButtonVisible { get; set; }
 
     [ObservableProperty]
     public partial bool IsRotationLocked { get; set; }
@@ -197,13 +204,19 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
 
     private void OnFullScreenChanged(object? sender, bool enabled)
     {
-        MainThread.BeginInvokeOnMainThread(() => IsFullScreen = enabled);
+        if (AppLifetime.IsShuttingDown) return;
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            if (!AppLifetime.IsShuttingDown) IsFullScreen = enabled;
+        });
     }
 
     public void ApplyQueryAttributes(IDictionary<string, object> query)
     {
         if (query.TryGetValue("Book", out var value) && value is BookItem book)
         {
+            IsReadingLocked = false;
+            IsUnlockButtonVisible = false;
             CloseNavigationOverlay();
             CloseReadingOptions();
             _bookmarkedPages.Clear();
@@ -445,7 +458,26 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
     [RelayCommand]
     private void ToggleHud()
     {
+        if (IsReadingLocked) return;
         IsHudVisible = !IsHudVisible;
+    }
+
+    [RelayCommand]
+    private void LockReading()
+    {
+        CloseReadingOptions();
+        CloseNavigationOverlay();
+        IsHudVisible = false;
+        IsUnlockButtonVisible = false;
+        IsReadingLocked = true;
+    }
+
+    [RelayCommand]
+    private void UnlockReading()
+    {
+        IsReadingLocked = false;
+        IsUnlockButtonVisible = false;
+        IsHudVisible = true;
     }
 
     [RelayCommand]
@@ -550,6 +582,17 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
         _persistDebounceCts?.Cancel();
         _persistDebounceCts?.Dispose();
         _persistDebounceCts = null;
+        if (_persistDebounceTask != null)
+        {
+            try
+            {
+                await _persistDebounceTask;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            _persistDebounceTask = null;
+        }
         await PersistProgressAsync();
 
         _preloadLoopCts?.Cancel();
@@ -564,7 +607,7 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
         _defaultPageAspectRatio = 1.414f;
         _pdfAspectScanStarted = false;
 
-        _bookSource?.Dispose();
+        var sourceToDispose = _bookSource;
         _bookSource = null;
 
         if (IsRotationLocked)
@@ -574,12 +617,42 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
             OnPropertyChanged(nameof(RotationLockLabel));
         }
 
-        if (CurrentBook != null)
+        var bookIdToClear = CurrentBook?.Id;
+
+        if (!AppLifetime.IsShuttingDown && Shell.Current != null)
         {
-            _pageCacheService.ClearBook(CurrentBook.Id);
+            await Shell.Current.GoToAsync("..");
         }
 
-        await Shell.Current.GoToAsync("..");
+        if (bookIdToClear != null)
+        {
+            _pageCacheService.ClearBook(bookIdToClear);
+        }
+
+        if (sourceToDispose != null)
+        {
+            _ = Task.Run(sourceToDispose.Dispose);
+        }
+    }
+
+    public void SaveProgressForShutdown()
+    {
+        _persistDebounceCts?.Cancel();
+        _preloadLoopCts?.Cancel();
+        _loadCts?.Cancel();
+        _fullScreenService.FullScreenChanged -= OnFullScreenChanged;
+        _settingsService.SettingsChanged -= OnSettingsChanged;
+
+        if (CurrentBook != null)
+        {
+            _libraryService.UpdateProgressSynchronously(new ReadingProgress
+            {
+                BookId = CurrentBook.Id,
+                CurrentPage = CurrentPageIndex + 1,
+                TotalPages = TotalPages,
+                UpdatedAtUtc = DateTime.UtcNow
+            });
+        }
     }
 
     public async Task OnSliderPageSelectedAsync(int pageNumber1Based)
@@ -1099,7 +1172,7 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
         _persistDebounceCts = cts;
         var ct = cts.Token;
 
-        _ = Task.Run(async () =>
+        _persistDebounceTask = Task.Run(async () =>
         {
             try
             {
@@ -1118,9 +1191,10 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
 
     private void OnSettingsChanged(object? sender, EventArgs e)
     {
+        if (AppLifetime.IsShuttingDown) return;
         MainThread.BeginInvokeOnMainThread(() =>
         {
-            if (HasBookPreferences) return;
+            if (AppLifetime.IsShuttingDown || HasBookPreferences) return;
             SyncFromSettings();
             RaisePageContentReady();
         });
@@ -1235,7 +1309,11 @@ public partial class ReaderViewModel : BaseViewModel, IQueryAttributable
 
     private void RaisePageContentReady()
     {
-        MainThread.BeginInvokeOnMainThread(() => PageContentReady?.Invoke(this, EventArgs.Empty));
+        if (AppLifetime.IsShuttingDown) return;
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            if (!AppLifetime.IsShuttingDown) PageContentReady?.Invoke(this, EventArgs.Empty);
+        });
     }
 
     private Task PersistProgressAsync()

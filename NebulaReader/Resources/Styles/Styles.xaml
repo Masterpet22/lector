@@ -44,13 +44,7 @@
                             <Setter Property="BorderColor" Value="{StaticResource NeonPurpleBright}" />
                         </VisualState.Setters>
                     </VisualState>
-                    <VisualState x:Name="Focused">
-                        <VisualState.Setters>
-                            <Setter Property="BorderColor" Value="{StaticResource NeonPurpleBright}" />
-                            <Setter Property="BorderWidth" Value="2" />
-                            <Setter Property="BackgroundColor" Value="{StaticResource Surface3}" />
-                        </VisualState.Setters>
-                    </VisualState>
+                    <VisualState x:Name="Focused" />
                     <VisualState x:Name="Disabled">
                         <VisualState.Setters>
                             <Setter Property="TextColor" Value="{StaticResource TextMuted}" />
@@ -88,13 +82,7 @@
                             <Setter Property="TextColor" Value="{StaticResource BgCanvas}" />
                         </VisualState.Setters>
                     </VisualState>
-                    <VisualState x:Name="Focused">
-                        <VisualState.Setters>
-                            <Setter Property="BorderColor" Value="{StaticResource White}" />
-                            <Setter Property="BorderWidth" Value="2" />
-                            <Setter Property="BackgroundColor" Value="{StaticResource NeonPurpleDeep}" />
-                        </VisualState.Setters>
-                    </VisualState>
+                    <VisualState x:Name="Focused" />
                     <VisualState x:Name="Disabled">
                         <VisualState.Setters>
                             <Setter Property="TextColor" Value="{StaticResource TextMuted}" />
@@ -128,13 +116,7 @@
                             <Setter Property="BorderColor" Value="{StaticResource NeonPurpleBright}" />
                         </VisualState.Setters>
                     </VisualState>
-                    <VisualState x:Name="Focused">
-                        <VisualState.Setters>
-                            <Setter Property="BorderColor" Value="{StaticResource NeonPurpleBright}" />
-                            <Setter Property="BorderWidth" Value="2" />
-                            <Setter Property="BackgroundColor" Value="{StaticResource Surface3}" />
-                        </VisualState.Setters>
-                    </VisualState>
+                    <VisualState x:Name="Focused" />
                 </VisualStateGroup>
             </VisualStateGroupList>
         </Setter>

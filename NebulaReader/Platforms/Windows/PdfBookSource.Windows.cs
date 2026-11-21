@@ -165,10 +165,17 @@ public sealed partial class PdfBookSource
 
     private partial void DisposePlatform()
     {
-        _pdfDocument = null;
-        _ownedStream?.Dispose();
-        _ownedStream = null;
-        _renderGate.Dispose();
+        _renderGate.Wait();
+        try
+        {
+            _pdfDocument = null;
+            _ownedStream?.Dispose();
+            _ownedStream = null;
+        }
+        finally
+        {
+            _renderGate.Release();
+        }
     }
 }
 

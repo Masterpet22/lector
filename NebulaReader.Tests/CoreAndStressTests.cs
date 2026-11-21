@@ -97,6 +97,37 @@ public class CoreAndStressTests
     }
 
     [Fact]
+    public void ClearCache_RemovesOnlyCachedPagesAndCovers()
+    {
+        using var pages = new PageCacheService();
+        var bitmap = new SKBitmap(8, 8);
+        pages.StoreBitmap("book", 0, bitmap, centerPageIndex: 0);
+        pages.ClearAll();
+        Assert.False(pages.ContainsPage("book", 0));
+        Assert.Equal(IntPtr.Zero, bitmap.Handle);
+
+        var cacheDir = Path.Combine(Path.GetTempPath(), $"nebula_cache_{Guid.NewGuid():N}");
+        Directory.CreateDirectory(cacheDir);
+        try
+        {
+            var cover = Path.Combine(cacheDir, "book.jpg");
+            var unrelated = Path.Combine(cacheDir, "keep.txt");
+            File.WriteAllBytes(cover, [1, 2, 3]);
+            File.WriteAllText(unrelated, "keep");
+
+            var covers = new CoverThumbnailService(null!, cacheDir);
+            covers.ClearCache();
+
+            Assert.False(File.Exists(cover));
+            Assert.True(File.Exists(unrelated));
+        }
+        finally
+        {
+            Directory.Delete(cacheDir, recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task CbzBookSource_StressReads320PageArchiveSequentially()
     {
         using var zipStream = new MemoryStream();

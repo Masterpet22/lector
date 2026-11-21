@@ -1,3 +1,4 @@
+using System.Collections.ObjectModel;
 using CommunityToolkit.Mvvm.ComponentModel;
 using NebulaReader.Services;
 
@@ -12,8 +13,39 @@ public sealed partial class LibraryDisplayItem : ObservableObject
     [ObservableProperty]
     public partial double CoverHeight { get; set; } = 200;
 
-    public bool IsGroup { get; init; }
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(IsSingleBook))]
+    [NotifyPropertyChangedFor(nameof(DisplayTitle))]
+    [NotifyPropertyChangedFor(nameof(TitleNumber))]
+    [NotifyPropertyChangedFor(nameof(HasTitleNumber))]
+    public partial bool IsGroup { get; set; }
+
+    [ObservableProperty]
+    public partial string? GroupKey { get; set; }
+
     public bool IsSingleBook => !IsGroup;
+
+    [ObservableProperty]
+    public partial bool CanEditSeriesGroup { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SelectionMark))]
+    public partial bool IsSelected { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(SelectionMark))]
+    public partial bool IsPartiallySelected { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowSelectionIndicator))]
+    public partial bool IsSelectionMode { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(ShowSelectionIndicator))]
+    public partial bool IsHovered { get; set; }
+
+    public bool ShowSelectionIndicator => IsSelectionMode || IsHovered;
+    public string SelectionMark => IsSelected ? "✓" : IsPartiallySelected ? "−" : string.Empty;
 
     private string _title = string.Empty;
     private (string Name, string? Number) _titleParts = (string.Empty, null);
@@ -21,32 +53,91 @@ public sealed partial class LibraryDisplayItem : ObservableObject
     public string Title
     {
         get => _title;
-        init
+        set
         {
-            _title = value ?? string.Empty;
+            var next = value ?? string.Empty;
+            if ( string.Equals(_title, next, StringComparison.Ordinal)) return;
+            _title = next;
             _titleParts = LibraryTitlePresentation.Split(_title);
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(DisplayTitle));
+            OnPropertyChanged(nameof(TitleNumber));
+            OnPropertyChanged(nameof(HasTitleNumber));
         }
     }
-    public string DisplayTitle => _titleParts.Name;
-    public string? TitleNumber => _titleParts.Number;
+
+    public string DisplayTitle => IsGroup ? Title : _titleParts.Name;
+    public string? TitleNumber => IsGroup ? null : _titleParts.Number;
     public bool HasTitleNumber => TitleNumber is not null;
-    public BookItem? Book { get; init; }
-    public IReadOnlyList<BookItem> GroupBooks { get; init; } = Array.Empty<BookItem>();
 
-    public int BookCount { get; init; }
-    public string BadgeText { get; init; } = string.Empty;
-    public string SubtitleText { get; init; } = string.Empty;
-    public double Progress { get; init; }
-    public bool HasKnownPageCount { get; init; }
-    public string? TagsText { get; init; }
+    [ObservableProperty]
+    public partial BookItem? Book { get; set; }
+
+    [ObservableProperty]
+    public partial IReadOnlyList<BookItem> GroupBooks { get; set; } = Array.Empty<BookItem>();
+
+    [ObservableProperty]
+    public partial int BookCount { get; set; }
+
+    [ObservableProperty]
+    public partial string BadgeText { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string SubtitleText { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial double Progress { get; set; }
+
+    [ObservableProperty]
+    public partial bool HasKnownPageCount { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasTags))]
+    public partial string? TagsText { get; set; }
+
     public bool HasTags => !string.IsNullOrWhiteSpace(TagsText);
-    public bool HasCoverError { get; init; }
-    public string? CoverStateText { get; init; }
 
-    public string? Cover1 { get; init; }
-    public string? Cover2 { get; init; }
-    public string? Cover3 { get; init; }
-    public string? Cover4 { get; init; }
+    [ObservableProperty]
+    public partial bool HasCoverError { get; set; }
+
+    [ObservableProperty]
+    public partial string? CoverStateText { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasCover1))]
+    [NotifyPropertyChangedFor(nameof(CoverCount))]
+    [NotifyPropertyChangedFor(nameof(HasOneCover))]
+    [NotifyPropertyChangedFor(nameof(HasTwoCovers))]
+    [NotifyPropertyChangedFor(nameof(HasThreeCovers))]
+    [NotifyPropertyChangedFor(nameof(HasFourCovers))]
+    public partial string? Cover1 { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasCover2))]
+    [NotifyPropertyChangedFor(nameof(CoverCount))]
+    [NotifyPropertyChangedFor(nameof(HasOneCover))]
+    [NotifyPropertyChangedFor(nameof(HasTwoCovers))]
+    [NotifyPropertyChangedFor(nameof(HasThreeCovers))]
+    [NotifyPropertyChangedFor(nameof(HasFourCovers))]
+    public partial string? Cover2 { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasCover3))]
+    [NotifyPropertyChangedFor(nameof(CoverCount))]
+    [NotifyPropertyChangedFor(nameof(HasOneCover))]
+    [NotifyPropertyChangedFor(nameof(HasTwoCovers))]
+    [NotifyPropertyChangedFor(nameof(HasThreeCovers))]
+    [NotifyPropertyChangedFor(nameof(HasFourCovers))]
+    public partial string? Cover3 { get; set; }
+
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasCover4))]
+    [NotifyPropertyChangedFor(nameof(CoverCount))]
+    [NotifyPropertyChangedFor(nameof(HasOneCover))]
+    [NotifyPropertyChangedFor(nameof(HasTwoCovers))]
+    [NotifyPropertyChangedFor(nameof(HasThreeCovers))]
+    [NotifyPropertyChangedFor(nameof(HasFourCovers))]
+    public partial string? Cover4 { get; set; }
 
     public bool HasCover1 => !string.IsNullOrWhiteSpace(Cover1);
     public bool HasCover2 => !string.IsNullOrWhiteSpace(Cover2);
@@ -58,6 +149,31 @@ public sealed partial class LibraryDisplayItem : ObservableObject
     public bool HasTwoCovers => CoverCount == 2;
     public bool HasThreeCovers => CoverCount == 3;
     public bool HasFourCovers => CoverCount == 4;
+
+    public string ItemKey => IsGroup ? $"group:{GroupKey ?? Title}" : $"book:{Book?.Id ?? Title}";
+
+    public void UpdateFrom(LibraryDisplayItem other)
+    {
+        CoverHeight = other.CoverHeight;
+        IsGroup = other.IsGroup;
+        GroupKey = other.GroupKey;
+        CanEditSeriesGroup = other.CanEditSeriesGroup;
+        Title = other.Title;
+        Book = other.Book;
+        GroupBooks = other.GroupBooks;
+        BookCount = other.BookCount;
+        BadgeText = other.BadgeText;
+        SubtitleText = other.SubtitleText;
+        Progress = other.Progress;
+        HasKnownPageCount = other.HasKnownPageCount;
+        TagsText = other.TagsText;
+        HasCoverError = other.HasCoverError;
+        CoverStateText = other.CoverStateText;
+        Cover1 = other.Cover1;
+        Cover2 = other.Cover2;
+        Cover3 = other.Cover3;
+        Cover4 = other.Cover4;
+    }
 
     public static LibraryDisplayItem FromSingleBook(BookItem book, IReadOnlyList<string>? displayTags = null, double coverHeight = 200)
     {
@@ -82,7 +198,7 @@ public sealed partial class LibraryDisplayItem : ObservableObject
             Cover1 = book.CoverThumbnailPath,
             HasCoverError = needsLocation || !string.IsNullOrWhiteSpace(book.CoverError),
             CoverStateText = needsLocation
-                ? $"Archivo por asociar · {book.OriginalFilePath ?? "Ubicación anterior desconocida"}"
+                ? $"Archivo por asociar · {book.OriginalFilePath ?? "Nombre de archivo desconocido"}"
                 : !string.IsNullOrWhiteSpace(book.CoverError) ? "No se pudo generar la portada · Reintentar en Acciones" : null
         };
     }
@@ -91,7 +207,9 @@ public sealed partial class LibraryDisplayItem : ObservableObject
         string seriesName,
         IReadOnlyList<BookItem> books,
         IReadOnlyList<string>? commonTags = null,
-        double coverHeight = 200)
+        double coverHeight = 200,
+        string? groupKey = null,
+        string groupKind = "Saga")
     {
         var covers = books
             .Select(b => b.CoverThumbnailPath)
@@ -107,12 +225,14 @@ public sealed partial class LibraryDisplayItem : ObservableObject
         {
             CoverHeight = coverHeight,
             IsGroup = true,
+            CanEditSeriesGroup = groupKind == "Saga",
+            GroupKey = groupKey ?? seriesName,
             Title = seriesName,
             Book = null,
             GroupBooks = books,
             BookCount = books.Count,
             BadgeText = $"{books.Count} docs",
-            SubtitleText = $"Saga · {books.Count} documentos",
+            SubtitleText = $"{groupKind} · {books.Count} documentos",
             TagsText = tagsText,
             Cover1 = covers.Count > 0 ? covers[0] : null,
             Cover2 = covers.Count > 1 ? covers[1] : null,
@@ -123,5 +243,35 @@ public sealed partial class LibraryDisplayItem : ObservableObject
 }
 
 /// <summary>Una fila virtualizada de tarjetas con ancho independiente del número de resultados.</summary>
-public sealed record LibraryDisplayRow(IReadOnlyList<LibraryDisplayItem> Items);
+public sealed class LibraryDisplayRow
+{
+    public ObservableCollection<LibraryDisplayItem> Items { get; }
 
+    public LibraryDisplayRow(IReadOnlyList<LibraryDisplayItem> items)
+    {
+        Items = new ObservableCollection<LibraryDisplayItem>(items);
+    }
+
+    public void SyncItems(IReadOnlyList<LibraryDisplayItem> nextItems)
+    {
+        for (var i = 0; i < nextItems.Count; i++)
+        {
+            if (i < Items.Count)
+            {
+                if (!ReferenceEquals(Items[i], nextItems[i]))
+                {
+                    Items[i] = nextItems[i];
+                }
+            }
+            else
+            {
+                Items.Add(nextItems[i]);
+            }
+        }
+
+        while (Items.Count > nextItems.Count)
+        {
+            Items.RemoveAt(Items.Count - 1);
+        }
+    }
+}

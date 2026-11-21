@@ -8,6 +8,40 @@ namespace NebulaReader.Tests;
 public class LibraryPersistenceTests
 {
     [Fact]
+    public async Task ClearingCoverCacheReferencesPreservesReadingProgress()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"nebula_library_{Guid.NewGuid():N}.db3");
+        var database = new LibraryDatabase(path);
+        try
+        {
+            var book = new BookItem
+            {
+                Title = "Comic", FilePath = "comic.cbz", Format = BookFormat.Cbz,
+                CoverThumbnailPath = "cached-cover.jpg"
+            };
+            await database.SaveBookAsync(book);
+            await database.UpdateProgressAsync(new ReadingProgress
+            {
+                BookId = book.Id, CurrentPage = 17, TotalPages = 100
+            });
+
+            await database.ClearCoverCacheReferencesAsync();
+
+            var reloaded = Assert.Single(await database.GetBooksAsync());
+            Assert.Null(reloaded.CoverThumbnailPath);
+            Assert.Equal(17, reloaded.CurrentPage);
+            Assert.Equal(100, reloaded.TotalPages);
+            Assert.Equal(ReadingStatus.Reading, reloaded.Status);
+        }
+        finally
+        {
+            await new SQLiteAsyncConnection(path,
+                SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create | SQLiteOpenFlags.SharedCache).CloseAsync();
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public async Task ProgressSurvivesReloadAndDelayedMetadataAndCompletedBooksLeaveContinueReading()
     {
         var path = Path.Combine(Path.GetTempPath(), $"nebula_library_{Guid.NewGuid():N}.db3");
@@ -62,6 +96,39 @@ public class LibraryPersistenceTests
         finally
         {
             // Cerrar la conexión compartida antes de eliminar la base temporal en Windows.
+            await new SQLiteAsyncConnection(path,
+                SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create | SQLiteOpenFlags.SharedCache).CloseAsync();
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
+    public async Task SynchronousShutdownProgressUpdatePersistsReadingState()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"nebula_library_{Guid.NewGuid():N}.db3");
+        var database = new LibraryDatabase(path);
+        try
+        {
+            var book = new BookItem { Title = "Shutdown Test", FilePath = "shutdown.cbz", Format = BookFormat.Cbz };
+            await database.SaveBookAsync(book);
+            var closedAt = new DateTime(2026, 11, 20, 17, 0, 0, DateTimeKind.Utc);
+
+            database.UpdateProgressSynchronously(new ReadingProgress
+            {
+                BookId = book.Id,
+                CurrentPage = 42,
+                TotalPages = 190,
+                UpdatedAtUtc = closedAt
+            });
+
+            var reloaded = Assert.Single(await database.GetBooksAsync());
+            Assert.Equal(42, reloaded.CurrentPage);
+            Assert.Equal(190, reloaded.TotalPages);
+            Assert.Equal(closedAt, reloaded.LastReadAtUtc);
+            Assert.Equal(ReadingStatus.Reading, reloaded.Status);
+        }
+        finally
+        {
             await new SQLiteAsyncConnection(path,
                 SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create | SQLiteOpenFlags.SharedCache).CloseAsync();
             File.Delete(path);

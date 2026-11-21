@@ -16,6 +16,25 @@ public sealed class LibrarySyncService
         _folders = folders;
     }
 
+    public async Task<int> RemoveFolderAsync(string folderPathOrUri, CancellationToken ct = default)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(folderPathOrUri);
+        var registeredFolders = _folders.GetFolders();
+        var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
+        if (!registeredFolders.Any(folder => string.Equals(folder, folderPathOrUri, comparison))) return 0;
+
+        var remainingFolders = registeredFolders
+            .Where(folder => !string.Equals(folder, folderPathOrUri, comparison))
+            .ToArray();
+        var books = await _library.GetBooksAsync(ct).ConfigureAwait(false);
+        var removedBooks = LibrarySyncScope.GetBooksForRemovedFolder(books, folderPathOrUri, remainingFolders);
+        foreach (var book in removedBooks)
+            await _library.RemoveBookAsync(book.Id, ct).ConfigureAwait(false);
+
+        _folders.Remove(folderPathOrUri);
+        return removedBooks.Count;
+    }
+
     public async Task<LibrarySyncResult> RunAsync(IProgress<FolderImportProgress>? progress = null,
         CancellationToken ct = default)
     {

@@ -1,4 +1,5 @@
 using NebulaReader.ViewModels;
+using NebulaReader.Services;
 
 namespace NebulaReader.Views;
 
@@ -16,10 +17,29 @@ public partial class SettingsPage : ContentPage
         BindingContext = viewModel;
     }
 
-    protected override void OnAppearing()
+    protected override async void OnAppearing()
     {
         base.OnAppearing();
         ViewModel.ReloadImportedFolders();
+        await ViewModel.LoadOnlineKeysAsync();
+    }
+
+    private async void OnRegisterFileAssociationsClicked(object sender, EventArgs e)
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        try
+        {
+#if WINDOWS
+            WindowsFileAssociations.Register();
+#endif
+            await DisplayAlertAsync("Formatos registrados",
+                "Selecciona Nebula Reader en Aplicaciones predeterminadas y asígnale .cbz, .cbr y .pdf. Tus elecciones actuales se conservan hasta que las cambies.", "Continuar");
+            await Launcher.Default.OpenAsync("ms-settings:defaultapps");
+        }
+        catch (Exception ex)
+        {
+            await DisplayAlertAsync("No se pudieron registrar los formatos", ex.Message, "Aceptar");
+        }
     }
 
     protected override void OnSizeAllocated(double width, double height)
@@ -37,6 +57,8 @@ public partial class SettingsPage : ContentPage
         AppearancePanel.Padding = panelPadding;
         LayoutPanel.Padding = panelPadding;
         WindowPanel.Padding = panelPadding;
+        OnlineTagsPanel.Padding = panelPadding;
+        CachePanel.Padding = panelPadding;
         ImportedFoldersPanel.Padding = panelPadding;
     }
 }

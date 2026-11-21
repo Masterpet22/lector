@@ -41,6 +41,7 @@ public partial class BookItem : ObservableObject
 
     public bool TitleEditedManually { get; set; }
     public bool SeriesEditedManually { get; set; }
+    public bool TagsEditedManually { get; set; }
     public string? CoverError { get; set; }
     public string? ContentFingerprint { get; set; }
 

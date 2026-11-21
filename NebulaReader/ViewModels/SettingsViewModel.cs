@@ -11,9 +11,42 @@ namespace NebulaReader.ViewModels;
 /// </summary>
 public partial class SettingsViewModel : BaseViewModel
 {
+    public bool CanRegisterFileAssociations => OperatingSystem.IsWindows();
     private readonly IReaderSettingsService _settingsService;
     private readonly IFullScreenService _fullScreenService;
     private readonly IImportedFolderStore _importedFolderStore;
+    private readonly IPageCacheService _pageCacheService;
+    private readonly ILibraryService _libraryService;
+    private readonly IOnlineTagSettings _onlineTagSettings;
+    private readonly LibrarySyncService _librarySyncService;
+
+    public IReadOnlyList<TagLanguageOption> TagLanguageOptions => TagLanguages.Options;
+
+    [ObservableProperty]
+    public partial TagLanguageOption? SelectedTagLanguage { get; set; }
+
+    partial void OnSelectedTagLanguageChanged(TagLanguageOption? value)
+    {
+        if (value != null) _onlineTagSettings.Language = value.Code;
+    }
+
+    [ObservableProperty]
+    public partial string CacheStatusMessage { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string FolderStatusMessage { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string MetronToken { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string ComicVineApiKey { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string GoogleBooksApiKey { get; set; } = string.Empty;
+
+    [ObservableProperty]
+    public partial string OnlineKeysStatus { get; set; } = string.Empty;
 
     [ObservableProperty]
     [NotifyPropertyChangedFor(nameof(HasNoImportedFolders))]
@@ -64,11 +97,18 @@ public partial class SettingsViewModel : BaseViewModel
     public partial bool IsFullScreen { get; set; }
 
     public SettingsViewModel(IReaderSettingsService settingsService, IFullScreenService fullScreenService,
-        IImportedFolderStore importedFolderStore)
+        IImportedFolderStore importedFolderStore, IPageCacheService pageCacheService,
+        ILibraryService libraryService, IOnlineTagSettings onlineTagSettings,
+        LibrarySyncService librarySyncService)
     {
+        _librarySyncService = librarySyncService;
+        _onlineTagSettings = onlineTagSettings;
+        SelectedTagLanguage = TagLanguages.Options.First(option => option.Code == _onlineTagSettings.Language);
         _settingsService = settingsService;
         _fullScreenService = fullScreenService;
         _importedFolderStore = importedFolderStore;
+        _pageCacheService = pageCacheService;
+        _libraryService = libraryService;
         Title = "Configuración";
 
         NightReadingModeEnabled = _settingsService.VisualFilter == ReaderVisualFilter.NightInvert;
@@ -96,16 +136,80 @@ public partial class SettingsViewModel : BaseViewModel
     public void ReloadImportedFolders() => ImportedFolders = new ObservableCollection<ImportedFolderEntry>(
         _importedFolderStore.GetFolders().Select(path => new ImportedFolderEntry { PathOrUri = path }));
 
-    [RelayCommand]
-    private void RemoveImportedFolder(string pathOrUri)
+    public async Task LoadOnlineKeysAsync()
     {
-        _importedFolderStore.Remove(pathOrUri);
-        ReloadImportedFolders();
+        try
+        {
+            MetronToken = await AppSecureStorage.GetAsync(OnlineTagService.MetronTokenKey) ?? string.Empty;
+            ComicVineApiKey = await AppSecureStorage.GetAsync(OnlineTagService.ComicVineKey) ?? string.Empty;
+            GoogleBooksApiKey = await AppSecureStorage.GetAsync(OnlineTagService.GoogleBooksKey) ?? string.Empty;
+        }
+        catch (Exception ex)
+        {
+            OnlineKeysStatus = $"No se pudieron cargar las claves: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task SaveOnlineKeysAsync()
+    {
+        try
+        {
+            await StoreKeyAsync(OnlineTagService.MetronTokenKey, MetronToken);
+            await StoreKeyAsync(OnlineTagService.ComicVineKey, ComicVineApiKey);
+            await StoreKeyAsync(OnlineTagService.GoogleBooksKey, GoogleBooksApiKey);
+            OnlineKeysStatus = "Claves guardadas en este dispositivo.";
+        }
+        catch (Exception ex)
+        {
+            OnlineKeysStatus = $"No se pudieron guardar las claves: {ex.Message}";
+        }
+    }
+
+    private static async Task StoreKeyAsync(string name, string value)
+    {
+        if (string.IsNullOrWhiteSpace(value)) AppSecureStorage.Remove(name);
+        else await AppSecureStorage.SetAsync(name, value.Trim());
+    }
+
+    [RelayCommand]
+    private async Task RemoveImportedFolderAsync(string pathOrUri)
+    {
+        try
+        {
+            var removed = await _librarySyncService.RemoveFolderAsync(pathOrUri);
+            ReloadImportedFolders();
+            FolderStatusMessage = $"Carpeta quitada. {removed} documento(s) retirado(s) de la biblioteca.";
+        }
+        catch (Exception ex)
+        {
+            FolderStatusMessage = $"No se pudo quitar la carpeta: {ex.Message}";
+        }
+    }
+
+    [RelayCommand]
+    private async Task ClearCacheAsync()
+    {
+        CacheStatusMessage = string.Empty;
+        try
+        {
+            _pageCacheService.ClearAll();
+            await _libraryService.ClearCoverCacheAsync();
+            CacheStatusMessage = "Caché borrada. Las portadas se regenerarán al abrir la biblioteca.";
+        }
+        catch (Exception ex)
+        {
+            CacheStatusMessage = $"No se pudo borrar toda la caché: {ex.Message}";
+        }
     }
 
     private void OnFullScreenChanged(object? sender, bool enabled)
     {
-        MainThread.BeginInvokeOnMainThread(() => IsFullScreen = enabled);
+        if (AppLifetime.IsShuttingDown) return;
+        MainThread.BeginInvokeOnMainThread(() =>
+        {
+            if (!AppLifetime.IsShuttingDown) IsFullScreen = enabled;
+        });
     }
 
     partial void OnNightReadingModeEnabledChanged(bool value)

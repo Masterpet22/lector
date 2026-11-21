@@ -194,7 +194,7 @@ public sealed class PageCacheService : IPageCacheService, IDisposable
         DisposeEntries(removed);
     }
 
-    public void Dispose()
+    public void ClearAll()
     {
         List<CacheEntry>? all = null;
         lock (_syncRoot)
@@ -208,6 +208,8 @@ public sealed class PageCacheService : IPageCacheService, IDisposable
 
         DisposeEntries(all);
     }
+
+    public void Dispose() => ClearAll();
 
     private void CollectEvictedOutsideWindowCore(
         string bookId,

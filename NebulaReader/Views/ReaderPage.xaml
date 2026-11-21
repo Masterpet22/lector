@@ -118,12 +118,12 @@
         <Border x:Name="ReadingOptionsPanel"
                 IsVisible="{Binding IsReadingOptionsVisible}"
                 HorizontalOptions="End" VerticalOptions="Fill"
-                WidthRequest="340" Margin="0,8,8,8" Padding="16"
+                WidthRequest="340" Margin="0,8,8,8" Padding="16,16,4,16"
                 BackgroundColor="{StaticResource BgCanvas}"
                 Stroke="{StaticResource SubtleBorder}"
                 StrokeShape="RoundRectangle 16">
             <ScrollView>
-                <VerticalStackLayout Spacing="12">
+                <VerticalStackLayout Spacing="12" Padding="0,0,12,0">
                     <Grid ColumnDefinitions="*,Auto">
                         <Label Text="Opciones de lectura" FontAttributes="Bold" FontSize="18"
                                TextColor="{StaticResource TextPrimary}" VerticalTextAlignment="Center" />
@@ -150,6 +150,9 @@
                             Command="{Binding ToggleRotationLockCommand}" />
                     <Button Text="{Binding FullScreenButtonLabel}" Style="{StaticResource HudButton}"
                             Command="{Binding ToggleFullScreenCommand}" />
+                    <Button Text="Bloquear lectura" Style="{StaticResource HudButton}"
+                            SemanticProperties.Description="Bloquear lectura y ocultar controles"
+                            Command="{Binding LockReadingCommand}" />
                     <Button Text="Restablecer ajustes de este libro" Style="{StaticResource HudButton}"
                             IsEnabled="{Binding HasBookPreferences}"
                             Command="{Binding ResetBookPreferencesCommand}" />
@@ -186,7 +189,7 @@
                         <Border BackgroundColor="{StaticResource Surface3}"
                                 Stroke="{StaticResource SubtleBorder}"
                                 StrokeShape="RoundRectangle 12"
-                                Padding="14,10" Margin="0,0,0,6">
+                                Padding="14,10" Margin="0,0,14,6">
                             <Grid ColumnDefinitions="*,Auto">
                                 <Label Text="{Binding PageNumber, StringFormat='Página {0}'}"
                                        TextColor="{StaticResource TextPrimary}" VerticalTextAlignment="Center" />
@@ -230,6 +233,25 @@
                     </DataTemplate>
                 </CollectionView.ItemTemplate>
             </CollectionView>
+        </Grid>
+
+        <!-- Captura los gestos mientras la lectura está bloqueada. -->
+        <Grid IsVisible="{Binding IsReadingLocked}" BackgroundColor="Transparent">
+            <Grid.GestureRecognizers>
+                <TapGestureRecognizer Tapped="OnLockedPageTapped" />
+            </Grid.GestureRecognizers>
+            <Button IsVisible="{Binding IsUnlockButtonVisible}"
+                    ImageSource="lock_closed.png"
+                    BackgroundColor="{StaticResource HudOverlay}"
+                    BorderColor="{StaticResource SubtleBorder}"
+                    BorderWidth="1"
+                    CornerRadius="28"
+                    WidthRequest="72" HeightRequest="72"
+                    Padding="16"
+                    Margin="0,0,20,20"
+                    HorizontalOptions="End" VerticalOptions="End"
+                    SemanticProperties.Description="Desbloquear lectura"
+                    Clicked="OnUnlockButtonClicked" />
         </Grid>
     </Grid>
 </ContentPage>

@@ -3,18 +3,23 @@ using SkiaSharp;
 namespace NebulaReader.Services;
 
 /// <summary>
-/// Extrae únicamente la página 0 de cada libro, la redimensiona a 300 px de ancho con SkiaSharp
+/// Extrae la portada detectada de cada libro, la redimensiona a 300 px de ancho con SkiaSharp
 /// y la guarda en FileSystem.CacheDirectory para carga instantánea en la biblioteca.
 /// </summary>
 public sealed class CoverThumbnailService : ICoverThumbnailService
 {
     private const int TargetCoverWidthPx = 300;
+    private const string CacheSuffix = ".cover-v2.jpg";
     private readonly IBookSourceFactory _bookSourceFactory;
     private readonly string _coversCacheDir;
 
     public CoverThumbnailService(IBookSourceFactory bookSourceFactory)
 #if ANDROID || WINDOWS
+#if WINDOWS
+        : this(bookSourceFactory, Path.Combine(AppContext.BaseDirectory, "Data", "covers"))
+#else
         : this(bookSourceFactory, Path.Combine(FileSystem.CacheDirectory, "covers"))
+#endif
 #else
         : this(bookSourceFactory, Path.Combine(Path.GetTempPath(), "NebulaReader", "covers"))
 #endif
@@ -30,8 +35,26 @@ public sealed class CoverThumbnailService : ICoverThumbnailService
     public void Invalidate(string bookId)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(bookId);
-        var path = Path.Combine(_coversCacheDir, $"{bookId}.jpg");
-        if (File.Exists(path)) File.Delete(path);
+        foreach (var suffix in new[] { ".jpg", CacheSuffix })
+        {
+            var path = Path.Combine(_coversCacheDir, $"{bookId}{suffix}");
+            if (File.Exists(path)) File.Delete(path);
+        }
+    }
+
+    public bool NeedsRefresh(string bookId, string? thumbnailPath) =>
+        !string.Equals(thumbnailPath, GetThumbnailPath(bookId), StringComparison.Ordinal) ||
+        !File.Exists(thumbnailPath) || new FileInfo(thumbnailPath).Length == 0;
+
+    private string GetThumbnailPath(string bookId) => Path.Combine(_coversCacheDir, $"{bookId}{CacheSuffix}");
+
+    public void ClearCache()
+    {
+        if (!Directory.Exists(_coversCacheDir)) return;
+        foreach (var path in Directory.EnumerateFiles(_coversCacheDir, "*.jpg", SearchOption.TopDirectoryOnly))
+        {
+            File.Delete(path);
+        }
     }
 
     public async Task<(string? ThumbnailPath, int PageCount)> GenerateCoverAsync(
@@ -44,7 +67,7 @@ public sealed class CoverThumbnailService : ICoverThumbnailService
         ct.ThrowIfCancellationRequested();
 
         Directory.CreateDirectory(_coversCacheDir);
-        var destinationPath = Path.Combine(_coversCacheDir, $"{bookId}.jpg");
+        var destinationPath = GetThumbnailPath(bookId);
 
         using var source = await _bookSourceFactory.CreateAsync(filePathOrUri, ct).ConfigureAwait(false);
         var pageCount = source.PageCount;

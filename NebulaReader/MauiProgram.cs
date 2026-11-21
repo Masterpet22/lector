@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Logging;
+using Microsoft.Maui.LifecycleEvents;
 using NebulaReader.Services;
 using NebulaReader.ViewModels;
 using NebulaReader.Views;
@@ -23,6 +24,11 @@ public static class MauiProgram
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
             });
 
+#if WINDOWS
+        builder.ConfigureLifecycleEvents(events => events.AddWindows(windows =>
+            windows.OnLaunched((app, args) => WindowsFileActivation.Initialize())));
+#endif
+
 #if ANDROID
         // Elimina los márgenes internos (insetTop/insetBottom) de MaterialButton para evitar
         // que los botones se vean recortados verticalmente o comprimidos en resoluciones móviles.
@@ -38,6 +44,16 @@ public static class MauiProgram
 
         // Servicios compartidos (Singleton)
         builder.Services.AddSingleton<IBookSourceFactory, BookSourceFactory>();
+        builder.Services.AddSingleton<ExternalDocumentOpenService>();
+        builder.Services.AddSingleton(_ =>
+        {
+            var client = new HttpClient { Timeout = TimeSpan.FromSeconds(15) };
+            client.DefaultRequestHeaders.UserAgent.ParseAdd("NebulaReader/2.0 (metadata lookup)");
+            return client;
+        });
+        builder.Services.AddSingleton<IOnlineTagService, OnlineTagService>();
+        builder.Services.AddSingleton<IOnlineTagSettings, OnlineTagSettings>();
+        builder.Services.AddSingleton<ITagLocalizationService, TagLocalizationService>();
         builder.Services.AddSingleton<ILibraryDatabase, LibraryDatabase>();
         builder.Services.AddSingleton<ICoverThumbnailService, CoverThumbnailService>();
         builder.Services.AddSingleton<ILibraryService, LibraryService>();
