@@ -19,7 +19,9 @@ public class DeliveryFiveTests
             var readAt = new DateTime(2026, 11, 14, 10, 0, 0, DateTimeKind.Utc);
             var manga = new BookItem { Id = "manga", Title = "Manga corregido", FilePath = "old/manga.cbz",
                 Format = BookFormat.Cbz, TotalPages = 12, CurrentPage = 4, Status = ReadingStatus.Reading,
-                LastReadAtUtc = readAt, TitleEditedManually = true, SeriesName = "Serie" };
+                LastReadAtUtc = readAt, TitleEditedManually = true, SeriesName = "Serie",
+                Author = "Autora", PublicationDate = new DateTime(2024, 5, 17),
+                Publisher = "Editorial", Language = "Español", Description = "Sinopsis" };
             var pdf = new BookItem { Id = "pdf", Title = "Manual", FilePath = "old/manual.pdf",
                 Format = BookFormat.Pdf, TotalPages = 30, CurrentPage = 5 };
             await source.SaveBookAsync(manga);
@@ -67,6 +69,11 @@ public class DeliveryFiveTests
             Assert.Equal("manga.cbz", restored.OriginalFilePath);
             Assert.Equal(4, restored.CurrentPage);
             Assert.Equal("Manga corregido", restored.Title);
+            Assert.Equal("Autora", restored.Author);
+            Assert.Equal(new DateTime(2024, 5, 17), restored.PublicationDate);
+            Assert.Equal("Editorial", restored.Publisher);
+            Assert.Equal("Español", restored.Language);
+            Assert.Equal("Sinopsis", restored.Description);
             Assert.Equal([4], await target.GetBookmarkedPagesAsync(manga.Id));
             Assert.True((await target.GetReaderPreferencesAsync(manga.Id))!.RightToLeftManga);
 

@@ -1,6 +1,8 @@
 using System.Net.Http.Headers;
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using NebulaReader.Models;
 
 namespace NebulaReader.Services;
@@ -66,7 +68,7 @@ public sealed class OnlineTagService : IOnlineTagService
 
     private async Task<IReadOnlyList<OnlineTagSuggestion>> SearchOpenLibraryAsync(string query, CancellationToken ct)
     {
-        var url = $"https://openlibrary.org/search.json?title={Uri.EscapeDataString(query)}&fields=key,title,author_name,subject&limit=5";
+        var url = $"https://openlibrary.org/search.json?title={Uri.EscapeDataString(query)}&fields=key,title,author_name,subject,publisher,language&limit=5";
         using var json = await GetJsonAsync(url, ct);
         if (!TryArray(json.RootElement, "docs", out var docs)) return [];
         var results = new List<OnlineTagSuggestion>();
@@ -75,14 +77,16 @@ public sealed class OnlineTagService : IOnlineTagService
             var key = GetString(doc, "key");
             Add(results, GetString(doc, "title"), ReadStrings(doc, "author_name").FirstOrDefault(),
                 ReadStrings(doc, "subject"), key is { Length: > 0 } && key.StartsWith("/works/", StringComparison.Ordinal)
-                    ? $"https://openlibrary.org{key}" : "https://openlibrary.org");
+                    ? $"https://openlibrary.org{key}" : "https://openlibrary.org",
+                publisher: ReadStrings(doc, "publisher").FirstOrDefault(),
+                language: ReadStrings(doc, "language").FirstOrDefault());
         }
         return results;
     }
 
     private async Task<IReadOnlyList<OnlineTagSuggestion>> SearchAniListAsync(string query, CancellationToken ct)
     {
-        const string gql = "query ($search: String) { Page(perPage: 5) { media(search: $search, type: MANGA) { id title { romaji english native } genres tags { name rank isMediaSpoiler } } } }";
+        const string gql = "query ($search: String) { Page(perPage: 5) { media(search: $search, type: MANGA) { id title { romaji english native } description(asHtml: false) startDate { year month day } genres tags { name rank isMediaSpoiler } } } }";
         using var request = new HttpRequestMessage(HttpMethod.Post, "https://graphql.anilist.co")
         {
             Content = new StringContent(JsonSerializer.Serialize(new { query = gql, variables = new { search = query } }),
@@ -103,14 +107,16 @@ public sealed class OnlineTagService : IOnlineTagService
                     .Where(tag => !GetBool(tag, "isMediaSpoiler") && GetInt(tag, "rank") >= 60)
                     .Select(tag => GetString(tag, "name")).OfType<string>());
             var id = GetInt(item, "id");
-            Add(results, title, null, tags, $"https://anilist.co/manga/{id}");
+            Add(results, title, null, tags, $"https://anilist.co/manga/{id}",
+                publicationDate: item.TryGetProperty("startDate", out var startDate) ? ReadDateParts(startDate) : null,
+                description: GetString(item, "description"));
         }
         return results;
     }
 
     private async Task<IReadOnlyList<OnlineTagSuggestion>> SearchCrossrefAsync(string query, CancellationToken ct)
     {
-        var url = $"https://api.crossref.org/works?query.title={Uri.EscapeDataString(query)}&rows=5&select=DOI,title,subject,author";
+        var url = $"https://api.crossref.org/works?query.title={Uri.EscapeDataString(query)}&rows=5&select=DOI,title,subject,author,publisher,published,language,abstract";
         using var json = await GetJsonAsync(url, ct);
         if (!json.RootElement.TryGetProperty("message", out var message)
             || !TryArray(message, "items", out var items)) return [];
@@ -126,7 +132,10 @@ public sealed class OnlineTagService : IOnlineTagService
                     .Where(part => !string.IsNullOrWhiteSpace(part)));
             }
             Add(results, ReadStrings(item, "title").FirstOrDefault(), author, ReadStrings(item, "subject"),
-                doi == null ? "https://www.crossref.org" : $"https://doi.org/{Uri.EscapeDataString(doi)}");
+                doi == null ? "https://www.crossref.org" : $"https://doi.org/{Uri.EscapeDataString(doi)}",
+                publisher: GetString(item, "publisher"),
+                publicationDate: item.TryGetProperty("published", out var published) ? ReadCrossrefDate(published) : null,
+                language: GetString(item, "language"), description: GetString(item, "abstract"));
         }
         return results;
     }
@@ -142,7 +151,9 @@ public sealed class OnlineTagService : IOnlineTagService
         {
             if (!item.TryGetProperty("volumeInfo", out var info)) continue;
             Add(results, GetString(info, "title"), ReadStrings(info, "authors").FirstOrDefault(),
-                ReadStrings(info, "categories"), GetString(info, "infoLink") ?? "https://books.google.com");
+                ReadStrings(info, "categories"), GetString(info, "infoLink") ?? "https://books.google.com",
+                publisher: GetString(info, "publisher"), publicationDate: ParseFullDate(GetString(info, "publishedDate")),
+                language: GetString(info, "language"), description: GetString(info, "description"));
         }
         return results;
     }
@@ -161,8 +172,9 @@ public sealed class OnlineTagService : IOnlineTagService
             var root = detail.RootElement;
             var genres = ReadNames(root, "genres");
             Add(results, GetString(root, "name") ?? GetString(item, "name"),
-                root.TryGetProperty("publisher", out var publisher) ? GetString(publisher, "name") : null,
-                genres, GetString(root, "resource_url") ?? $"https://metron.cloud/api/series/{id}/");
+                null, genres, GetString(root, "resource_url") ?? $"https://metron.cloud/api/series/{id}/",
+                publisher: root.TryGetProperty("publisher", out var publisher) ? GetString(publisher, "name") : null,
+                description: GetString(root, "desc") ?? GetString(root, "description"));
         }
         return results;
     }
@@ -178,11 +190,10 @@ public sealed class OnlineTagService : IOnlineTagService
         {
             var publisher = item.TryGetProperty("publisher", out var publisherField)
                 ? GetString(publisherField, "name") : null;
-            var tags = ReadNames(item, "concepts").Concat(ReadNames(item, "genres"))
-                .Concat(publisher == null ? [] : [publisher]);
-            Add(results, GetString(item, "name"),
-                publisher,
-                tags, GetString(item, "site_detail_url") ?? "https://comicvine.gamespot.com");
+            var tags = ReadNames(item, "concepts").Concat(ReadNames(item, "genres"));
+            Add(results, GetString(item, "name"), null, tags,
+                GetString(item, "site_detail_url") ?? "https://comicvine.gamespot.com",
+                publisher: publisher, description: GetString(item, "description"));
         }
         return results;
     }
@@ -216,12 +227,55 @@ public sealed class OnlineTagService : IOnlineTagService
     }
 
     private static void Add(List<OnlineTagSuggestion> results, string? title, string? author,
-        IEnumerable<string> tags, string url)
+        IEnumerable<string> tags, string url, string? publisher = null, DateTime? publicationDate = null,
+        string? language = null, string? description = null)
     {
         if (string.IsNullOrWhiteSpace(title)) return;
         var normalized = tags.Select(tag => tag.Trim()).Where(tag => tag.Length is > 1 and <= 80)
             .Distinct(StringComparer.OrdinalIgnoreCase).Take(20).ToArray();
-        if (normalized.Length > 0) results.Add(new OnlineTagSuggestion(title.Trim(), author, normalized, url));
+        if (normalized.Length > 0 || !string.IsNullOrWhiteSpace(author)
+            || !string.IsNullOrWhiteSpace(publisher) || publicationDate != null
+            || !string.IsNullOrWhiteSpace(language) || !string.IsNullOrWhiteSpace(description))
+            results.Add(new OnlineTagSuggestion(title.Trim(), CleanText(author, 255), normalized, url)
+            {
+                Publisher = CleanText(publisher, 255),
+                PublicationDate = publicationDate,
+                Language = CleanText(language, 100),
+                Description = CleanText(description, 4000)
+            });
+    }
+
+    private static DateTime? ParseFullDate(string? value) =>
+        DateTime.TryParseExact(value, "yyyy-MM-dd", CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
+            ? date.Date : null;
+
+    private static DateTime? ReadDateParts(JsonElement value)
+    {
+        var year = GetInt(value, "year");
+        var month = GetInt(value, "month");
+        var day = GetInt(value, "day");
+        return year is >= 1 and <= 9999 && month is >= 1 and <= 12 && day >= 1
+            && day <= DateTime.DaysInMonth(year, month) ? new DateTime(year, month, day) : null;
+    }
+
+    private static DateTime? ReadCrossrefDate(JsonElement value)
+    {
+        if (!TryArray(value, "date-parts", out var parts) || parts.GetArrayLength() == 0) return null;
+        var first = parts[0];
+        if (first.ValueKind != JsonValueKind.Array || first.GetArrayLength() < 3) return null;
+        if (!first[0].TryGetInt32(out var year) || !first[1].TryGetInt32(out var month)
+            || !first[2].TryGetInt32(out var day)) return null;
+        return year is >= 1 and <= 9999 && month is >= 1 and <= 12 && day >= 1
+            && day <= DateTime.DaysInMonth(year, month) ? new DateTime(year, month, day) : null;
+    }
+
+    private static string? CleanText(string? value, int maxLength)
+    {
+        if (string.IsNullOrWhiteSpace(value)) return null;
+        var plain = Regex.Replace(value, "<[^>]+>", " ");
+        plain = System.Net.WebUtility.HtmlDecode(plain);
+        plain = Regex.Replace(plain, @"\s+", " ").Trim();
+        return plain.Length > maxLength ? plain[..maxLength].TrimEnd() : plain;
     }
 
     private static bool TryArray(JsonElement value, string name, out JsonElement array)

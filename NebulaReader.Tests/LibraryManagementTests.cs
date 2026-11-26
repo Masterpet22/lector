@@ -8,6 +8,32 @@ namespace NebulaReader.Tests;
 public class LibraryManagementTests
 {
     [Fact]
+    public async Task EditingOtherMetadataKeepsAutomaticSeriesAndTagsAvailable()
+    {
+        var path = Path.Combine(Path.GetTempPath(), $"nebula_metadata_{Guid.NewGuid():N}.db3");
+        try
+        {
+            var database = new LibraryDatabase(path);
+            var book = new BookItem { Id = "book", Title = "Título", FilePath = "book.pdf",
+                SeriesName = "Serie detectada", Tags = "Ciencia" };
+            await database.SaveBookAsync(book);
+            await database.UpdateDocumentMetadataAsync(book.Id, new DocumentMetadataEdit(
+                book.Title, book.SeriesName, "Autora", null, null, null, null, book.Tags));
+            var saved = (await database.GetBookByIdAsync(book.Id))!;
+            Assert.Equal("Autora", saved.Author);
+            Assert.False(saved.TitleEditedManually);
+            Assert.False(saved.SeriesEditedManually);
+            Assert.False(saved.TagsEditedManually);
+        }
+        finally
+        {
+            await new SQLiteAsyncConnection(path,
+                SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create | SQLiteOpenFlags.SharedCache).CloseAsync();
+            File.Delete(path);
+        }
+    }
+
+    [Fact]
     public async Task GroupSeriesEditUpdatesOnlyMembersAndRollsBackIfOneIsMissing()
     {
         var path = Path.Combine(Path.GetTempPath(), $"nebula_series_group_{Guid.NewGuid():N}.db3");
@@ -66,6 +92,27 @@ public class LibraryManagementTests
             Assert.Equal("Aventura, Manga", reloaded.Tags);
             Assert.True(reloaded.TagsEditedManually);
             Assert.Equal(12, reloaded.CurrentPage);
+            await database.UpdateDocumentMetadataAsync(book.Id, new DocumentMetadataEdit(
+                "Documento", "Serie nueva", "Autora", new DateTime(2024, 5, 17),
+                "Editorial", "Español", "Resumen", "Historia, Ciencia"));
+            var withMetadata = Assert.Single(await database.GetBooksAsync());
+            Assert.Equal("Documento", withMetadata.Title);
+            Assert.Equal("Serie nueva", withMetadata.SeriesName);
+            Assert.Equal("Autora", withMetadata.Author);
+            Assert.Equal(new DateTime(2024, 5, 17), withMetadata.PublicationDate);
+            Assert.Equal("Editorial", withMetadata.Publisher);
+            Assert.Equal("Español", withMetadata.Language);
+            Assert.Equal("Resumen", withMetadata.Description);
+            Assert.Equal("Historia, Ciencia", withMetadata.Tags);
+            Assert.Equal(12, withMetadata.CurrentPage);
+            withMetadata.Author = "Autor extraído después";
+            withMetadata.Publisher = "Otra editorial";
+            withMetadata.DetailedMetadataExtracted = true;
+            await database.UpdateBookMetadataAsync(withMetadata);
+            var afterExtraction = Assert.Single(await database.GetBooksAsync());
+            Assert.Equal("Autora", afterExtraction.Author);
+            Assert.Equal("Editorial", afterExtraction.Publisher);
+            Assert.True(afterExtraction.DetailedMetadataExtracted);
             await new SQLiteAsyncConnection(path,
                 SQLiteOpenFlags.ReadWrite | SQLiteOpenFlags.Create | SQLiteOpenFlags.SharedCache).CloseAsync();
         }

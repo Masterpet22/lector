@@ -19,6 +19,11 @@ public sealed record BookMetadata(
     string? EmbeddedTitle = null)
 {
     public string? FormattedTags => Tags.Count == 0 ? null : string.Join(", ", Tags);
+    public string? Author { get; init; }
+    public DateTime? PublicationDate { get; init; }
+    public string? Publisher { get; init; }
+    public string? Language { get; init; }
+    public string? Description { get; init; }
 }
 
 /// <summary>
@@ -137,7 +142,14 @@ public static partial class BookMetadataExtractor
         var tags = ParseTagList(rawTagSources);
         series ??= ExtractExplicitSeriesFromTags(tags);
 
-        return new BookMetadata(series, tags, title);
+        return new BookMetadata(series, tags, title)
+        {
+            Author = ReadElement("Writer") ?? ReadElement("Author"),
+            PublicationDate = ParseDateParts(ReadElement("Year"), ReadElement("Month"), ReadElement("Day")),
+            Publisher = ReadElement("Publisher"),
+            Language = ReadElement("LanguageISO") ?? ReadElement("Language"),
+            Description = ReadElement("Summary") ?? ReadElement("Description")
+        };
     }
 
     public static BookMetadata ParsePdfMetadataText(string pdfText)
@@ -149,6 +161,11 @@ public static partial class BookMetadataExtractor
 
         string? series = null;
         string? embeddedTitle = null;
+        string? author = null;
+        string? publisher = null;
+        string? language = null;
+        string? description = null;
+        DateTime? publicationDate = null;
         var tags = new List<string>();
 
         // 1. Intentar leer bloque XMP embebido (<x:xmpmeta ...> o <rdf:RDF ...>)
@@ -181,6 +198,22 @@ public static partial class BookMetadataExtractor
                     .FirstOrDefault(v => !string.IsNullOrWhiteSpace(v));
                 embeddedTitle ??= dcTitle;
 
+                string? XmpValue(string name)
+                {
+                    var element = descendants.FirstOrDefault(e =>
+                        e.Name.LocalName.Equals(name, StringComparison.OrdinalIgnoreCase)
+                        && !e.Name.NamespaceName.Equals("http://www.w3.org/1999/02/22-rdf-syntax-ns#", StringComparison.Ordinal));
+                    return NormalizeDisplayText(element?.Descendants()
+                        .FirstOrDefault(e => e.Name.LocalName.Equals("li", StringComparison.OrdinalIgnoreCase))?.Value
+                        ?? element?.Value);
+                }
+
+                author ??= XmpValue("creator");
+                publisher ??= XmpValue("publisher");
+                language ??= XmpValue("language");
+                description ??= XmpValue("description");
+                publicationDate ??= ParseFullDate(XmpValue("date"));
+
                 var xmpSubjects = descendants
                     .Where(e => e.Name.LocalName.Equals("subject", StringComparison.OrdinalIgnoreCase))
                     .SelectMany(e => e.Descendants().Where(d => d.Name.LocalName.Equals("li", StringComparison.OrdinalIgnoreCase)))
@@ -201,6 +234,8 @@ public static partial class BookMetadataExtractor
         // 2. Leer diccionario PDF /Info (/Series, /Saga, /Keywords, /Subject, /Title)
         series ??= ExtractPdfInfoString(pdfText, "Series") ?? ExtractPdfInfoString(pdfText, "Saga");
         embeddedTitle ??= ExtractPdfInfoString(pdfText, "Title");
+        author ??= ExtractPdfInfoString(pdfText, "Author");
+        publisher ??= ExtractPdfInfoString(pdfText, "Publisher");
 
         var infoKeywords = ExtractPdfInfoString(pdfText, "Keywords");
         if (!string.IsNullOrWhiteSpace(infoKeywords))
@@ -224,7 +259,31 @@ public static partial class BookMetadataExtractor
         var deduplicatedTags = DeduplicateTags(tags);
         series ??= ExtractExplicitSeriesFromTags(deduplicatedTags);
 
-        return new BookMetadata(series, deduplicatedTags, embeddedTitle);
+        return new BookMetadata(series, deduplicatedTags, embeddedTitle)
+        {
+            Author = author,
+            PublicationDate = publicationDate,
+            Publisher = publisher,
+            Language = language,
+            Description = description
+        };
+    }
+
+    private static DateTime? ParseDateParts(string? yearText, string? monthText, string? dayText)
+    {
+        if (!int.TryParse(yearText, CultureInfo.InvariantCulture, out var year)
+            || !int.TryParse(monthText, CultureInfo.InvariantCulture, out var month)
+            || !int.TryParse(dayText, CultureInfo.InvariantCulture, out var day)) return null;
+        return year is >= 1 and <= 9999 && month is >= 1 and <= 12 && day >= 1
+            && day <= DateTime.DaysInMonth(year, month) ? new DateTime(year, month, day) : null;
+    }
+
+    private static DateTime? ParseFullDate(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value) ||
+            !Regex.IsMatch(value, @"^\d{4}-\d{2}-\d{2}(?:[Tt ]|$)")) return null;
+        return DateTime.TryParse(value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var date)
+            ? date.Date : null;
     }
 
     public static IReadOnlyList<LibraryGroupBucket<T>> BuildLibraryGroups<T>(

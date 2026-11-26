@@ -882,6 +882,25 @@ public partial class LibraryViewModel : BaseViewModel
         UpdateStatusSummary();
     }
 
+    public async Task EditDocumentMetadataAsync(BookItem book, DocumentMetadataEdit metadata)
+    {
+        var updated = await _libraryService.EditDocumentMetadataAsync(book.Id, metadata);
+        UpsertBookInCollection(updated);
+        UpdateActiveGroupAfterRename(updated);
+        RebuildDisplayItems();
+        UpdateStatusSummary();
+    }
+
+    public async Task ApplyOnlineMetadataAsync(BookItem book, string title, string? series,
+        string? tags, OnlineTagSuggestion suggestion)
+    {
+        var updated = await _libraryService.ApplyOnlineMetadataAsync(book.Id, title, series, tags, suggestion);
+        UpsertBookInCollection(updated);
+        UpdateActiveGroupAfterRename(updated);
+        RebuildDisplayItems();
+        UpdateStatusSummary();
+    }
+
     public Task<IReadOnlyList<OnlineTagSource>> GetAvailableTagSourcesAsync(CancellationToken ct = default) =>
         _onlineTagService.GetAvailableSourcesAsync(ct);
 

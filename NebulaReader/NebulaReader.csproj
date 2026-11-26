@@ -24,8 +24,8 @@
 		<ApplicationId>app.nebulareader.mobile</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>2.1.0</ApplicationDisplayVersion>
-		<ApplicationVersion>5</ApplicationVersion>
+		<ApplicationDisplayVersion>2.1.1</ApplicationDisplayVersion>
+		<ApplicationVersion>6</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
 		<WindowsPackageType>None</WindowsPackageType>
@@ -37,13 +37,21 @@
 		<!-- Trimming, R8 y símbolos de depuración nativos en Release para Android -->
 		<PublishTrimmed Condition="'$(Configuration)' == 'Release' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">true</PublishTrimmed>
 		<AndroidLinkTool Condition="'$(Configuration)' == 'Release' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">r8</AndroidLinkTool>
+		<AndroidR8ObfuscationMode Condition="'$(Configuration)' == 'Release' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">private-members</AndroidR8ObfuscationMode>
+		<AndroidCreateProguardMappingFile Condition="'$(Configuration)' == 'Release' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">true</AndroidCreateProguardMappingFile>
 		<UseDefaultPublishRuntimeIdentifier Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">false</UseDefaultPublishRuntimeIdentifier>
 		<RuntimeIdentifiers Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">android-arm64;android-arm;android-x86;android-x64</RuntimeIdentifiers>
 		<!-- Una APK Debug instalada directamente debe contener sus ensamblados. -->
 		<EmbedAssembliesIntoApk Condition="'$(Configuration)' == 'Debug' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">true</EmbedAssembliesIntoApk>
 	</PropertyGroup>
 
-	<Target Name="_EmbedAndroidNativeDebugSymbols" AfterTargets="_BuildLibraryImportsCache;_PrepareBuildApk" BeforeTargets="_BuildApkEmbed" Condition="'$(Configuration)' == 'Release' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' and '$(AndroidPackageFormat)' == 'aab'">
+	<ItemGroup>
+		<!-- El SDK incluye automáticamente **/proguard.cfg; se registra solo para Android Release. -->
+		<ProguardConfiguration Remove="Platforms\Android\proguard.cfg" />
+		<ProguardConfiguration Include="Platforms\Android\proguard.cfg" Condition="'$(Configuration)' == 'Release' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'" />
+	</ItemGroup>
+
+	<Target Name="_EmbedAndroidNativeDebugSymbols" BeforeTargets="_BuildApkEmbed" Condition="'$(Configuration)' == 'Release' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android' and '$(AndroidPackageFormat)' == 'aab'">
 		<ItemGroup>
 			<AndroidAppBundleMetaDataFile Condition="Exists('$(IntermediateOutputPath)app_shared_libraries\arm64-v8a\libxamarin-app.dbg.so')" Include="com.android.tools.build.debugsymbols/arm64-v8a/libxamarin-app.so.sym:$(IntermediateOutputPath)app_shared_libraries\arm64-v8a\libxamarin-app.dbg.so" />
 			<AndroidAppBundleMetaDataFile Condition="Exists('$(IntermediateOutputPath)app_shared_libraries\armeabi-v7a\libxamarin-app.dbg.so')" Include="com.android.tools.build.debugsymbols/armeabi-v7a/libxamarin-app.so.sym:$(IntermediateOutputPath)app_shared_libraries\armeabi-v7a\libxamarin-app.dbg.so" />
@@ -74,6 +82,16 @@
 	<ItemGroup>
 		<PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.0" />
 		<PackageReference Include="Microsoft.Maui.Controls" Version="10.0.110" />
+		<PackageReference Include="Xamarin.Google.Android.Material" Version="1.14.0.6" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'" />
+		<!-- Alinear extensiones KTX con las bibliotecas AndroidX que resuelven MAUI y Material. -->
+		<PackageReference Include="Xamarin.AndroidX.Activity.Ktx" Version="1.13.0.1" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'" />
+		<PackageReference Include="Xamarin.AndroidX.Collection.Ktx" Version="1.6.0.1" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'" />
+		<PackageReference Include="Xamarin.AndroidX.Fragment.Ktx" Version="1.8.9.3" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'" />
+		<PackageReference Include="Xamarin.AndroidX.Lifecycle.LiveData" Version="2.11.0.1" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'" />
+		<PackageReference Include="Xamarin.AndroidX.Lifecycle.LiveData.Core.Ktx" Version="2.11.0.1" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'" />
+		<PackageReference Include="Xamarin.AndroidX.Lifecycle.Runtime.Ktx" Version="2.11.0.1" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'" />
+		<PackageReference Include="Xamarin.AndroidX.Lifecycle.ViewModel.Ktx" Version="2.11.0.1" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'" />
+		<PackageReference Include="Xamarin.AndroidX.SavedState.SavedState.Ktx" Version="1.5.0.1" Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'" />
 		<PackageReference Include="Microsoft.Extensions.Logging.Debug" Version="10.0.0" />
 		<PackageReference Include="SharpCompress" Version="0.50.9" />
 		<PackageReference Include="SkiaSharp" Version="4.156.0" />

@@ -37,7 +37,14 @@ public partial class BookItem : ObservableObject
     [ObservableProperty]
     public partial string? Tags { get; set; }
 
+    public string? Author { get; set; }
+    public DateTime? PublicationDate { get; set; }
+    public string? Publisher { get; set; }
+    public string? Language { get; set; }
+    public string? Description { get; set; }
+
     public bool MetadataExtracted { get; set; }
+    public bool DetailedMetadataExtracted { get; set; }
 
     public bool TitleEditedManually { get; set; }
     public bool SeriesEditedManually { get; set; }

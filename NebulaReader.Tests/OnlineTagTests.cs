@@ -75,6 +75,80 @@ public class OnlineTagTests
     }
 
     [Fact]
+    public async Task ComicPublishersAreNotMistakenForAuthorsOrTags()
+    {
+        var settings = new Settings();
+        settings.Keys[OnlineTagSource.Metron] = "token";
+        settings.Keys[OnlineTagSource.ComicVine] = "key";
+        using var http = new HttpClient(new Handler(request =>
+        {
+            var url = request.RequestUri!.AbsoluteUri;
+            if (url.Contains("metron.cloud/api/series/?", StringComparison.Ordinal))
+                return """{"results":[{"id":7,"name":"Serie"}]}""";
+            if (url.Contains("metron.cloud/api/series/7/", StringComparison.Ordinal))
+                return """{"name":"Serie","publisher":{"name":"Editorial Metron"},"genres":[{"name":"Fantasía"}]}""";
+            return """{"results":[{"name":"Serie","publisher":{"name":"Editorial Vine"},"genres":[{"name":"Aventura"}]}]}""";
+        }));
+        var service = new OnlineTagService(http, settings);
+        var book = new BookItem { Title = "Serie" };
+        var metron = Assert.Single(await service.SearchAsync(book, OnlineTagSource.Metron));
+        Assert.Null(metron.Author);
+        Assert.Equal("Editorial Metron", metron.Publisher);
+        var comicVine = Assert.Single(await service.SearchAsync(book, OnlineTagSource.ComicVine));
+        Assert.Null(comicVine.Author);
+        Assert.Equal("Editorial Vine", comicVine.Publisher);
+        Assert.DoesNotContain("Editorial Vine", comicVine.Tags);
+    }
+
+    [Fact]
+    public async Task GoogleBooksSuggestionKeepsItsDocumentFields()
+    {
+        var settings = new Settings();
+        settings.Keys[OnlineTagSource.GoogleBooks] = "key";
+        using var http = new HttpClient(new Handler(_ => """
+            {"items":[{"volumeInfo":{"title":"Libro","authors":["Autora"],"categories":["Historia"],
+            "publisher":"Editorial","publishedDate":"2024-05-17","language":"es",
+            "description":"<b>Resumen</b> del libro"}},
+            {"volumeInfo":{"title":"Otro","authors":["Autor"],"publishedDate":"2024"}}]}
+            """));
+        var results = await new OnlineTagService(http, settings)
+            .SearchAsync(new BookItem { Title = "Libro" }, OnlineTagSource.GoogleBooks);
+        var result = Assert.Single(results, item => item.Title == "Libro");
+        Assert.Equal("Autora", result.Author);
+        Assert.Equal("Editorial", result.Publisher);
+        Assert.Equal(new DateTime(2024, 5, 17), result.PublicationDate);
+        Assert.Equal("es", result.Language);
+        Assert.Equal("Resumen del libro", result.Description);
+        Assert.Null(Assert.Single(results, item => item.Title == "Otro").PublicationDate);
+    }
+
+    [Fact]
+    public async Task PublicCatalogsKeepAvailablePublisherDateLanguageAndDescription()
+    {
+        using var http = new HttpClient(new Handler(request =>
+        {
+            var url = request.RequestUri!.Host;
+            if (url == "openlibrary.org")
+                return """{"docs":[{"key":"/works/OL1W","title":"Libro","author_name":["Autora"],"subject":["Historia"],"publisher":["Editorial"],"language":["spa"]}]}""";
+            if (url == "api.crossref.org")
+                return """{"message":{"items":[{"DOI":"10.1/test","title":["Artículo"],"subject":["Ciencia"],"author":[{"given":"Ana","family":"Pérez"}],"publisher":"Editorial","published":{"date-parts":[[2024,5,17]]},"language":"es","abstract":"<p>Resumen</p>"}]}}""";
+            return """{"data":{"Page":{"media":[{"id":1,"title":{"english":"Manga"},"genres":["Fantasía"],"startDate":{"year":2023,"month":9,"day":2},"description":"Una aventura"}]}}}""";
+        }));
+        var service = new OnlineTagService(http, new Settings());
+        var book = new BookItem { Title = "Libro" };
+        var openLibrary = Assert.Single(await service.SearchAsync(book, OnlineTagSource.OpenLibrary));
+        Assert.Equal("Editorial", openLibrary.Publisher);
+        Assert.Equal("spa", openLibrary.Language);
+        var crossref = Assert.Single(await service.SearchAsync(book, OnlineTagSource.Crossref));
+        Assert.Equal("Ana Pérez", crossref.Author);
+        Assert.Equal(new DateTime(2024, 5, 17), crossref.PublicationDate);
+        Assert.Equal("Resumen", crossref.Description);
+        var aniList = Assert.Single(await service.SearchAsync(book, OnlineTagSource.AniList));
+        Assert.Equal(new DateTime(2023, 9, 2), aniList.PublicationDate);
+        Assert.Equal("Una aventura", aniList.Description);
+    }
+
+    [Fact]
     public async Task OriginalTargetLanguageWinsOverEquivalentTranslatedTagAndTranslationsAreCached()
     {
         var handler = new Handler(request =>

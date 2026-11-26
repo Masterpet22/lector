@@ -45,6 +45,7 @@
   <ItemGroup>
     <Compile Include="..\NebulaReader\Models\BookFormat.cs" Link="Core\BookFormat.cs" />
     <Compile Include="..\NebulaReader\Models\BookItem.cs" Link="Core\BookItem.cs" />
+    <Compile Include="..\NebulaReader\Models\DocumentMetadataEdit.cs" Link="Core\DocumentMetadataEdit.cs" />
     <Compile Include="..\NebulaReader\Models\ReadingProgress.cs" Link="Core\ReadingProgress.cs" />
     <Compile Include="..\NebulaReader\Services\LibraryDatabase.cs" Link="Core\LibraryDatabase.cs" />
     <Compile Include="..\NebulaReader\Services\ILibraryDatabase.cs" Link="Core\ILibraryDatabase.cs" />

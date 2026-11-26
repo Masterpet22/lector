@@ -39,6 +39,12 @@ public sealed class BackupBook
     public DateTime? LastReadAtUtc { get; set; }
     public string? SeriesName { get; set; }
     public string? Tags { get; set; }
+    public string? Author { get; set; }
+    public DateTime? PublicationDate { get; set; }
+    public string? Publisher { get; set; }
+    public string? Language { get; set; }
+    public string? Description { get; set; }
+    public bool DetailedMetadataExtracted { get; set; }
     public bool TitleEditedManually { get; set; }
     public bool SeriesEditedManually { get; set; }
     public bool TagsEditedManually { get; set; }
@@ -55,13 +61,16 @@ public sealed class BackupBook
         {
             try
             {
-                using var cursor = Android.App.Application.Context.ContentResolver?.Query(
-                    Android.Net.Uri.Parse(path), [Android.Provider.IOpenableColumns.DisplayName], null, null, null);
-                var column = cursor?.GetColumnIndex(Android.Provider.IOpenableColumns.DisplayName) ?? -1;
-                if (column >= 0 && cursor!.MoveToFirst())
+                if (Android.Net.Uri.Parse(path) is { } contentUri)
                 {
-                    var displayName = cursor.GetString(column);
-                    if (!string.IsNullOrWhiteSpace(displayName)) return displayName;
+                    using var cursor = Android.App.Application.Context.ContentResolver?.Query(
+                        contentUri, [Android.Provider.IOpenableColumns.DisplayName], null, null, null);
+                    var column = cursor?.GetColumnIndex(Android.Provider.IOpenableColumns.DisplayName) ?? -1;
+                    if (column >= 0 && cursor!.MoveToFirst())
+                    {
+                        var displayName = cursor.GetString(column);
+                        if (!string.IsNullOrWhiteSpace(displayName)) return displayName;
+                    }
                 }
             }
             catch (Exception)

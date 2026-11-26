@@ -76,10 +76,19 @@ public sealed class LibraryDatabase : ILibraryDatabase
         // Una portada puede terminar después de una lectura: no guardar su copia antigua del progreso.
         await conn.ExecuteAsync(
             "UPDATE Books SET CoverThumbnailPath = ?, TotalPages = CASE WHEN ? > 0 THEN ? ELSE TotalPages END, " +
+            "Title = CASE WHEN TitleEditedManually = 1 THEN Title ELSE ? END, " +
             "SeriesName = CASE WHEN SeriesEditedManually = 1 THEN SeriesName ELSE ? END, " +
-            "Tags = CASE WHEN TagsEditedManually = 1 THEN Tags ELSE ? END, MetadataExtracted = ? WHERE Id = ? AND FilePath = ?",
+            "Tags = CASE WHEN TagsEditedManually = 1 THEN Tags ELSE ? END, " +
+            "Author = CASE WHEN Author IS NULL OR TRIM(Author) = '' THEN ? ELSE Author END, " +
+            "PublicationDate = COALESCE(PublicationDate, ?), " +
+            "Publisher = CASE WHEN Publisher IS NULL OR TRIM(Publisher) = '' THEN ? ELSE Publisher END, " +
+            "Language = CASE WHEN Language IS NULL OR TRIM(Language) = '' THEN ? ELSE Language END, " +
+            "Description = CASE WHEN Description IS NULL OR TRIM(Description) = '' THEN ? ELSE Description END, " +
+            "MetadataExtracted = ?, DetailedMetadataExtracted = ? WHERE Id = ? AND FilePath = ?",
             book.CoverThumbnailPath, book.TotalPages, book.TotalPages,
-            book.SeriesName, book.Tags, book.MetadataExtracted, book.Id, book.FilePath).ConfigureAwait(false);
+            book.Title, book.SeriesName, book.Tags, book.Author, book.PublicationDate,
+            book.Publisher, book.Language, book.Description,
+            book.MetadataExtracted, book.DetailedMetadataExtracted, book.Id, book.FilePath).ConfigureAwait(false);
     }
 
     public async Task ClearCoverCacheReferencesAsync(CancellationToken ct = default)
@@ -275,6 +284,12 @@ public sealed class LibraryDatabase : ILibraryDatabase
                         Title = entry.Title,
                         SeriesName = entry.SeriesName,
                         Tags = entry.Tags,
+                        Author = entry.Author,
+                        PublicationDate = entry.PublicationDate,
+                        Publisher = entry.Publisher,
+                        Language = entry.Language,
+                        Description = entry.Description,
+                        DetailedMetadataExtracted = entry.DetailedMetadataExtracted,
                         Format = entry.Format,
                         CurrentPage = entry.CurrentPage,
                         TotalPages = entry.TotalPages,
@@ -318,6 +333,12 @@ public sealed class LibraryDatabase : ILibraryDatabase
                         book.TagsEditedManually = true;
                     }
                     else if (!book.TagsEditedManually && string.IsNullOrWhiteSpace(book.Tags)) book.Tags = entry.Tags;
+                    if (string.IsNullOrWhiteSpace(book.Author)) book.Author = entry.Author;
+                    if (book.PublicationDate == null) book.PublicationDate = entry.PublicationDate;
+                    if (string.IsNullOrWhiteSpace(book.Publisher)) book.Publisher = entry.Publisher;
+                    if (string.IsNullOrWhiteSpace(book.Language)) book.Language = entry.Language;
+                    if (string.IsNullOrWhiteSpace(book.Description)) book.Description = entry.Description;
+                    book.DetailedMetadataExtracted |= entry.DetailedMetadataExtracted;
                     if (string.IsNullOrWhiteSpace(book.ContentFingerprint)) book.ContentFingerprint = entry.ContentFingerprint;
                     db.Update(book);
                     merged++;
@@ -393,6 +414,24 @@ public sealed class LibraryDatabase : ILibraryDatabase
         var conn = await GetConnectionAsync(ct).ConfigureAwait(false);
         await conn.ExecuteAsync("UPDATE Books SET Tags = ?, TagsEditedManually = ? WHERE Id = ?",
             tags, editedManually, bookId).ConfigureAwait(false);
+    }
+
+    public async Task UpdateDocumentMetadataAsync(string bookId, DocumentMetadataEdit metadata, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        ct.ThrowIfCancellationRequested();
+        var conn = await GetConnectionAsync(ct).ConfigureAwait(false);
+        var affected = await conn.ExecuteAsync(
+            "UPDATE Books SET Title = ?, SeriesName = ?, Author = ?, PublicationDate = ?, " +
+            "Publisher = ?, Language = ?, Description = ?, Tags = ?, " +
+            "TitleEditedManually = CASE WHEN Title IS NOT ? THEN 1 ELSE TitleEditedManually END, " +
+            "SeriesEditedManually = CASE WHEN SeriesName IS NOT ? THEN 1 ELSE SeriesEditedManually END, " +
+            "TagsEditedManually = CASE WHEN Tags IS NOT ? THEN 1 ELSE TagsEditedManually END WHERE Id = ?",
+            metadata.Title, metadata.SeriesName, metadata.Author, metadata.PublicationDate,
+            metadata.Publisher, metadata.Language, metadata.Description, metadata.Tags,
+            metadata.Title, metadata.SeriesName, metadata.Tags, bookId).ConfigureAwait(false);
+        if (affected != 1)
+            throw new InvalidOperationException("El documento ya no está en la biblioteca.");
     }
 
     public async Task SetReadingStatusAsync(string bookId, ReadingStatus status, int page, CancellationToken ct = default)

@@ -7,6 +7,9 @@ public partial class ManagementPage : ContentPage
     public ManagementPage(LibraryViewModel viewModel)
     {
         InitializeComponent();
+#if ANDROID
+        SafeAreaEdges = new Microsoft.Maui.SafeAreaEdges(Microsoft.Maui.SafeAreaRegions.Container);
+#endif
         BindingContext = viewModel;
     }
 

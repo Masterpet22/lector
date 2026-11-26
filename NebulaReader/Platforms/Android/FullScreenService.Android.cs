@@ -16,16 +16,16 @@ public sealed partial class FullScreenService
             }
 
             var decorView = window.DecorView;
-            WindowCompat.SetDecorFitsSystemWindows(window, !enabled);
+            WindowCompat.SetDecorFitsSystemWindows(window, false);
             var controller = WindowCompat.GetInsetsController(window, decorView);
             if (controller == null)
             {
                 return;
             }
 
+            controller.SystemBarsBehavior = WindowInsetsControllerCompat.BehaviorShowTransientBarsBySwipe;
             if (enabled)
             {
-                controller.SystemBarsBehavior = WindowInsetsControllerCompat.BehaviorShowTransientBarsBySwipe;
                 controller.Hide(WindowInsetsCompat.Type.SystemBars());
             }
             else

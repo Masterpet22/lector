@@ -536,7 +536,7 @@
                                         <Setter Property="IsEnabled" Value="False" />
                                     </DataTrigger>
                                 </FlexLayout.Triggers>
-                                <Button Text="Descargar etiquetas" Clicked="OnSelectedDownloadTagsClicked" Margin="0,0,6,6" />
+                                <Button Text="Buscar metadatos" Clicked="OnSelectedDownloadTagsClicked" Margin="0,0,6,6" />
                                 <Button Text="Leídos" Clicked="OnSelectedReadClicked" Margin="0,0,6,6" />
                                 <Button Text="No leídos" Clicked="OnSelectedUnreadClicked" Margin="0,0,6,6" />
                                 <Button Text="Quitar" Clicked="OnSelectedRemoveClicked" Margin="0,0,6,6" />
@@ -732,11 +732,12 @@
 
         <!-- Modal estilizado para selección de metadatos y etiquetas online -->
         <Grid x:Name="TagPickerOverlay" Grid.RowSpan="2" Grid.ColumnSpan="2"
-              IsVisible="False" BackgroundColor="#D908070E" Padding="20">
+              IsVisible="False" BackgroundColor="#D908070E" Padding="20"
+              SizeChanged="OnDialogOverlaySizeChanged">
             <Grid.GestureRecognizers>
                 <TapGestureRecognizer Tapped="OnTagPickerCancelClicked" />
             </Grid.GestureRecognizers>
-            <Border HorizontalOptions="Center" VerticalOptions="Center"
+            <Border x:Name="TagPickerCard" HorizontalOptions="Center" VerticalOptions="Center"
                     MaximumWidthRequest="640" MaximumHeightRequest="560"
                     BackgroundColor="{StaticResource Surface1}"
                     Stroke="{StaticResource NeonBorder}" StrokeThickness="1.5"
@@ -747,7 +748,7 @@
                 <Border.GestureRecognizers>
                     <TapGestureRecognizer />
                 </Border.GestureRecognizers>
-                <Grid RowDefinitions="Auto,*,Auto" RowSpacing="14" MinimumWidthRequest="320" WidthRequest="560">
+                <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="14">
                     <VerticalStackLayout Grid.Row="0" Spacing="4">
                         <Label Text="METADATOS Y ETIQUETAS ONLINE" Style="{StaticResource EyebrowLabel}" />
                         <Label x:Name="TagPickerTitleLabel"
@@ -765,26 +766,28 @@
                         <VerticalStackLayout x:Name="TagPickerItemsLayout" Spacing="10" Padding="0,2,14,2" />
                     </ScrollView>
 
-                    <Grid Grid.Row="2" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="10">
-                        <Button x:Name="TagPickerStopButton" Grid.Column="0"
+                    <FlexLayout Grid.Row="2" Direction="Row" Wrap="Wrap"
+                                JustifyContent="SpaceBetween" AlignItems="Center">
+                        <Button x:Name="TagPickerStopButton" Margin="0,0,8,0"
                                 Text="Detener descarga"
                                 IsVisible="False"
                                 Clicked="OnTagPickerStopClicked" />
-                        <Button x:Name="TagPickerCancelButton" Grid.Column="2"
+                        <Button x:Name="TagPickerCancelButton"
                                 Text="Cancelar"
                                 Clicked="OnTagPickerCancelClicked" />
-                    </Grid>
+                    </FlexLayout>
                 </Grid>
             </Border>
         </Grid>
 
         <!-- Modal estilizado general para alertas, confirmaciones, menús de acciones y edición de texto -->
         <Grid x:Name="NebulaDialogOverlay" Grid.RowSpan="2" Grid.ColumnSpan="2"
-              IsVisible="False" BackgroundColor="#D908070E" Padding="20">
+              IsVisible="False" BackgroundColor="#D908070E" Padding="20"
+              SizeChanged="OnDialogOverlaySizeChanged">
             <Grid.GestureRecognizers>
                 <TapGestureRecognizer Tapped="OnNebulaDialogBackdropTapped" />
             </Grid.GestureRecognizers>
-            <Border HorizontalOptions="Center" VerticalOptions="Center"
+            <Border x:Name="NebulaDialogCard" HorizontalOptions="Center" VerticalOptions="Center"
                     MaximumWidthRequest="540" MaximumHeightRequest="560"
                     BackgroundColor="{StaticResource Surface1}"
                     Stroke="{StaticResource NeonBorder}" StrokeThickness="1.5"
@@ -795,7 +798,7 @@
                 <Border.GestureRecognizers>
                     <TapGestureRecognizer />
                 </Border.GestureRecognizers>
-                <Grid RowDefinitions="Auto,*,Auto" RowSpacing="14" MinimumWidthRequest="300" WidthRequest="460">
+                <Grid RowDefinitions="Auto,Auto,Auto" RowSpacing="14">
                     <VerticalStackLayout Grid.Row="0" Spacing="4">
                         <Label x:Name="NebulaDialogEyebrowLabel" Text="NEBULA READER" Style="{StaticResource EyebrowLabel}" />
                         <Label x:Name="NebulaDialogTitleLabel"
@@ -806,6 +809,11 @@
                         <Label x:Name="NebulaDialogMessageLabel"
                                IsVisible="False"
                                TextColor="{StaticResource TextSecondary}"
+                               FontSize="13"
+                               LineBreakMode="WordWrap" />
+                        <Label x:Name="NebulaDialogErrorLabel"
+                               IsVisible="False"
+                               TextColor="#FDA4AF"
                                FontSize="13"
                                LineBreakMode="WordWrap" />
                     </VerticalStackLayout>
@@ -829,15 +837,16 @@
                         </VerticalStackLayout>
                     </ScrollView>
 
-                    <Grid Grid.Row="2" ColumnDefinitions="*,Auto,Auto" ColumnSpacing="10">
-                        <Button x:Name="NebulaDialogCancelButton" Grid.Column="1"
+                    <FlexLayout Grid.Row="2" Direction="Row" Wrap="Wrap"
+                                JustifyContent="End" AlignItems="Center">
+                        <Button x:Name="NebulaDialogCancelButton" Margin="0,0,10,0"
                                 Text="Cancelar"
                                 Clicked="OnNebulaDialogCancelClicked" />
-                        <Button x:Name="NebulaDialogAcceptButton" Grid.Column="2"
+                        <Button x:Name="NebulaDialogAcceptButton"
                                 Text="Aceptar"
                                 Style="{StaticResource PrimaryNeonButton}"
                                 Clicked="OnNebulaDialogAcceptClicked" />
-                    </Grid>
+                    </FlexLayout>
                 </Grid>
             </Border>
         </Grid>

@@ -160,7 +160,7 @@
             </ScrollView>
         </Border>
 
-        <Grid IsVisible="{Binding IsNavigationOverlayVisible}"
+        <Grid x:Name="BookmarksPanel" IsVisible="{Binding IsNavigationOverlayVisible}"
               BackgroundColor="{StaticResource BgCanvas}"
                RowDefinitions="Auto,Auto,*"
               Padding="14,12">
@@ -240,7 +240,7 @@
             <Grid.GestureRecognizers>
                 <TapGestureRecognizer Tapped="OnLockedPageTapped" />
             </Grid.GestureRecognizers>
-            <Button IsVisible="{Binding IsUnlockButtonVisible}"
+            <Button x:Name="UnlockButton" IsVisible="{Binding IsUnlockButtonVisible}"
                     ImageSource="lock_closed.png"
                     BackgroundColor="{StaticResource HudOverlay}"
                     BorderColor="{StaticResource SubtleBorder}"

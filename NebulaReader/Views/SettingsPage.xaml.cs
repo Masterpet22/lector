@@ -14,6 +14,9 @@ public partial class SettingsPage : ContentPage
     {
         ViewModel = viewModel;
         InitializeComponent();
+#if ANDROID
+        SafeAreaEdges = new Microsoft.Maui.SafeAreaEdges(Microsoft.Maui.SafeAreaRegions.Container);
+#endif
         BindingContext = viewModel;
     }
 

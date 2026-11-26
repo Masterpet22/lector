@@ -25,6 +25,7 @@ public interface ILibraryDatabase
     Task UpdateDetailsAsync(string bookId, string title, string? series, bool titleEdited, bool seriesEdited, CancellationToken ct = default);
     Task UpdateSeriesAsync(IReadOnlyCollection<string> bookIds, string? series, CancellationToken ct = default);
     Task UpdateTagsAsync(string bookId, string? tags, bool editedManually, CancellationToken ct = default);
+    Task UpdateDocumentMetadataAsync(string bookId, DocumentMetadataEdit metadata, CancellationToken ct = default);
     Task SetReadingStatusAsync(string bookId, ReadingStatus status, int page, CancellationToken ct = default);
     Task RelocateBookAsync(string bookId, string filePath, CancellationToken ct = default);
     Task UpdateCoverResultAsync(string bookId, string? coverPath, int pageCount, string? error, string? expectedPath = null, CancellationToken ct = default);

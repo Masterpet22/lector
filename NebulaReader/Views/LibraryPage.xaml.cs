@@ -26,6 +26,7 @@ public partial class LibraryPage : ContentPage
     private CancellationTokenSource? _tagDownloadCts;
     private TaskCompletionSource<OnlineTagSuggestion?>? _tagPickerTcs;
     private TaskCompletionSource<string?>? _nebulaDialogTcs;
+    private Func<bool>? _nebulaDialogCanAccept;
     private bool _tagPickerStopRequested;
     private Border? _pressedCard;
     private Point _pressPosition;
@@ -49,6 +50,10 @@ public partial class LibraryPage : ContentPage
         _externalDocuments = externalDocuments;
         ViewModel = viewModel;
         InitializeComponent();
+#if ANDROID
+        SafeAreaEdges = new Microsoft.Maui.SafeAreaEdges(Microsoft.Maui.SafeAreaRegions.Container);
+        LibraryRootGrid.SafeAreaEdges = Microsoft.Maui.SafeAreaEdges.None;
+#endif
         LibraryViewPicker.SelectedIndex = Math.Clamp(AppPreferences.Get(LibraryViewPreferenceKey, 2), 0, 7);
         BindingContext = ViewModel;
         ViewModel.PropertyChanged += OnViewModelPropertyChanged;
@@ -473,6 +478,8 @@ public partial class LibraryPage : ContentPage
             return;
         }
 
+        UpdateDialogLayout(width, height);
+
         var isCompactHeight = height < 520;
         var isWide = width >= 1000;
         var isCompact = width < 760;
@@ -497,6 +504,38 @@ public partial class LibraryPage : ContentPage
         var contentWidth = GetVisibleContentWidth(width);
         UpdateHeaderLayout(contentWidth, isWide, isCompact);
         UpdateContentLayout(contentWidth);
+    }
+
+    private void OnDialogOverlaySizeChanged(object? sender, EventArgs e)
+    {
+        if (sender is Grid { Width: > 0, Height: > 0 } overlay)
+            UpdateDialogLayout(overlay.Width, overlay.Height);
+    }
+
+    private void UpdateDialogLayout(double width, double height)
+    {
+        if (width <= 0 || height <= 0 || TagPickerCard is null || NebulaDialogCard is null ||
+            TagPickerScrollView is null || NebulaDialogScrollView is null) return;
+
+        var horizontalInset = width < 480 ? 12.0 : 20.0;
+        var verticalInset = height < 520 ? 8.0 : 20.0;
+        var overlayPadding = new Thickness(horizontalInset, verticalInset);
+        var cardPadding = width < 420 ? new Thickness(14, 12) : new Thickness(22, 20);
+        var availableWidth = Math.Max(0, width - horizontalInset * 2);
+        var availableHeight = Math.Max(0, height - verticalInset * 2);
+        var cardHeight = Math.Min(560, availableHeight);
+        var scrollHeight = Math.Max(0, Math.Min(380, cardHeight - 220));
+
+        TagPickerOverlay.Padding = overlayPadding;
+        NebulaDialogOverlay.Padding = overlayPadding;
+        TagPickerCard.Padding = cardPadding;
+        NebulaDialogCard.Padding = cardPadding;
+        TagPickerCard.WidthRequest = Math.Min(640, availableWidth);
+        NebulaDialogCard.WidthRequest = Math.Min(540, availableWidth);
+        TagPickerCard.MaximumHeightRequest = cardHeight;
+        NebulaDialogCard.MaximumHeightRequest = cardHeight;
+        TagPickerScrollView.MaximumHeightRequest = scrollHeight;
+        NebulaDialogScrollView.MaximumHeightRequest = scrollHeight;
     }
 
     private const double SidebarSpacing = 16;
@@ -815,25 +854,16 @@ public partial class LibraryPage : ContentPage
         try
         {
             var action = await DisplayActionSheetAsync(book.Title, "Cancelar", null,
-                "Editar título y serie", "Editar etiquetas", "Descargar etiquetas", "Marcar como leído", "Marcar como no leído",
+                "Editar metadatos", "Buscar metadatos", "Marcar como leído", "Marcar como no leído",
                 "Volver a localizar / Conceder acceso", "Reintentar portada", "Quitar de la biblioteca");
             switch (action)
             {
-                case "Editar título y serie":
-                    var title = await DisplayPromptAsync("Editar título", "Título", initialValue: book.Title);
-                    if (title == null) return;
-                    var series = await DisplayPromptAsync("Editar serie", "Serie (vacío para quitar)", initialValue: book.SeriesName ?? "");
-                    if (series == null) return;
-                    await ViewModel.EditDetailsAsync(book, title, series);
+                case "Editar metadatos":
+                    var metadata = await ShowEditDocumentMetadataDialogAsync(book);
+                    if (metadata == null) return;
+                    await ViewModel.EditDocumentMetadataAsync(book, metadata);
                     break;
-                case "Editar etiquetas":
-                    var tags = await DisplayPromptAsync("Editar etiquetas",
-                        "Separa las etiquetas con comas o punto y coma. Déjalo vacío para quitarlas.",
-                        initialValue: book.Tags ?? "", maxLength: 1000);
-                    if (tags == null) return;
-                    await ViewModel.EditTagsAsync(book, tags);
-                    break;
-                case "Descargar etiquetas":
+                case "Buscar metadatos":
                     var seriesBucket = LibraryBrowseService.FilterGroups(ViewModel.Books, grouping: LibraryGrouping.Series)
                         .FirstOrDefault(bucket => bucket.IsGroup && bucket.Items.Any(item => item.Id == book.Id));
                     if (seriesBucket is { Items.Count: > 1 })
@@ -987,12 +1017,39 @@ public partial class LibraryPage : ContentPage
             {
                 contentStack.Children.Add(new Label
                 {
-                    Text = entry.Suggestion.Author,
+                    Text = $"Autor: {entry.Suggestion.Author}",
                     TextColor = textSecondary,
                     FontSize = 12,
                     LineBreakMode = LineBreakMode.TailTruncation
                 });
             }
+
+            var suggestedDetails = new[]
+            {
+                string.IsNullOrWhiteSpace(entry.Suggestion.Publisher) ? null : $"Editorial: {entry.Suggestion.Publisher}",
+                entry.Suggestion.PublicationDate is { } date ? $"Fecha: {date:yyyy-MM-dd}" : null,
+                string.IsNullOrWhiteSpace(entry.Suggestion.Language) ? null : $"Idioma: {entry.Suggestion.Language}"
+            }.Where(detail => detail != null);
+            var detailsText = string.Join(" · ", suggestedDetails);
+            if (detailsText.Length > 0)
+                contentStack.Children.Add(new Label
+                {
+                    Text = detailsText,
+                    TextColor = textSecondary,
+                    FontSize = 11,
+                    MaxLines = 2,
+                    LineBreakMode = LineBreakMode.TailTruncation
+                });
+
+            if (!string.IsNullOrWhiteSpace(entry.Suggestion.Description))
+                contentStack.Children.Add(new Label
+                {
+                    Text = entry.Suggestion.Description,
+                    TextColor = textSecondary,
+                    FontSize = 11,
+                    MaxLines = 2,
+                    LineBreakMode = LineBreakMode.TailTruncation
+                });
 
             if (entry.Suggestion.Tags.Count > 0)
             {
@@ -1122,6 +1179,9 @@ public partial class LibraryPage : ContentPage
 
     private void OnNebulaDialogAcceptClicked(object? sender, EventArgs e)
     {
+        if (_nebulaDialogCanAccept?.Invoke() == false)
+            return;
+
         if (NebulaDialogInputBorder.IsVisible)
             _nebulaDialogTcs?.TrySetResult(NebulaDialogEntry.Text ?? string.Empty);
         else
@@ -1256,11 +1316,11 @@ public partial class LibraryPage : ContentPage
             ColumnDefinitions =
             [
                 new ColumnDefinition(GridLength.Star),
-                new ColumnDefinition(GridLength.Star),
-                new ColumnDefinition(GridLength.Star),
                 new ColumnDefinition(GridLength.Star)
             ],
-            ColumnSpacing = 8
+            RowDefinitions = [new RowDefinition(GridLength.Auto), new RowDefinition(GridLength.Auto)],
+            ColumnSpacing = 8,
+            RowSpacing = 8
         };
 
         static Border CreateStatChip(string label, int count, string bgHex, string borderHex, string valueHex) => new()
@@ -1298,8 +1358,8 @@ public partial class LibraryPage : ContentPage
 
         statsGrid.Add(CreateStatChip("Guardados", saved, "#21163E", "#B026FF", "#D884FF"), 0, 0);
         statsGrid.Add(CreateStatChip("Omitidos", skipped, "#1C1830", "#3B3359", "#E9E4FA"), 1, 0);
-        statsGrid.Add(CreateStatChip("Errores", failures.Count, failures.Count > 0 ? "#381526" : "#1C1830", failures.Count > 0 ? "#F43F5E" : "#2A2346", failures.Count > 0 ? "#FDA4AF" : "#9F94C4"), 2, 0);
-        statsGrid.Add(CreateStatChip("Pendientes", pending, "#1C1830", "#2A2346", "#9F94C4"), 3, 0);
+        statsGrid.Add(CreateStatChip("Errores", failures.Count, failures.Count > 0 ? "#381526" : "#1C1830", failures.Count > 0 ? "#F43F5E" : "#2A2346", failures.Count > 0 ? "#FDA4AF" : "#9F94C4"), 0, 1);
+        statsGrid.Add(CreateStatChip("Pendientes", pending, "#1C1830", "#2A2346", "#9F94C4"), 1, 1);
 
         var views = new List<View> { statsGrid };
         foreach (var failure in failures)
@@ -1323,7 +1383,7 @@ public partial class LibraryPage : ContentPage
 
         await ShowNebulaDialogCoreAsync(
             "RESUMEN DE METADATOS",
-            stopped ? "Descarga detenida" : "Descarga de etiquetas",
+            stopped ? "Descarga detenida" : "Búsqueda de metadatos",
             null,
             acceptText: "Aceptar",
             cancelText: null,
@@ -1340,16 +1400,20 @@ public partial class LibraryPage : ContentPage
         string initialInput = "",
         string? placeholder = null,
         int maxLength = -1,
-        IReadOnlyList<View>? customViews = null)
+        IReadOnlyList<View>? customViews = null,
+        Func<bool>? canAccept = null)
     {
         _nebulaDialogTcs?.TrySetResult(null);
         var tcs = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
         _nebulaDialogTcs = tcs;
+        _nebulaDialogCanAccept = canAccept;
 
         NebulaDialogEyebrowLabel.Text = eyebrow;
         NebulaDialogTitleLabel.Text = title;
         NebulaDialogMessageLabel.Text = message ?? string.Empty;
         NebulaDialogMessageLabel.IsVisible = !string.IsNullOrWhiteSpace(message);
+        NebulaDialogErrorLabel.Text = string.Empty;
+        NebulaDialogErrorLabel.IsVisible = false;
 
         NebulaDialogInputBorder.IsVisible = isInputPrompt;
         if (isInputPrompt)
@@ -1397,7 +1461,10 @@ public partial class LibraryPage : ContentPage
             NebulaDialogOverlay.IsVisible = false;
             NebulaDialogCustomContent.Children.Clear();
             if (ReferenceEquals(_nebulaDialogTcs, tcs))
+            {
                 _nebulaDialogTcs = null;
+                _nebulaDialogCanAccept = null;
+            }
         }
     }
 
@@ -1460,7 +1527,7 @@ public partial class LibraryPage : ContentPage
                 throw firstError;
 
             var sourceNames = string.Join(", ", sources.Select(TagSourceName));
-            await DisplayAlertAsync("Sin resultados", $"No se encontraron etiquetas para «{displayTitle}» en las fuentes disponibles ({sourceNames}).", "Aceptar");
+            await DisplayAlertAsync("Sin resultados", $"No se encontraron metadatos para «{displayTitle}» en las fuentes disponibles ({sourceNames}).", "Aceptar");
             return false;
         }
 
@@ -1486,6 +1553,11 @@ public partial class LibraryPage : ContentPage
         if (cleanSeriesName.Length > 255)
             cleanSeriesName = cleanSeriesName[..255].Trim();
 
+        // Una sugerencia elegida para una serie no identifica la fecha ni los créditos de cada tomo.
+        var documentSuggestion = targetBooks.Count == 1 ? suggestion : suggestion with
+        {
+            Author = null, Publisher = null, PublicationDate = null, Language = null, Description = null
+        };
         foreach (var book in targetBooks)
         {
             ct.ThrowIfCancellationRequested();
@@ -1514,8 +1586,7 @@ public partial class LibraryPage : ContentPage
                 ? cleanSeriesName
                 : book.SeriesName;
 
-            await ViewModel.EditDetailsAsync(book, newTitle, newSeries);
-            await ViewModel.EditTagsAsync(book, proposedTags);
+            await ViewModel.ApplyOnlineMetadataAsync(book, newTitle, newSeries, proposedTags, documentSuggestion);
         }
 
         if (batchContext == null)

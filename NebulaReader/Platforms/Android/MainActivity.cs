@@ -1,6 +1,7 @@
 using Android.App;
 using Android.Content;
 using Android.Content.PM;
+using AndroidX.Activity;
 using NebulaReader.Services;
 
 namespace NebulaReader;
@@ -25,7 +26,11 @@ public class MainActivity : MauiAppCompatActivity
 {
     protected override void OnCreate(Android.OS.Bundle? savedInstanceState)
     {
+        var background = Android.Graphics.Color.Rgb(8, 7, 14);
+        EdgeToEdge.Enable(this, SystemBarStyle.Dark(background.ToArgb()), SystemBarStyle.Dark(background.ToArgb()));
         base.OnCreate(savedInstanceState);
+        Window?.DecorView?.SetBackgroundColor(background);
+        if (Window != null) AndroidSafeArea.Attach(Window);
         if (savedInstanceState == null) ExternalDocumentIntent.Handle(Intent);
     }
 

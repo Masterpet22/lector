@@ -50,7 +50,7 @@ public class LibraryService : ILibraryService
         var books = await _database.GetBooksAsync(ct).ConfigureAwait(false);
         foreach (var book in books)
         {
-            if (NeedsBackgroundEnrichment(book) && book.CoverError == null)
+            if (NeedsBackgroundEnrichment(book) && (book.CoverError == null || !book.DetailedMetadataExtracted))
             {
                 QueueBackgroundCoverGeneration(book);
             }
@@ -207,6 +207,55 @@ public class LibraryService : ILibraryService
         return await RequireBookAsync(bookId, ct).ConfigureAwait(false);
     }
 
+    public async Task<BookItem> EditDocumentMetadataAsync(string bookId, DocumentMetadataEdit metadata, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(metadata);
+        var title = metadata.Title.Trim();
+        if (title.Length is 0 or > 255)
+            throw new ArgumentException("El título debe tener entre 1 y 255 caracteres.", nameof(metadata));
+
+        static string? Optional(string? value, int maxLength, string field)
+        {
+            var normalized = string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+            if (normalized?.Length > maxLength)
+                throw new ArgumentException($"{field} no puede superar los {maxLength} caracteres.");
+            return normalized;
+        }
+
+        var series = Optional(metadata.SeriesName, 255, "La serie");
+        var author = Optional(metadata.Author, 255, "El autor");
+        var publisher = Optional(metadata.Publisher, 255, "La editorial");
+        var language = Optional(metadata.Language, 100, "El idioma");
+        var description = Optional(metadata.Description, 4000, "La descripción");
+        var tags = string.IsNullOrWhiteSpace(metadata.Tags) ? null : string.Join(", ",
+            metadata.Tags.Split([',', ';'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(tag => tag.Length > 0)
+                .Distinct(StringComparer.OrdinalIgnoreCase));
+        if (tags?.Split(',').Length > 32 || tags?.Length > 1000)
+            throw new ArgumentException("Las etiquetas superan el límite de 32 o de 1000 caracteres.", nameof(metadata));
+
+        await RequireBookAsync(bookId, ct).ConfigureAwait(false);
+        var normalizedMetadata = new DocumentMetadataEdit(title, series, author, metadata.PublicationDate?.Date,
+            publisher, language, description, tags);
+        await _database.UpdateDocumentMetadataAsync(bookId, normalizedMetadata, ct).ConfigureAwait(false);
+        return await RequireBookAsync(bookId, ct).ConfigureAwait(false);
+    }
+
+    public async Task<BookItem> ApplyOnlineMetadataAsync(string bookId, string title, string? series,
+        string? tags, OnlineTagSuggestion suggestion, CancellationToken ct = default)
+    {
+        ArgumentNullException.ThrowIfNull(suggestion);
+        var current = await RequireBookAsync(bookId, ct).ConfigureAwait(false);
+        static string? KeepExisting(string? existing, string? suggested) =>
+            string.IsNullOrWhiteSpace(existing) ? suggested : existing;
+        return await EditDocumentMetadataAsync(bookId, new DocumentMetadataEdit(title, series,
+            KeepExisting(current.Author, suggestion.Author),
+            current.PublicationDate ?? suggestion.PublicationDate,
+            KeepExisting(current.Publisher, suggestion.Publisher),
+            KeepExisting(current.Language, suggestion.Language),
+            KeepExisting(current.Description, suggestion.Description), tags), ct).ConfigureAwait(false);
+    }
+
     public async Task<BookItem> RelocateBookAsync(string bookId, string newPath, CancellationToken ct = default)
     {
         var book = await RequireBookAsync(bookId, ct).ConfigureAwait(false);
@@ -260,6 +309,12 @@ public class LibraryService : ILibraryService
         await _database.GetBookByIdAsync(bookId, ct).ConfigureAwait(false)
         ?? throw new InvalidOperationException("El documento ya no está en la biblioteca.");
 
+    private static string LimitMetadata(string value, int maxLength)
+    {
+        var trimmed = value.Trim();
+        return trimmed.Length > maxLength ? trimmed[..maxLength].TrimEnd() : trimmed;
+    }
+
     private static async Task<string> FingerprintAsync(IBookSource source, CancellationToken ct)
     {
         await using var page = await source.GetPageStreamAsync(0, ct).ConfigureAwait(false);
@@ -272,7 +327,8 @@ public class LibraryService : ILibraryService
         if (book.FilePath.StartsWith("backup://", StringComparison.OrdinalIgnoreCase)) return false;
         var missingCover = _coverThumbnailService.NeedsRefresh(book.Id, book.CoverThumbnailPath)
             || book.TotalPages <= 0;
-        return missingCover || !book.MetadataExtracted || string.IsNullOrWhiteSpace(book.ContentFingerprint);
+        return missingCover || !book.MetadataExtracted || !book.DetailedMetadataExtracted
+            || string.IsNullOrWhiteSpace(book.ContentFingerprint);
     }
 
     private void QueueBackgroundCoverGeneration(BookItem book)
@@ -315,11 +371,18 @@ public class LibraryService : ILibraryService
 
                 if (AppLifetime.IsShuttingDown) return;
 
-                if (!book.MetadataExtracted)
+                if (!book.MetadataExtracted || !book.DetailedMetadataExtracted)
                 {
                     var metadata = await _bookSourceFactory
                         .ExtractMetadataAsync(book.FilePath)
                         .ConfigureAwait(false);
+
+                    if (!book.TitleEditedManually && !string.IsNullOrWhiteSpace(metadata.EmbeddedTitle)
+                        && !string.Equals(book.Title, metadata.EmbeddedTitle, StringComparison.Ordinal))
+                    {
+                        book.Title = metadata.EmbeddedTitle;
+                        changed = true;
+                    }
 
                     if (!book.SeriesEditedManually && !string.IsNullOrWhiteSpace(metadata.SeriesName) &&
                         !string.Equals(book.SeriesName, metadata.SeriesName, StringComparison.Ordinal))
@@ -336,7 +399,19 @@ public class LibraryService : ILibraryService
                         changed = true;
                     }
 
+                    if (string.IsNullOrWhiteSpace(book.Author) && !string.IsNullOrWhiteSpace(metadata.Author))
+                        book.Author = LimitMetadata(metadata.Author, 255);
+                    if (book.PublicationDate == null)
+                        book.PublicationDate = metadata.PublicationDate;
+                    if (string.IsNullOrWhiteSpace(book.Publisher) && !string.IsNullOrWhiteSpace(metadata.Publisher))
+                        book.Publisher = LimitMetadata(metadata.Publisher, 255);
+                    if (string.IsNullOrWhiteSpace(book.Language) && !string.IsNullOrWhiteSpace(metadata.Language))
+                        book.Language = LimitMetadata(metadata.Language, 100);
+                    if (string.IsNullOrWhiteSpace(book.Description) && !string.IsNullOrWhiteSpace(metadata.Description))
+                        book.Description = LimitMetadata(metadata.Description, 4000);
+
                     book.MetadataExtracted = true;
+                    book.DetailedMetadataExtracted = true;
                     changed = true;
                 }
 

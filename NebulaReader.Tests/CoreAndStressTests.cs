@@ -171,6 +171,11 @@ public class CoreAndStressTests
               <Title>Despertar</Title>
               <Series>Solo Leveling</Series>
               <Number>01</Number>
+              <Writer>Autora de prueba</Writer>
+              <Year>2024</Year><Month>5</Month><Day>17</Day>
+              <Publisher>Editorial de prueba</Publisher>
+              <LanguageISO>es</LanguageISO>
+              <Summary>Resumen del cómic</Summary>
               <Tags>Action, Hunter, Monarchs</Tags>
               <Genre>Fantasy</Genre>
             </ComicInfo>
@@ -188,6 +193,11 @@ public class CoreAndStressTests
         Assert.Contains("Hunter", metadata.Tags);
         Assert.Contains("Fantasy", metadata.Tags);
         Assert.Equal("Despertar", metadata.EmbeddedTitle);
+        Assert.Equal("Autora de prueba", metadata.Author);
+        Assert.Equal(new DateTime(2024, 5, 17), metadata.PublicationDate);
+        Assert.Equal("Editorial de prueba", metadata.Publisher);
+        Assert.Equal("es", metadata.Language);
+        Assert.Equal("Resumen del cómic", metadata.Description);
     }
 
     [Fact]
@@ -196,12 +206,16 @@ public class CoreAndStressTests
         const string syntheticPdf = """
             %PDF-1.7
             1 0 obj
-            << /Title (El Imperio Final) /Subject (Nacidos de la Bruma) /Keywords (serie: Mistborn, Cosmere, Fantasia) >>
+            << /Title (El Imperio Final) /Author (Autor PDF) /Subject (Nacidos de la Bruma) /Keywords (serie: Mistborn, Cosmere, Fantasia) >>
             endobj
             <x:xmpmeta xmlns:x="adobe:ns:meta/">
               <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#" xmlns:dc="http://purl.org/dc/elements/1.1/">
                 <rdf:Description>
                   <dc:subject><rdf:Bag><rdf:li>Brandon Sanderson</rdf:li></rdf:Bag></dc:subject>
+                  <dc:publisher><rdf:Bag><rdf:li>Editorial PDF</rdf:li></rdf:Bag></dc:publisher>
+                  <dc:language><rdf:Bag><rdf:li>es</rdf:li></rdf:Bag></dc:language>
+                  <dc:description><rdf:Alt><rdf:li>Descripción PDF</rdf:li></rdf:Alt></dc:description>
+                  <dc:date><rdf:Seq><rdf:li>2023-11-19</rdf:li></rdf:Seq></dc:date>
                 </rdf:Description>
               </rdf:RDF>
             </x:xmpmeta>
@@ -215,6 +229,11 @@ public class CoreAndStressTests
         Assert.Equal("El Imperio Final", metadata.EmbeddedTitle);
         Assert.Contains("Cosmere", metadata.Tags);
         Assert.Contains("Brandon Sanderson", metadata.Tags);
+        Assert.Equal("Autor PDF", metadata.Author);
+        Assert.Equal(new DateTime(2023, 11, 19), metadata.PublicationDate);
+        Assert.Equal("Editorial PDF", metadata.Publisher);
+        Assert.Equal("es", metadata.Language);
+        Assert.Equal("Descripción PDF", metadata.Description);
     }
 
     [Fact]

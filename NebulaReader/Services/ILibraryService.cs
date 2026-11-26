@@ -28,6 +28,9 @@ public interface ILibraryService
     Task<BookItem> EditDetailsAsync(string bookId, string title, string? series, CancellationToken ct = default);
     Task UpdateSeriesAsync(IReadOnlyCollection<string> bookIds, string? series, CancellationToken ct = default);
     Task<BookItem> EditTagsAsync(string bookId, string? tags, CancellationToken ct = default);
+    Task<BookItem> EditDocumentMetadataAsync(string bookId, DocumentMetadataEdit metadata, CancellationToken ct = default);
+    Task<BookItem> ApplyOnlineMetadataAsync(string bookId, string title, string? series,
+        string? tags, OnlineTagSuggestion suggestion, CancellationToken ct = default);
     Task<BookItem> RelocateBookAsync(string bookId, string newPath, CancellationToken ct = default);
     Task RetryCoverAsync(string bookId, CancellationToken ct = default);
     Task<BookAccessState> CheckAccessAsync(BookItem book, CancellationToken ct = default);

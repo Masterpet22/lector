@@ -14,6 +14,7 @@ desde `NebulaReader.slnx` y `NebulaReader/NebulaReader.csproj`.
   las plataformas y herramientas de compilación requeridas por la carga de
   trabajo .NET instalada, además de **Android SDK Platform-Tools** (`adb`).
 - **Java JDK** compatible con la versión instalada de .NET para Android.
+- **Python 3** para ejecutar la auditoría reproducible del AAB; el script usa solo la biblioteca estándar.
 - **Conexión a Internet** para restaurar paquetes NuGet y componentes del SDK
   que aún no estén instalados.
 - **Dispositivo Android** con depuración USB habilitada, o un **emulador Android**.
@@ -70,6 +71,24 @@ también pueda instalarse directamente con `adb install -r` y abrirse sin el
 despliegue adicional de Visual Studio. Por eso su APK ocupa más espacio. La
 publicación **Release** sigue siendo la opción para distribuir o probar el
 rendimiento final.
+
+## Auditoría del AAB Release
+
+Desde la raíz del repositorio, genera primero un AAB oficial **local sin la clave de publicación**. Este paquete sirve para revisar el contenido; usa las instrucciones de [REGLAS_DE_COMPILACION.md](REGLAS_DE_COMPILACION.md) para firmar el AAB que se enviará a Google Play.
+
+```powershell
+dotnet clean NebulaReader/NebulaReader.csproj -f net10.0-android -c Release
+dotnet publish NebulaReader/NebulaReader.csproj -f net10.0-android -c Release `
+  -p:AndroidPackageFormats=aab -p:AndroidKeyStore=false
+
+python scripts/auditar_aab.py `
+  NebulaReader/bin/Release/net10.0-android/app.nebulareader.mobile.aab `
+  --expected-id app.nebulareader.mobile
+```
+
+La auditoría usa `dexdump` de Android SDK Build-Tools. Comprueba `r8.json`, `proguard.map`, símbolos nativos, tamaño DEX, ofuscación mínima del 25 %, `EdgeToEdge.enable`, eliminación de `SheetDialog` y llamadas a los setters de barras del sistema. Informa por separado las llamadas que quedan en AndroidX y las llamadas de Material protegidas para API anteriores a 35. Devuelve un código distinto de cero si falla una condición verificable. Repite la auditoría sobre el AAB firmado con la clave de subida antes de enviarlo a Google Play.
+
+Para compilar e instalar un APK de pruebas que coexista con la app oficial, usa el bloque de [REGLAS_DE_COMPILACION.md](REGLAS_DE_COMPILACION.md); conserva los identificadores y directorios separados.
 
 ## Para publicar
 

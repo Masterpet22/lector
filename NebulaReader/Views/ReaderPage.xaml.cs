@@ -96,6 +96,9 @@ public partial class ReaderPage : ContentPage
     private bool _platformInputAttached;
     private CancellationTokenSource? _hudHideCts;
     private CancellationTokenSource? _unlockButtonHideCts;
+#if ANDROID
+    private AndroidSafeInsets _safeInsets;
+#endif
 
     private SKSamplingOptions CurrentSampling => _isActivelyInteracting ? FastGestureSampling : HighQualitySampling;
 
@@ -109,6 +112,11 @@ public partial class ReaderPage : ContentPage
     public ReaderPage(ReaderViewModel viewModel)
     {
         InitializeComponent();
+#if ANDROID
+        SafeAreaEdges = Microsoft.Maui.SafeAreaEdges.None;
+        ((Grid)Content).SafeAreaEdges = Microsoft.Maui.SafeAreaEdges.None;
+        BookmarksPanel.SafeAreaEdges = Microsoft.Maui.SafeAreaEdges.None;
+#endif
         ConfigureSurfaceView();
         BindingContext = viewModel;
         viewModel.PageContentReady += OnPageContentReady;
@@ -192,6 +200,10 @@ public partial class ReaderPage : ContentPage
     protected override void OnAppearing()
     {
         base.OnAppearing();
+#if ANDROID
+        AndroidSafeArea.Changed += OnAndroidSafeInsetsChanged;
+        _safeInsets = AndroidSafeArea.Current;
+#endif
         if (_readerSurfaceView.Handler?.PlatformView != null)
         {
             AttachPlatformInput(_readerSurfaceView);
@@ -296,7 +308,14 @@ public partial class ReaderPage : ContentPage
 
         var isCompactHeight = height < 520;
 
-        TopHudBar.Margin = isCompactHeight ? new Thickness(8, 6, 8, 0) : new Thickness(14, 14, 14, 0);
+#if ANDROID
+        var safe = new Thickness(_safeInsets.Left, _safeInsets.Top, _safeInsets.Right, _safeInsets.Bottom);
+#else
+        var safe = new Thickness(0);
+#endif
+        TopHudBar.Margin = isCompactHeight
+            ? new Thickness(8 + safe.Left, 6 + safe.Top, 8 + safe.Right, 0)
+            : new Thickness(14 + safe.Left, 14 + safe.Top, 14 + safe.Right, 0);
         TopHudBar.Padding = isCompactHeight ? new Thickness(10, 8) : new Thickness(14, 12);
         var compactWidth = width < 900;
         var veryNarrow = width < 340;
@@ -310,8 +329,11 @@ public partial class ReaderPage : ContentPage
         Grid.SetColumnSpan(ReadingOptionsButton, veryNarrow ? 4 : compactWidth ? 2 : 1);
         GoToPageButton.Text = "Ir a página";
         ReadingOptionsButton.Text = "Opciones de lectura";
-        ReadingOptionsPanel.WidthRequest = Math.Min(340, Math.Max(0, width - 16));
-        var thumbnailSpan = ResponsiveLayout.GetColumnCount(width - 30, 140, 10, 8);
+        ReadingOptionsPanel.Margin = new Thickness(safe.Left, 8 + safe.Top, 8 + safe.Right, 8 + safe.Bottom);
+        ReadingOptionsPanel.WidthRequest = Math.Min(340, Math.Max(0, width - safe.Left - safe.Right - 16));
+        BookmarksPanel.Margin = new Thickness(safe.Left, safe.Top, safe.Right, safe.Bottom);
+        UnlockButton.Margin = new Thickness(0, 0, 20 + safe.Right, 20 + safe.Bottom);
+        var thumbnailSpan = ResponsiveLayout.GetColumnCount(width - safe.Left - safe.Right - 30, 140, 10, 8);
         if (ThumbnailGridLayout.Span != thumbnailSpan)
         {
             ThumbnailGridLayout.Span = thumbnailSpan;
@@ -320,7 +342,9 @@ public partial class ReaderPage : ContentPage
                     ThumbnailsView.ScrollTo(reader.CurrentPageIndex, position: ScrollToPosition.Center, animate: false));
         }
 
-        BottomHudBar.Margin = isCompactHeight ? new Thickness(8, 0, 8, 6) : new Thickness(14, 0, 14, 14);
+        BottomHudBar.Margin = isCompactHeight
+            ? new Thickness(8 + safe.Left, 0, 8 + safe.Right, 6 + safe.Bottom)
+            : new Thickness(14 + safe.Left, 0, 14 + safe.Right, 14 + safe.Bottom);
         BottomHudBar.Padding = isCompactHeight ? new Thickness(12, 6) : new Thickness(16, 10, 16, 12);
         BottomHudStack.Spacing = isCompactHeight ? 2 : 6;
         var stackedNavigation = width < 360;
@@ -337,10 +361,10 @@ public partial class ReaderPage : ContentPage
         if (width > 980)
         {
             TopHudBar.HorizontalOptions = LayoutOptions.Center;
-            TopHudBar.WidthRequest = Math.Min(940, width - 32);
+            TopHudBar.WidthRequest = Math.Min(940, width - safe.Left - safe.Right - 32);
 
             BottomHudBar.HorizontalOptions = LayoutOptions.Center;
-            BottomHudBar.WidthRequest = Math.Min(860, width - 32);
+            BottomHudBar.WidthRequest = Math.Min(860, width - safe.Left - safe.Right - 32);
         }
         else
         {
@@ -351,6 +375,14 @@ public partial class ReaderPage : ContentPage
             BottomHudBar.WidthRequest = -1;
         }
     }
+
+#if ANDROID
+    private void OnAndroidSafeInsetsChanged(AndroidSafeInsets insets)
+    {
+        _safeInsets = insets;
+        UpdateAdaptiveHudLayout(Width, Height);
+    }
+#endif
 
     private void OnCanvasHandlerChanged(object? sender, EventArgs e)
     {
@@ -1482,6 +1514,9 @@ public partial class ReaderPage : ContentPage
     protected override void OnDisappearing()
     {
         base.OnDisappearing();
+#if ANDROID
+        AndroidSafeArea.Changed -= OnAndroidSafeInsetsChanged;
+#endif
         if (!AppLifetime.IsShuttingDown)
         {
             if (ViewModel is { IsReadingLocked: true } vm)
