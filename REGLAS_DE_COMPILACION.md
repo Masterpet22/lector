@@ -62,6 +62,7 @@ foreach ($path in @($keystore, $keyPasswordFile, $storePasswordFile)) {
 dotnet clean $project -f net10.0-android -c Release
 
 dotnet publish $project -f net10.0-android -c Release `
+  -p:RuntimeIdentifier=android-arm64 `
   -p:AndroidPackageFormats=aab -p:AndroidKeyStore=true `
   "-p:AndroidSigningKeyStore=$keystore" `
   "-p:AndroidSigningKeyAlias=$keyAlias" `
@@ -73,6 +74,8 @@ $officialAab = Get-ChildItem -LiteralPath $officialArtifacts -Recurse -Filter 'a
 if (-not $officialAab) { throw 'No se generó el AAB oficial firmado.' }
 $officialAab.FullName
 ```
+
+El `RuntimeIdentifier` del comando fija ARM64 como arquitectura principal, pero `RuntimeIdentifiers` del proyecto conserva ARM64, ARM de 32 bits, x86 y x86-64 en el AAB. En el dispositivo probado, omitir este parámetro produjo recortes visuales en la biblioteca. El SDK de Android borra `RuntimeIdentifier` si se declara junto a `RuntimeIdentifiers` dentro del proyecto; por eso debe pasarse al publicar.
 
 Comprueba antes de subirlo que el paquete sea `app.nebulareader.mobile`, que el código de versión sea nuevo, que su certificado corresponda a la clave de subida registrada y que el AAB conserve `r8.json`, `proguard.map` y los símbolos nativos. **Distribuye el AAB oficial mediante Google Play**; una APK local firmada con la clave de subida puede no actualizar la app instalada desde Play si Google firma las APK entregadas con otra clave.
 

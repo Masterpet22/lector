@@ -24,8 +24,8 @@
 		<ApplicationId>app.nebulareader.mobile</ApplicationId>
 
 		<!-- Versions -->
-		<ApplicationDisplayVersion>2.1.1</ApplicationDisplayVersion>
-		<ApplicationVersion>6</ApplicationVersion>
+		<ApplicationDisplayVersion>2.1.3</ApplicationDisplayVersion>
+		<ApplicationVersion>8</ApplicationVersion>
 
 		<!-- To develop, package, and publish an app to the Microsoft Store, see: https://aka.ms/MauiTemplateUnpackaged -->
 		<WindowsPackageType>None</WindowsPackageType>
@@ -36,10 +36,14 @@
 
 		<!-- Trimming, R8 y símbolos de depuración nativos en Release para Android -->
 		<PublishTrimmed Condition="'$(Configuration)' == 'Release' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">true</PublishTrimmed>
+		<!-- La compilación AAB con AOT recorta bordes en Android; mantenerla desactivada en Release. -->
+		<AndroidEnableProfiledAot Condition="'$(Configuration)' == 'Release' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">false</AndroidEnableProfiledAot>
+		<RunAOTCompilation Condition="'$(Configuration)' == 'Release' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">false</RunAOTCompilation>
 		<AndroidLinkTool Condition="'$(Configuration)' == 'Release' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">r8</AndroidLinkTool>
 		<AndroidR8ObfuscationMode Condition="'$(Configuration)' == 'Release' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">private-members</AndroidR8ObfuscationMode>
 		<AndroidCreateProguardMappingFile Condition="'$(Configuration)' == 'Release' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">true</AndroidCreateProguardMappingFile>
 		<UseDefaultPublishRuntimeIdentifier Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">false</UseDefaultPublishRuntimeIdentifier>
+		<!-- El AAB oficial conserva cuatro ABI; publicar con -p:RuntimeIdentifier=android-arm64. -->
 		<RuntimeIdentifiers Condition="$([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">android-arm64;android-arm;android-x86;android-x64</RuntimeIdentifiers>
 		<!-- Una APK Debug instalada directamente debe contener sus ensamblados. -->
 		<EmbedAssembliesIntoApk Condition="'$(Configuration)' == 'Debug' and $([MSBuild]::GetTargetPlatformIdentifier('$(TargetFramework)')) == 'android'">true</EmbedAssembliesIntoApk>
